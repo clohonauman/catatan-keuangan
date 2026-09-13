@@ -1,8 +1,9 @@
 package com.charlie.finance;
 
-import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
@@ -16,6 +17,7 @@ import android.os.Environment;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.ServiceWorkerController;
 import android.webkit.ServiceWorkerWebSettings;
 import android.webkit.ValueCallback;
@@ -25,22 +27,36 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.fragment.app.FragmentActivity;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 
-public class MainActivity extends Activity {
+public class MainActivity extends FragmentActivity {
 
     private static final String APP_URL = "https://charlie-finance.rf.gd/";
     private static final String APP_HOST = "charlie-finance.rf.gd";
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final String SECURITY_PREFS = "catatan_keuangan_security";
+    private static final String PREF_BIOMETRIC_ENABLED = "biometric_enabled";
+    private static final long BIOMETRIC_RELOCK_AFTER_MS = 30_000L;
+    private static final int BIOMETRIC_MODE_UNLOCK = 1;
+    private static final int BIOMETRIC_MODE_ENABLE = 2;
+    private static final int BIOMETRIC_MODE_DISABLE = 3;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -49,6 +65,13 @@ public class MainActivity extends Activity {
     private boolean showingLocalOfflinePage = false;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
+    private SharedPreferences securityPrefs;
+    private FrameLayout biometricLockOverlay;
+    private TextView biometricLockMessage;
+    private Button biometricRetryButton;
+    private Button biometricUsePinButton;
+    private boolean biometricPromptVisible = false;
+    private long backgroundedAt = 0L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,8 +80,14 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
+        biometricLockOverlay = findViewById(R.id.biometricLockOverlay);
+        biometricLockMessage = findViewById(R.id.biometricLockMessage);
+        biometricRetryButton = findViewById(R.id.biometricRetryButton);
+        biometricUsePinButton = findViewById(R.id.biometricUsePinButton);
+        securityPrefs = getSharedPreferences(SECURITY_PREFS, MODE_PRIVATE);
 
         configureWebView();
+        configureBiometricGate();
         configureServiceWorker();
         registerNetworkWatcher();
 
@@ -114,7 +143,7 @@ public class MainActivity extends Activity {
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
         settings.setUserAgentString(
-                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.1"
+                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.2"
         );
 
         // Cookie/session login tetap tersimpan
@@ -128,6 +157,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new FinanceWebViewClient());
         webView.setWebChromeClient(new FinanceWebChromeClient());
         webView.setDownloadListener(new FinanceDownloadListener());
+        webView.addJavascriptInterface(new BiometricBridge(), "AndroidBiometric");
 
         // Debug WebView hanya aktif pada debug build
         boolean isDebuggable =
@@ -135,6 +165,231 @@ public class MainActivity extends Activity {
 
         if (isDebuggable) {
             WebView.setWebContentsDebuggingEnabled(true);
+        }
+    }
+
+    private void configureBiometricGate() {
+        biometricRetryButton.setOnClickListener(v -> authenticateBiometric(BIOMETRIC_MODE_UNLOCK));
+        biometricUsePinButton.setOnClickListener(v -> useApplicationPinFallback());
+
+        if (isBiometricEnabled()) {
+            showBiometricOverlay("Verifikasi biometrik untuk membuka aplikasi.");
+            biometricLockOverlay.post(() -> authenticateBiometric(BIOMETRIC_MODE_UNLOCK));
+        } else {
+            hideBiometricOverlay();
+        }
+    }
+
+    private boolean isBiometricEnabled() {
+        return securityPrefs != null && securityPrefs.getBoolean(PREF_BIOMETRIC_ENABLED, false);
+    }
+
+    private int biometricAuthenticators() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    | BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+        }
+        // Android 7–10: gunakan biometrik yang tersedia. Fallback PIN aplikasi
+        // ditampilkan sebagai negative button pada dialog biometrik.
+        return BiometricManager.Authenticators.BIOMETRIC_WEAK;
+    }
+
+    private int biometricCapability() {
+        try {
+            return BiometricManager.from(this).canAuthenticate(biometricAuthenticators());
+        } catch (Exception e) {
+            return BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+        }
+    }
+
+    private String biometricLabel() {
+        PackageManager pm = getPackageManager();
+        boolean face = pm.hasSystemFeature("android.hardware.biometrics.face");
+        boolean fingerprint = pm.hasSystemFeature("android.hardware.fingerprint");
+        if (face && fingerprint) return "Pengenalan wajah / sidik jari";
+        if (face) return "Pengenalan wajah";
+        if (fingerprint) return "Sidik jari";
+        return "Biometrik perangkat";
+    }
+
+    private String biometricUnavailableMessage(int capability) {
+        if (capability == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED) {
+            return "Belum ada biometrik atau kunci layar yang didaftarkan pada perangkat.";
+        }
+        if (capability == BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE) {
+            return "Perangkat ini tidak memiliki sensor biometrik yang didukung.";
+        }
+        if (capability == BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE) {
+            return "Sensor biometrik sedang tidak tersedia. Coba lagi beberapa saat.";
+        }
+        return "Biometrik perangkat belum dapat digunakan.";
+    }
+
+    private String getBiometricStatusJson() {
+        int capability = biometricCapability();
+        boolean supported = capability == BiometricManager.BIOMETRIC_SUCCESS;
+        boolean enabled = isBiometricEnabled();
+        String label = biometricLabel();
+        String message = supported ? "" : biometricUnavailableMessage(capability);
+        return "{" +
+                "\"supported\":" + supported + "," +
+                "\"enabled\":" + enabled + "," +
+                "\"label\":\"" + jsonEscape(label) + "\"," +
+                "\"message\":\"" + jsonEscape(message) + "\"" +
+                "}";
+    }
+
+    private String jsonEscape(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
+    private void notifyWebBiometricStatus() {
+        if (webView == null) return;
+        String status = getBiometricStatusJson();
+        webView.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('finance-biometric-status',{detail:" + status + "}));",
+                null
+        );
+    }
+
+    private void showBiometricOverlay(String message) {
+        if (biometricLockMessage != null && message != null) {
+            biometricLockMessage.setText(message);
+        }
+        if (biometricLockOverlay != null) {
+            biometricLockOverlay.setVisibility(View.VISIBLE);
+            biometricLockOverlay.bringToFront();
+        }
+    }
+
+    private void hideBiometricOverlay() {
+        if (biometricLockOverlay != null) {
+            biometricLockOverlay.setVisibility(View.GONE);
+        }
+    }
+
+    private void useApplicationPinFallback() {
+        if (!isConnected()) {
+            Toast.makeText(
+                    this,
+                    "PIN aplikasi memerlukan koneksi untuk mengunci ulang sesi dengan aman.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+        biometricPromptVisible = false;
+        webView.loadUrl(APP_URL + "?app_lock=1");
+        hideBiometricOverlay();
+    }
+
+    private void authenticateBiometric(int mode) {
+        if (biometricPromptVisible) return;
+
+        int capability = biometricCapability();
+        if (capability != BiometricManager.BIOMETRIC_SUCCESS) {
+            if (mode == BIOMETRIC_MODE_UNLOCK && isBiometricEnabled()) {
+                // Jangan otomatis mematikan pengamanan hanya karena sensor sementara tidak tersedia.
+                // Pengguna tetap dapat memilih fallback PIN aplikasi.
+                showBiometricOverlay(biometricUnavailableMessage(capability) + " Gunakan PIN aplikasi bila perlu.");
+                Toast.makeText(this, biometricUnavailableMessage(capability), Toast.LENGTH_LONG).show();
+            } else if (mode == BIOMETRIC_MODE_DISABLE) {
+                // Pengguna sudah berada di sesi aplikasi yang terbuka; izinkan mematikan setting lokal
+                // jika sensor memang sudah tidak tersedia agar tidak terjadi lockout permanen.
+                securityPrefs.edit().putBoolean(PREF_BIOMETRIC_ENABLED, false).apply();
+                hideBiometricOverlay();
+            } else {
+                Toast.makeText(this, biometricUnavailableMessage(capability), Toast.LENGTH_LONG).show();
+            }
+            notifyWebBiometricStatus();
+            return;
+        }
+
+        Executor executor = ContextCompat.getMainExecutor(this);
+        BiometricPrompt prompt = new BiometricPrompt(
+                this,
+                executor,
+                new BiometricPrompt.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationError(int errorCode, CharSequence errString) {
+                        super.onAuthenticationError(errorCode, errString);
+                        biometricPromptVisible = false;
+                        if (mode == BIOMETRIC_MODE_UNLOCK) {
+                            if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                                useApplicationPinFallback();
+                                return;
+                            }
+                            showBiometricOverlay("Aplikasi tetap terkunci. Coba biometrik lagi atau gunakan PIN aplikasi.");
+                        }
+                        notifyWebBiometricStatus();
+                    }
+
+                    @Override
+                    public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                        super.onAuthenticationSucceeded(result);
+                        biometricPromptVisible = false;
+                        if (mode == BIOMETRIC_MODE_ENABLE) {
+                            securityPrefs.edit().putBoolean(PREF_BIOMETRIC_ENABLED, true).apply();
+                            Toast.makeText(MainActivity.this, "Kunci biometrik diaktifkan.", Toast.LENGTH_SHORT).show();
+                        } else if (mode == BIOMETRIC_MODE_DISABLE) {
+                            securityPrefs.edit().putBoolean(PREF_BIOMETRIC_ENABLED, false).apply();
+                            Toast.makeText(MainActivity.this, "Kunci biometrik dinonaktifkan.", Toast.LENGTH_SHORT).show();
+                        }
+                        hideBiometricOverlay();
+                        notifyWebBiometricStatus();
+                    }
+
+                    @Override
+                    public void onAuthenticationFailed() {
+                        super.onAuthenticationFailed();
+                        if (mode == BIOMETRIC_MODE_UNLOCK) {
+                            showBiometricOverlay("Biometrik tidak cocok. Silakan coba lagi.");
+                        }
+                    }
+                }
+        );
+
+        BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle(mode == BIOMETRIC_MODE_DISABLE ? "Nonaktifkan kunci biometrik" : "Buka Catatan Keuangan")
+                .setSubtitle(mode == BIOMETRIC_MODE_ENABLE
+                        ? "Verifikasi untuk mengaktifkan " + biometricLabel().toLowerCase(Locale.ROOT)
+                        : "Gunakan " + biometricLabel().toLowerCase(Locale.ROOT))
+                .setAllowedAuthenticators(biometricAuthenticators())
+                .setConfirmationRequired(false);
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            promptBuilder.setNegativeButtonText(
+                    mode == BIOMETRIC_MODE_UNLOCK ? "Gunakan PIN aplikasi" : "Batal"
+            );
+        }
+
+        biometricPromptVisible = true;
+        prompt.authenticate(promptBuilder.build());
+    }
+
+    private class BiometricBridge {
+        @JavascriptInterface
+        public String getStatus() {
+            return getBiometricStatusJson();
+        }
+
+        @JavascriptInterface
+        public void requestEnable() {
+            runOnUiThread(() -> authenticateBiometric(BIOMETRIC_MODE_ENABLE));
+        }
+
+        @JavascriptInterface
+        public void requestDisable() {
+            runOnUiThread(() -> {
+                if (!isBiometricEnabled()) {
+                    notifyWebBiometricStatus();
+                    return;
+                }
+                authenticateBiometric(BIOMETRIC_MODE_DISABLE);
+            });
         }
     }
 
@@ -224,6 +479,7 @@ public class MainActivity extends Activity {
 
             // Pastikan cookie/session tersimpan ke disk
             CookieManager.getInstance().flush();
+            notifyWebBiometricStatus();
         }
 
         @Override
@@ -624,6 +880,15 @@ public class MainActivity extends Activity {
 
         webView.onResume();
 
+        if (isBiometricEnabled()
+                && backgroundedAt > 0L
+                && (System.currentTimeMillis() - backgroundedAt) >= BIOMETRIC_RELOCK_AFTER_MS
+                && !biometricPromptVisible) {
+            showBiometricOverlay("Verifikasi biometrik untuk kembali ke aplikasi.");
+            authenticateBiometric(BIOMETRIC_MODE_UNLOCK);
+        }
+        backgroundedAt = 0L;
+
         if (isConnected()
                 && showingLocalOfflinePage) {
 
@@ -639,6 +904,12 @@ public class MainActivity extends Activity {
                     null
             );
         }
+    }
+
+    @Override
+    protected void onStop() {
+        backgroundedAt = System.currentTimeMillis();
+        super.onStop();
     }
 
     @Override

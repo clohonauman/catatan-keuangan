@@ -3,6 +3,7 @@ require_once __DIR__.'/auth.php';
 require_once __DIR__.'/db.php';
 require_once __DIR__.'/admin_notification_helper.php';
 require_once __DIR__.'/image_storage_helper.php';
+require_once __DIR__.'/user_email_notification_helper.php';
 
 define('SUBSCRIPTION_FILE', __DIR__.'/data/subscriptions.json');
 define('PAYMENT_PROOF_DIR', __DIR__.'/data/payment_proofs');
@@ -556,6 +557,9 @@ function subscriptionApproveOrder(int $orderId, array $admin): array {
     }
     $invoiceChat .= "\nTotal: ".subscriptionFormatRupiah((int)$updated['amount'])."\nBank: {$updated['bank_name']}\nStatus: LUNAS\nTerima kasih telah menggunakan Catatan Keuangan Premium.";
     addChatForUser((int)$updated['user_id'], 'assistant', $invoiceChat);
+    try {
+        emailNotifyAutomatic((int)$updated['user_id'], 'premium_approved_'.(int)$updated['id'], 'premium', 'Pembayaran Premium Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' telah diverifikasi. Akun Anda sekarang Premium ('.$updated['plan_label'].') dan '.$expiryText.'.', ['action_url'=>'https://charlie-finance.rf.gd/','action_label'=>'Buka Catatan Keuangan']);
+    } catch (Throwable $mailError) { /* jangan gagalkan approval karena email */ }
 
     return $updated;
 }
@@ -584,6 +588,9 @@ function subscriptionRejectOrder(int $orderId, array $admin, string $reason=''):
     });
 
     addChatForUser((int)$updated['user_id'], 'assistant', 'Pembelian ditolak karena bukti bayar tidak valid. Jika ingin mengajukan pertanyaan seputar pembelian tersebut silahkan hubungi admin melalui Chat WA Only +6282259866048 (Senin - Sabtu 09.00 WITA - 17.00 WITA).');
+    try {
+        emailNotifyAutomatic((int)$updated['user_id'], 'premium_rejected_'.(int)$updated['id'], 'premium', 'Pembayaran Premium Belum Dapat Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' belum dapat disetujui. Alasan: '.$reason, ['action_url'=>'https://charlie-finance.rf.gd/','action_label'=>'Buka Catatan Keuangan']);
+    } catch (Throwable $mailError) { /* jangan gagalkan rejection karena email */ }
     return $updated;
 }
 

@@ -10,6 +10,7 @@ if (!authIsSuperAdmin($admin)) {
 }
 require_once __DIR__.'/../db.php';
 require_once __DIR__.'/../subscription_helper.php';
+require_once __DIR__.'/../user_email_notification_helper.php';
 
 function adminUsersSnapshot(): array {
     $auth = authReadData();
@@ -50,6 +51,8 @@ function adminUsersSnapshot(): array {
         $rows[] = [
             'id'=>$id,
             'username'=>$u['username'],
+            'email'=>(string)($u['email'] ?? ''),
+            'email_verified'=>trim((string)($u['email_verified_at'] ?? '')) !== '',
             'role'=>authUserRole($u),
             'plan'=>$plan,
             'premium_type'=>(string)($u['premium_type'] ?? ''),
@@ -77,10 +80,17 @@ try {
         $in = json_decode(file_get_contents('php://input'), true);
         if (!is_array($in)) $in = [];
         $action = (string)($in['action'] ?? '');
+        $actionResult = null;
 
         switch ($action) {
             case 'set_plan':
-                authAdminSetUserPlan((int)($in['user_id'] ?? 0), (string)($in['plan'] ?? 'free'), (string)($in['expires_at'] ?? ''));
+                $changedUser = authAdminSetUserPlan((int)($in['user_id'] ?? 0), (string)($in['plan'] ?? 'free'), (string)($in['expires_at'] ?? ''));
+                try {
+                    $planLabel = ((string)($changedUser['plan'] ?? 'free') === 'premium') ? 'Premium' : 'Free';
+                    $expiry = trim((string)($changedUser['plan_expires_at'] ?? ''));
+                    $msg = 'Status paket akun Anda telah diperbarui oleh admin menjadi '.$planLabel.'.'.($expiry !== '' ? ' Masa aktif sampai '.$expiry.'.' : '');
+                    emailNotifyAutomatic((int)$changedUser['id'], 'admin_plan_'.date('YmdHis'), 'premium', 'Status Paket Akun Diperbarui', $msg, ['action_url'=>'https://charlie-finance.rf.gd/','action_label'=>'Buka Catatan Keuangan']);
+                } catch (Throwable $mailError) { /* perubahan paket tetap berhasil walau email gagal */ }
                 break;
             case 'subscription_approve':
                 subscriptionApproveOrder((int)($in['order_id'] ?? 0), $admin);
@@ -100,6 +110,18 @@ try {
             case 'bank_delete':
                 subscriptionAdminDeleteBank((string)($in['bank_id'] ?? ''));
                 break;
+            case 'email_broadcast_create':
+                $actionResult = emailBroadcastCreate($admin, (array)($in['broadcast'] ?? []));
+                break;
+            case 'email_broadcast_process':
+                $actionResult = emailBroadcastProcess((int)($in['campaign_id'] ?? 0), (int)($in['batch_size'] ?? 5));
+                break;
+            case 'email_broadcast_retry':
+                $actionResult = emailBroadcastRetryFailed((int)($in['campaign_id'] ?? 0));
+                break;
+            case 'email_broadcast_test':
+                $actionResult = emailBroadcastSendTest($admin, (array)($in['broadcast'] ?? []));
+                break;
             default:
                 throw new InvalidArgumentException('Aksi admin tidak dikenal.');
         }
@@ -111,6 +133,8 @@ try {
         'users'=>$users['users'],
         'stats'=>$users['stats'],
         'subscriptions'=>subscriptionAdminSnapshot(),
+        'email_broadcasts'=>emailBroadcastSnapshot(),
+        'action_result'=>$actionResult ?? null,
     ], JSON_UNESCAPED_UNICODE);
 } catch (InvalidArgumentException $e) {
     http_response_code(422);

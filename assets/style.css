@@ -1491,3 +1491,73 @@ dialog.tx-detail-dialog{width:min(600px,calc(100% - 24px));max-height:calc(100dv
 .help-faq-footer{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e4e9f0}.help-faq-footer>div{display:grid;gap:2px}.help-faq-footer>div b{font-size:11px;color:#2b384b}.help-faq-footer>div span{font-size:9.5px;color:#8b95a4}.help-faq-footer .btn{white-space:nowrap}
 @media(max-width:760px){.help-faq-dialog{width:100%!important;max-width:none!important;max-height:none!important;height:92dvh!important;margin:auto 0 0!important;border-radius:24px 24px 0 0!important}.help-faq-card{height:92dvh;max-height:92dvh}.help-faq-head{padding:15px 15px 12px}.help-faq-title-icon{width:36px;height:36px;flex-basis:36px;border-radius:12px;font-size:19px}.help-faq-title-wrap h3{font-size:17px}.help-faq-title-wrap p{font-size:9.5px}.help-faq-search-wrap{margin:11px 12px 8px}.help-faq-categories{flex-wrap:nowrap;gap:6px;padding:0 12px 10px;overflow-x:auto;scrollbar-width:none}.help-faq-categories::-webkit-scrollbar{display:none}.help-faq-categories button{padding:8px 11px}.help-faq-body{padding:0 12px 12px}.help-faq-results-line{padding:2px 2px 8px}.help-faq-results-line span{display:none}.help-faq-item summary{min-height:46px;padding:11px 12px;font-size:10.5px}.help-faq-answer{padding:10px 12px 12px;font-size:10.5px}.help-faq-group-title{margin-top:13px}.help-faq-group-title small{display:none}.help-faq-footer{padding:10px 12px calc(10px + env(safe-area-inset-bottom))}.help-faq-footer>div span{display:none}.help-faq-footer .btn{padding:10px 12px;font-size:11px}}
 
+
+
+/* ===== Biometric security (Android native bridge) ===== */
+.biometric-security-card{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  margin:14px 0;
+  padding:14px;
+  border:1px solid #dbe4f0;
+  border-radius:16px;
+  background:linear-gradient(180deg,#fff,#f8fbff);
+}
+.biometric-security-icon{
+  width:44px;height:44px;border-radius:14px;
+  display:grid;place-items:center;
+  background:#eaf2ff;color:#175cd3;
+  font-size:24px;font-weight:800;
+}
+.biometric-security-copy{min-width:0;display:grid;gap:4px}
+.biometric-security-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.biometric-security-title-row b{font-size:14px;color:#162033}
+.biometric-security-copy small{display:block;color:#526173;line-height:1.45}
+.biometric-security-note{display:block;color:#7b8796;font-size:11px;line-height:1.4}
+.biometric-security-state{
+  display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;
+  font-size:9px;font-weight:800;letter-spacing:.05em;
+}
+.biometric-security-state.enabled{background:#e8f8ef;color:#087443}
+.biometric-security-state.available{background:#eaf2ff;color:#175cd3}
+.biometric-security-state.unavailable{background:#f1f3f6;color:#687386}
+.biometric-security-toggle{min-width:104px;white-space:nowrap}
+@media(max-width:620px){
+  .biometric-security-card{grid-template-columns:42px minmax(0,1fr);align-items:start}
+  .biometric-security-icon{width:42px;height:42px}
+  .biometric-security-toggle{grid-column:1/-1;width:100%}
+}
+
+/* =========================================================
+   ADMIN: BROADCAST EMAIL PENGGUNA
+   ========================================================= */
+.admin-email-broadcast-section{position:relative}
+.admin-broadcast-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.admin-broadcast-form label{display:grid;gap:5px;margin:0;font-size:9px;font-weight:850;color:#667085}
+.admin-broadcast-form input,.admin-broadcast-form select,.admin-broadcast-form textarea{width:100%;box-sizing:border-box;border:1px solid #dce3ed;border-radius:10px;background:#fff;color:#172235;padding:9px 10px;font:inherit;font-size:10px;outline:none;transition:.15s ease}
+.admin-broadcast-form textarea{min-height:105px;resize:vertical;line-height:1.55}
+.admin-broadcast-form input:focus,.admin-broadcast-form select:focus,.admin-broadcast-form textarea:focus{border-color:#8fb6ff;box-shadow:0 0 0 3px rgba(23,92,211,.08)}
+.admin-broadcast-wide{grid-column:1/-1}
+.admin-broadcast-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:11px}
+.admin-broadcast-progress{min-width:0;color:#667085;font-size:9px;line-height:1.45}
+.admin-broadcast-history{margin-top:12px}
+.admin-broadcast-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border:1px solid #e3e8ef;border-radius:13px;background:#fff}
+.admin-broadcast-icon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:#edf4ff;color:#175cd3;font-size:17px}
+.admin-broadcast-main{min-width:0}.admin-broadcast-main>b{display:block;font-size:11px;color:#26354a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.admin-broadcast-main>small{display:block;margin-top:3px;color:#8792a3;font-size:8px}
+.admin-broadcast-meter{height:5px;margin-top:7px;border-radius:999px;overflow:hidden;background:#eef2f6}.admin-broadcast-meter span{display:block;height:100%;border-radius:inherit;background:#175cd3}
+.admin-broadcast-retry{white-space:nowrap!important;width:auto!important}
+@media(max-width:760px){.admin-broadcast-form{grid-template-columns:1fr}.admin-broadcast-wide{grid-column:auto}.admin-broadcast-actions{align-items:stretch;flex-direction:column}.admin-broadcast-actions .btn{width:100%}.admin-broadcast-row{grid-template-columns:34px minmax(0,1fr)}.admin-broadcast-icon{width:34px;height:34px}.admin-broadcast-retry{grid-column:2;width:max-content!important}}
+.admin-broadcast-form label>small{font-size:8px;font-weight:600;line-height:1.45;color:#8a95a6}
+.admin-broadcast-action-buttons{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.admin-broadcast-card{display:grid;gap:8px}
+.admin-broadcast-diagnostics{margin:0 2px 10px;padding:9px 11px;border:1px solid #e7ebf1;border-radius:11px;background:#fbfcfe}
+.admin-broadcast-diagnostics summary{cursor:pointer;font-size:9px;font-weight:800;color:#52657d}
+.admin-broadcast-diagnostic-list{display:grid;gap:6px;margin-top:8px}
+.admin-broadcast-diagnostic-item{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:10px;align-items:start;padding:7px 8px;border-radius:9px;background:#fff;border:1px solid #edf0f4}
+.admin-broadcast-diagnostic-item>span{min-width:0}.admin-broadcast-diagnostic-item b{display:block;font-size:9px;color:#2a3950}.admin-broadcast-diagnostic-item small{display:block;font-size:8px;color:#8490a1;line-height:1.4;word-break:break-word}
+.admin-broadcast-delivery-note{display:block;margin-top:8px;color:#98a2b3;font-size:8px;line-height:1.45}
+@media(max-width:760px){.admin-broadcast-action-buttons{width:100%;display:grid;grid-template-columns:1fr 1fr}.admin-broadcast-action-buttons .btn{width:100%}.admin-broadcast-diagnostic-item{grid-template-columns:1fr}}
+
+.admin-broadcast-safe-mode{padding:10px 12px;border:1px solid #dfe7f2;border-radius:12px;background:#f8fbff}.admin-broadcast-safe-row{display:flex!important;align-items:center;gap:8px;font-size:9px!important;color:#344054!important;font-weight:750!important}.admin-broadcast-safe-row input{width:16px!important;height:16px!important;margin:0!important;box-shadow:none!important}.admin-broadcast-safe-mode>small{font-size:8px!important;color:#7c8a9d!important;line-height:1.45!important}

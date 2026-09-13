@@ -35,8 +35,10 @@ function financeEnsureFeatureData(&$d) {
             'bills'=>true,
             'low_balance'=>false,
             'low_balance_threshold'=>100000,
+            'email_enabled'=>true,
         ];
     }
+    if (!array_key_exists('email_enabled', $d['settings']['notifications'])) $d['settings']['notifications']['email_enabled'] = true;
 
     if (!isset($d['wallets']) || !is_array($d['wallets']) || count($d['wallets']) === 0) {
         $legacyInitial = max(0, (int)($d['settings']['initial_balance'] ?? 0));
@@ -636,7 +638,7 @@ function financeUndoAudit($auditId){
 }
 
 function financeNotificationSettings(){ $d=financeReadData();return $d['settings']['notifications']; }
-function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000))];setSetting('notifications',$cfg);return $cfg;}
+function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),'email_enabled'=>!array_key_exists('email_enabled',$input)||!empty($input['email_enabled'])];setSetting('notifications',$cfg);return $cfg;}
 
 function financeFeatureSnapshot(){
     financeProcessRecurring();

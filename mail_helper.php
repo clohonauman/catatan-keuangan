@@ -49,6 +49,45 @@ function financeSmtpCommand($socket, $command, $allowedCodes, $context='SMTP') {
     return financeSmtpExpect($socket, $allowedCodes, $context);
 }
 
+function financeSmtpWriteAll($socket, string $data, string $context='SMTP'): void {
+    $length = strlen($data);
+    $offset = 0;
+    while ($offset < $length) {
+        $written = fwrite($socket, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            throw new RuntimeException($context.' gagal menulis data ke server SMTP.');
+        }
+        $offset += $written;
+    }
+}
+
+function financeMailBase64Part(string $value): string {
+    return rtrim(chunk_split(base64_encode($value), 76, "\r\n"));
+}
+
+/**
+ * Mendeteksi pembatasan kuota harian provider email.
+ * Gmail mengembalikan 550-5.4.5 / "Daily user sending limit exceeded".
+ * Fungsi ini sengaja generik agar fitur broadcast dapat menahan antrean
+ * tanpa menandai penerima sebagai gagal permanen.
+ */
+function financeMailIsDailySendingLimitError($error): bool {
+    $message = $error instanceof Throwable ? $error->getMessage() : (string)$error;
+    $message = strtolower(trim($message));
+    if ($message === '') return false;
+    $needles = [
+        'daily user sending limit exceeded',
+        '550-5.4.5',
+        '550 5.4.5',
+        'daily sending limit',
+        'sending limit exceeded',
+    ];
+    foreach ($needles as $needle) {
+        if (strpos($message, $needle) !== false) return true;
+    }
+    return false;
+}
+
 function financeSmtpSend($to, $subject, $html, $text='') {
     $host = trim((string)MAIL_SMTP_HOST);
     $port = (int)MAIL_SMTP_PORT;
@@ -95,12 +134,14 @@ function financeSmtpSend($to, $subject, $html, $text='') {
 
         $boundary = '=_Finance_'.bin2hex(random_bytes(12));
         $fromName = financeMailHeaderEncode((string)MAIL_FROM_NAME);
+        $messageId = '<'.bin2hex(random_bytes(12)).'@'.($helo ?: 'localhost').'>';
         $headers = [
             'Date: '.date(DATE_RFC2822),
             'From: '.$fromName.' <'.$from.'>',
+            'Reply-To: '.$from,
             'To: <'.$to.'>',
             'Subject: '.financeMailHeaderEncode($subject),
-            'Message-ID: <'.bin2hex(random_bytes(12)).'@'.($helo ?: 'localhost').'>',
+            'Message-ID: '.$messageId,
             'MIME-Version: 1.0',
             'Content-Type: multipart/alternative; boundary="'.$boundary.'"',
         ];
@@ -108,19 +149,25 @@ function financeSmtpSend($to, $subject, $html, $text='') {
         $text = trim((string)$text);
         if ($text === '') $text = trim(html_entity_decode(strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $html)), ENT_QUOTES|ENT_HTML5, 'UTF-8'));
 
+        // Base64 untuk body membuat email UTF-8 lebih stabil di shared hosting/relay SMTP
+        // dan menghindari perubahan karakter/line wrapping oleh server di tengah jalan.
         $body = implode("\r\n", $headers)."\r\n\r\n";
-        $body .= '--'.$boundary."\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n".$text."\r\n\r\n";
-        $body .= '--'.$boundary."\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n".$html."\r\n\r\n";
+        $body .= '--'.$boundary."\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n".financeMailBase64Part($text)."\r\n\r\n";
+        $body .= '--'.$boundary."\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n".financeMailBase64Part($html)."\r\n\r\n";
         $body .= '--'.$boundary."--\r\n";
-        $body = preg_replace('/(?m)^\./', '..', $body);
 
-        if (fwrite($socket, $body."\r\n.\r\n") === false) throw new RuntimeException('Gagal mengirim isi email melalui SMTP.');
-        financeSmtpExpect($socket, [250], 'Pengiriman email');
+        financeSmtpWriteAll($socket, $body."\r\n.\r\n", 'Isi email SMTP');
+        $smtpResponse = financeSmtpExpect($socket, [250], 'Pengiriman email');
         @fwrite($socket, "QUIT\r\n");
     } finally {
         @fclose($socket);
     }
-    return true;
+    return [
+        'accepted'=>true,
+        'transport'=>'smtp',
+        'message_id'=>$messageId ?? '',
+        'smtp_response'=>$smtpResponse ?? '',
+    ];
 }
 
 function financeSendMail($to, $subject, $html, $text='') {
@@ -142,7 +189,7 @@ function financeSendMail($to, $subject, $html, $text='') {
     ];
     $ok = @mail($to, financeMailHeaderEncode($subject), $html, implode("\r\n", $headers));
     if (!$ok) throw new RuntimeException('Email tidak dapat dikirim oleh server. Jika hosting menonaktifkan mail(), gunakan SMTP pada mail_config.php.');
-    return true;
+    return ['accepted'=>true,'transport'=>'mail','message_id'=>'','smtp_response'=>''];
 }
 
 function financeSecurityEmailHtml($title, $intro, $code, $expiresMinutes=15) {

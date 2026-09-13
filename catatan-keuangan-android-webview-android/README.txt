@@ -1,10 +1,10 @@
-# Folder app - Catatan Keuangan
+CATATAN KEUANGAN ANDROID v1.2.0
 
-Folder ini siap menggantikan folder `app/` pada project Android Anda.
+Project Android lengkap untuk https://charlie-finance.rf.gd/
 
-Perubahan:
-- Nama aplikasi launcher: Catatan Keuangan
-- Safe Browsing WebView tetap OFF sesuai permintaan
-- Kamera/galeri, download laporan, Service Worker, offline fallback dan auto-sync dipertahankan
-- applicationId tetap `com.charlie.finance`
-- Domain tetap `https://charlie-finance.rf.gd/`
+Tambahan versi ini:
+- Splash Screen native saat aplikasi dibuka.
+- Biometrik native tetap aktif (fingerprint/face unlock yang didukung perangkat).
+- Kamera/galeri, offline, download, dan WebView tetap tersedia.
+
+Buka folder ini di Android Studio, gunakan JDK 17, lalu lakukan Gradle Sync.

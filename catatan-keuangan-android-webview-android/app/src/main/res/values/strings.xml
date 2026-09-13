@@ -2,4 +2,6 @@
     <string name="app_name">Catatan Keuangan</string>
     <string name="offline_title">Sedang Offline</string>
     <string name="offline_message">Aplikasi akan memakai data yang sudah tersimpan di perangkat. Hubungkan internet untuk sinkronisasi otomatis.</string>
+    <string name="splash_subtitle">Keuangan lebih tertata, keputusan lebih tenang.</string>
+    <string name="splash_footer">Charlie Finance</string>
 </resources>

@@ -158,6 +158,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Digunakan oleh fallback biometrik native: paksa sesi kembali ke layar PIN aplikasi.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['app_lock']) && $_GET['app_lock'] === '1') {
+    $lockUser = authCurrentUser();
+    if ($lockUser && !empty($lockUser['pin_hash'])) {
+        $_SESSION['pin_verified'] = false;
+    }
+}
+
 $user = authCurrentUser();
 $unlocked = $user && !empty($_SESSION['pin_verified']);
 $emailStatus = $user ? authEmailStatus($user) : ['email'=>'','has_email'=>false,'verified'=>false,'verified_at'=>'','masked'=>''];
@@ -1465,16 +1473,69 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                                 <label class="toggle-line"><input type="checkbox" id="notifyBills"> Tagihan jatuh
                                     tempo</label>
                                 <label class="toggle-line"><input type="checkbox" id="notifyLow"> Saldo rendah</label>
+                                <label class="toggle-line"><input type="checkbox" id="notifyEmailEnabled"> Kirim notifikasi juga ke email terverifikasi</label>
                                 <label>Ambang saldo rendah<input type="number" id="notifyLowThreshold" min="0"
                                         step="1000"></label>
                                 <button class="btn primary" id="saveNotificationSettings" type="button">Simpan
                                     Notifikasi</button>
-                                <small>Notifikasi tanpa server push bekerja saat aplikasi sedang dibuka/aktif.</small>
+                                <small>Peringatan browser bekerja saat aplikasi sedang dibuka/aktif. Jika email diaktifkan, peringatan yang sama juga dikirim ke email terverifikasi dan dideduplikasi agar tidak terkirim berulang kali.</small>
                             </div>
                         </div>
                     </section>
                     <?php if (authIsSuperAdmin($user)): ?><section class="finance-tab-panel" data-finance-panel="admin" hidden>
                             <div class="analytics-kpis" id="adminKpis"></div>
+
+                            <div class="admin-premium-section admin-email-broadcast-section">
+                                <div class="feature-toolbar">
+                                    <div><b>Broadcast Email Pengguna</b><small>Kirim informasi pembaruan Android, pengumuman, maintenance, atau pemberitahuan keamanan ke email pengguna yang sudah terverifikasi.</small></div>
+                                </div>
+                                <div class="admin-broadcast-form">
+                                    <label>Jenis Notifikasi
+                                        <select id="adminBroadcastKind">
+                                            <option value="android_update">Pembaruan Aplikasi Android</option>
+                                            <option value="announcement">Pengumuman</option>
+                                            <option value="maintenance">Maintenance / Layanan</option>
+                                            <option value="security">Keamanan</option>
+                                        </select>
+                                    </label>
+                                    <label>Target Pengguna
+                                        <select id="adminBroadcastTarget">
+                                            <option value="all">Semua pengguna</option>
+                                            <option value="free">Pengguna Free</option>
+                                            <option value="premium">Pengguna Premium</option>
+                                        </select>
+                                    </label>
+                                    <label class="admin-broadcast-wide">Judul
+                                        <input id="adminBroadcastTitle" maxlength="120" placeholder="Contoh: Pembaruan Aplikasi Android Tersedia">
+                                    </label>
+                                    <label class="admin-broadcast-wide">Subjek Email
+                                        <input id="adminBroadcastSubject" maxlength="140" placeholder="Contoh: Versi terbaru Catatan Keuangan sudah tersedia">
+                                    </label>
+                                    <label class="admin-broadcast-wide">Isi Pesan
+                                        <textarea id="adminBroadcastMessage" rows="5" maxlength="4000" placeholder="Jelaskan informasi yang ingin disampaikan kepada pengguna."></textarea>
+                                    </label>
+                                    <label>Link Tombol (opsional)
+                                        <input id="adminBroadcastActionUrl" type="url" placeholder="https://charlie-finance.rf.gd/android-download.php">
+                                        <small>Untuk update Android, hindari link <b>.apk</b> langsung. Sistem otomatis memakai halaman download resmi agar email tidak mudah difilter.</small>
+                                    </label>
+                                    <label>Label Tombol
+                                        <input id="adminBroadcastActionLabel" maxlength="50" placeholder="Unduh APK Terbaru">
+                                    </label>
+                                    <label class="admin-broadcast-wide admin-broadcast-safe-mode">
+                                        <span>Mode Pengiriman</span>
+                                        <span class="admin-broadcast-safe-row"><input id="adminBroadcastIncludeLink" type="checkbox"> Sertakan tombol/link eksternal di email</span>
+                                        <small>Disarankan tetap nonaktif. Email tanpa link lebih mudah masuk Inbox; pengguna dapat membuka aplikasi untuk melihat pembaruan.</small>
+                                    </label>
+                                </div>
+                                <div class="admin-broadcast-actions">
+                                    <div id="adminBroadcastProgress" class="admin-broadcast-progress">Siap mengirim ke email terverifikasi.</div>
+                                    <div class="admin-broadcast-action-buttons">
+                                        <button type="button" class="btn secondary" id="adminBroadcastTest">Kirim Tes ke Saya</button>
+                                        <button type="button" class="btn primary" id="adminBroadcastSend">Kirim Broadcast</button>
+                                    </div>
+                                </div>
+                                <div class="feature-list admin-broadcast-history" id="adminBroadcastHistory"><div class="empty">Belum ada riwayat broadcast.</div></div>
+                            </div>
 
                             <div class="admin-premium-section admin-notification-section">
                                 <div class="feature-toolbar">
@@ -1656,6 +1717,14 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                         <summary><span>Mengapa email perlu diverifikasi?</span><i>+</i></summary>
                         <div class="help-faq-answer">Email terverifikasi digunakan untuk membantu pemulihan password/PIN dan meningkatkan keamanan akun. Pada menu <b>Email & Keamanan</b> Anda juga dapat meninjau perangkat yang masuk dan mengeluarkan perangkat lain bila diperlukan.</div>
                     </details>
+                    <details class="help-faq-item" data-faq-category="akun" data-faq-keywords="biometrik biometrics fingerprint sidik jari face wajah face id finger id android keamanan kunci">
+                        <summary><span>Bagaimana mengaktifkan kunci biometrik?</span><i>+</i></summary>
+                        <div class="help-faq-answer">Pada aplikasi Android, buka <b>Email & Keamanan</b> lalu aktifkan <b>Kunci Biometrik Perangkat</b>. Android akan memakai metode yang tersedia pada perangkat, misalnya sidik jari, pengenalan wajah yang didukung, atau kredensial kunci layar. Aplikasi tidak menyimpan data sidik jari/wajah; proses verifikasi dilakukan oleh sistem perangkat. PIN aplikasi tetap tersedia sebagai fallback.</div>
+                    </details>
+                    <details class="help-faq-item" data-faq-category="akun" data-faq-keywords="email notifikasi broadcast pembaruan android tagihan saldo batas harian">
+                        <summary>Apakah notifikasi aplikasi bisa dikirim ke email?</summary>
+                        <div class="help-faq-answer">Bisa. Aktifkan <b>Kirim notifikasi juga ke email terverifikasi</b> pada menu <b>Backup &amp; Aplikasi → Notifikasi</b>. Peringatan batas harian, tagihan jatuh tempo, saldo rendah, serta pemberitahuan penting dari admin dapat dikirim ke email. Sistem melakukan deduplikasi agar peringatan yang sama tidak dikirim berulang kali pada hari yang sama.</div>
+                    </details>
                     <details class="help-faq-item" data-faq-category="akun" data-faq-keywords="hapus akun permanen data privasi">
                         <summary><span>Bagaimana menghapus akun?</span><i>+</i></summary>
                         <div class="help-faq-answer">Gunakan menu <b>Hapus Akun</b>. Ikuti konfirmasi yang ditampilkan karena penghapusan akun dan data bersifat permanen sesuai proses yang dijelaskan pada halaman tersebut.</div>
@@ -1833,6 +1902,19 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                             <span>Username tidak dapat diubah.</span>
                         </div>
                         <span class="account-locked-chip">TERKUNCI</span>
+                    </div>
+
+                    <div class="biometric-security-card" id="biometricSecurityCard">
+                        <div class="biometric-security-icon" aria-hidden="true">◎</div>
+                        <div class="biometric-security-copy">
+                            <div class="biometric-security-title-row">
+                                <b>Kunci Biometrik Perangkat</b>
+                                <span class="biometric-security-state unavailable" id="biometricSecurityState">MEMERIKSA</span>
+                            </div>
+                            <small id="biometricSecurityText">Mendeteksi dukungan sidik jari atau pengenalan wajah pada perangkat ini.</small>
+                            <span class="biometric-security-note" id="biometricSecurityNote">Fitur ini melindungi aplikasi saat dibuka kembali. PIN aplikasi tetap tersedia sebagai cadangan.</span>
+                        </div>
+                        <button type="button" class="btn secondary biometric-security-toggle" id="biometricSecurityToggle" disabled>Aktifkan</button>
                     </div>
 
                     <details class="security-change-card" <?= (($_POST['action'] ?? '') === 'change_password') ? 'open' : '' ?>>
@@ -2244,6 +2326,79 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
             };
         </script>
         <script src="assets/offline-store.js?v=<?= h($assetVersion) ?>"></script>
+        <script>
+            (function () {
+                var card = document.getElementById('biometricSecurityCard');
+                var state = document.getElementById('biometricSecurityState');
+                var text = document.getElementById('biometricSecurityText');
+                var note = document.getElementById('biometricSecurityNote');
+                var toggle = document.getElementById('biometricSecurityToggle');
+                if (!card || !state || !text || !toggle) return;
+
+                function parseStatus(raw) {
+                    try { return typeof raw === 'string' ? JSON.parse(raw) : (raw || {}); }
+                    catch (_) { return {}; }
+                }
+
+                function render(status) {
+                    var nativeBridge = !!(window.AndroidBiometric && typeof window.AndroidBiometric.getStatus === 'function');
+                    var supported = !!status.supported;
+                    var enabled = !!status.enabled;
+                    var label = status.label || 'Biometrik perangkat';
+
+                    state.className = 'biometric-security-state ' + (enabled ? 'enabled' : (supported ? 'available' : 'unavailable'));
+                    state.textContent = enabled ? 'AKTIF' : (supported ? 'TERSEDIA' : 'TIDAK TERSEDIA');
+                    toggle.disabled = !nativeBridge || !supported;
+                    toggle.textContent = enabled ? 'Nonaktifkan' : 'Aktifkan';
+                    toggle.dataset.enabled = enabled ? '1' : '0';
+
+                    if (!nativeBridge) {
+                        text.textContent = 'Kunci biometrik native tersedia saat aplikasi dibuka melalui aplikasi Android.';
+                        note.textContent = 'Di browser/PWA, keamanan tetap menggunakan PIN aplikasi. Face ID/Touch ID web memerlukan integrasi Passkey/WebAuthn terpisah.';
+                        return;
+                    }
+
+                    if (supported) {
+                        text.textContent = enabled
+                            ? label + ' aktif. Aplikasi akan meminta verifikasi biometrik setelah kembali dari latar belakang.'
+                            : 'Perangkat mendukung ' + label.toLowerCase() + '. Aktifkan untuk mengunci aplikasi secara lokal.';
+                        note.textContent = 'Verifikasi diproses oleh sistem perangkat. Aplikasi tidak menerima atau menyimpan data sidik jari/wajah.';
+                    } else {
+                        text.textContent = status.message || 'Biometrik atau kunci layar perangkat belum tersedia.';
+                        note.textContent = 'Daftarkan sidik jari/wajah atau aktifkan kunci layar perangkat, lalu buka kembali aplikasi.';
+                    }
+                }
+
+                function refresh() {
+                    if (!(window.AndroidBiometric && typeof window.AndroidBiometric.getStatus === 'function')) {
+                        render({ supported: false, enabled: false });
+                        return;
+                    }
+                    try { render(parseStatus(window.AndroidBiometric.getStatus())); }
+                    catch (_) { render({ supported: false, enabled: false }); }
+                }
+
+                toggle.addEventListener('click', function () {
+                    if (!(window.AndroidBiometric)) return;
+                    toggle.disabled = true;
+                    try {
+                        if (toggle.dataset.enabled === '1') window.AndroidBiometric.requestDisable();
+                        else window.AndroidBiometric.requestEnable();
+                    } catch (_) {
+                        refresh();
+                    }
+                    setTimeout(refresh, 1200);
+                });
+
+                window.addEventListener('finance-biometric-status', function (event) {
+                    render((event && event.detail) || {});
+                });
+                document.getElementById('openEmailSecurity')?.addEventListener('click', function () {
+                    setTimeout(refresh, 80);
+                });
+                refresh();
+            })();
+        </script>
         <script src="assets/app.js?v=<?= h($assetVersion) ?>"></script>
     <?php endif; ?>
 
