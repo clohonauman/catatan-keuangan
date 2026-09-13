@@ -1,0 +1,139 @@
+# =========================================================
+# Catatan Keuangan - Git Ignore
+# =========================================================
+
+# ---------------------------------------------------------
+# OS / Editor
+# ---------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------
+# Environment & secrets
+# ---------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# Contains SMTP credentials / deployment-specific settings
+/mail_config.php
+
+# Optional local-only config variants
+/config.local.php
+/config.*.local.php
+
+# Certificates / private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# ---------------------------------------------------------
+# Runtime user/application data
+# Never commit real user, transaction, notification,
+# subscription, privacy, or assistant-learning data.
+# ---------------------------------------------------------
+/data/*.json
+/data/user_finance/*.json
+/data/payment_proofs/*
+!/data/payment_proofs/.gitkeep
+/data/receipts/
+/data/uploads/
+/data/tmp/
+/data/cache/
+
+# Keep required directory/security placeholders
+!/data/.gitkeep
+!/data/.htaccess
+!/data/user_finance/.gitkeep
+
+# ---------------------------------------------------------
+# Logs / temporary / backup files
+# ---------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+
+/logs/
+/tmp/
+/cache/
+/backups/
+
+# ---------------------------------------------------------
+# PHP dependencies (if Composer is used later)
+# Keep composer.lock committed for applications.
+# ---------------------------------------------------------
+/vendor/
+
+# ---------------------------------------------------------
+# Node dependencies / frontend tooling (if used later)
+# ---------------------------------------------------------
+/node_modules/
+/dist/
+.npm/
+.yarn/
+.pnpm-store/
+
+# ---------------------------------------------------------
+# Android / Gradle WebView project
+# ---------------------------------------------------------
+/catatan-keuangan-android-webview-android/.gradle/
+/catatan-keuangan-android-webview-android/.idea/
+/catatan-keuangan-android-webview-android/build/
+/catatan-keuangan-android-webview-android/app/build/
+/catatan-keuangan-android-webview-android/local.properties
+/catatan-keuangan-android-webview-android/keystore.properties
+/catatan-keuangan-android-webview-android/captures/
+/catatan-keuangan-android-webview-android/.externalNativeBuild/
+/catatan-keuangan-android-webview-android/.cxx/
+
+# Android generated/release artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# ---------------------------------------------------------
+# IDE / Gradle generated files that may appear elsewhere
+# ---------------------------------------------------------
+.gradle/
+**/build/
+
+# ---------------------------------------------------------
+# Test / coverage output
+# ---------------------------------------------------------
+/coverage/
+.phpunit.result.cache
+
+# ---------------------------------------------------------
+# Local archives / exported project copies
+# ---------------------------------------------------------
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# ---------------------------------------------------------
+# Misc generated files
+# ---------------------------------------------------------
+*.pid
+*.seed
+*.pid.lock

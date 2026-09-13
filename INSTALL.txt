@@ -1,0 +1,1042 @@
+CATATAN KEUANGAN / CHARLIE FINANCE
+PANDUAN INSTALASI LENGKAP
+Versi: v12
+Tanggal: 11 September 2026
+
+============================================================
+1. REQUIREMENT
+============================================================
+
+Minimum:
+- PHP 7.4+
+- Web server Apache/LiteSpeed/Nginx
+- HTTPS sangat direkomendasikan
+- Session PHP aktif
+- JSON extension aktif
+- File upload aktif
+- Folder data dapat ditulis PHP
+
+Rekomendasi:
+- PHP 8.1 / 8.2
+- Apache/LiteSpeed yang mendukung .htaccess
+- fileinfo extension aktif
+
+Tidak membutuhkan:
+- MySQL
+- MariaDB
+- PostgreSQL
+- Composer
+- Node.js
+- npm
+- API OpenAI
+
+Aplikasi menyimpan data pada file JSON.
+
+============================================================
+2. STRUKTUR UTAMA
+============================================================
+
+File/folder utama:
+
+index.php
+auth.php
+config.php
+db.php
+finance_features.php
+native_assistant.php
+learning_helper.php
+receipt_helper.php
+report_pdf_helper.php
+subscription_helper.php
+transaction_filter_helper.php
+offline_sync_helper.php
+manifest.json
+sw.js
+.htaccess
+
+ajax/
+assets/
+data/
+apks/
+
+Folder data penting:
+
+data/users.json
+data/subscriptions.json
+data/assistant_learning.json
+data/user_finance/
+data/payment_proofs/
+
+JANGAN menghapus folder data pada website yang sudah digunakan.
+
+============================================================
+3. INSTALASI BARU DI SHARED HOSTING
+============================================================
+
+A. Siapkan domain/subdomain.
+
+Contoh:
+https://domainanda.com
+
+B. Pastikan HTTPS aktif.
+
+C. Masuk ke File Manager hosting.
+
+D. Buka document root, biasanya:
+- htdocs
+- public_html
+- www
+
+E. Upload seluruh isi FULL package ke document root.
+
+Yang benar:
+
+htdocs/index.php
+htdocs/auth.php
+htdocs/ajax/
+htdocs/assets/
+htdocs/data/
+
+Yang salah:
+
+htdocs/charlie-finance/index.php
+
+kecuali memang aplikasi ingin dipasang pada subfolder tersebut.
+
+F. Permission awal yang direkomendasikan:
+
+Folder: 755
+File:   644
+
+Folder yang harus writable:
+data/
+data/user_finance/
+data/payment_proofs/
+
+Jika PHP tidak dapat menulis, coba:
+775
+
+Jangan gunakan 777 secara permanen.
+
+G. Buka aplikasi melalui browser.
+
+H. Buat akun pertama.
+
+Pada build saat ini, akun pertama dari instalasi kosong otomatis mendapat:
+
+role = super_admin
+
+Setelah itu buat akun user biasa melalui menu registrasi.
+
+I. Buat PIN.
+
+PIN harus 4–6 digit angka.
+
+J. Login Super Admin dan lanjutkan konfigurasi Premium.
+
+============================================================
+4. INSTALASI BARU DENGAN DATA BENAR-BENAR KOSONG
+============================================================
+
+Jika FULL package yang Anda miliki berisi data pengujian/sample, jangan gunakan file data sample untuk produksi.
+
+Sebelum website pertama kali digunakan, pastikan data akun benar-benar kosong.
+
+Struktur users.json kosong yang valid:
+
+{
+    "users": [],
+    "meta": {
+        "next_user_id": 1
+    }
+}
+
+Untuk subscriptions.json, gunakan struktur default aplikasi atau biarkan helper membuat data default jika file tidak ada.
+
+Untuk setiap instalasi baru:
+- Hapus file user_finance sample.
+- Jangan membawa bukti pembayaran sample.
+- Pastikan assistant_learning.json hanya berisi aturan yang memang ingin dipakai.
+
+Jangan melakukan langkah reset ini pada website produksi yang sudah mempunyai user.
+
+
+============================================================
+4A. KONFIGURASI EMAIL PEMULIHAN (WAJIB UNTUK RESET EMAIL)
+============================================================
+
+File konfigurasi:
+mail_config.php
+
+Aplikasi mendukung dua metode:
+
+A. PHP mail()
+--------------
+Set:
+MAIL_TRANSPORT = 'mail'
+
+Metode ini hanya bekerja jika server/hosting mengizinkan fungsi mail().
+Pastikan MAIL_FROM_EMAIL menggunakan alamat pengirim yang valid.
+
+B. SMTP
+-------
+Set:
+MAIL_TRANSPORT = 'smtp'
+MAIL_SMTP_HOST = host SMTP
+MAIL_SMTP_PORT = port SMTP
+MAIL_SMTP_USERNAME = username/email SMTP
+MAIL_SMTP_PASSWORD = password / app password SMTP
+MAIL_SMTP_ENCRYPTION = tls, ssl, atau none
+MAIL_FROM_EMAIL = alamat pengirim
+MAIL_FROM_NAME = Catatan Keuangan
+
+Contoh umum TLS:
+MAIL_SMTP_PORT = 587
+MAIL_SMTP_ENCRYPTION = 'tls'
+
+Contoh umum SSL:
+MAIL_SMTP_PORT = 465
+MAIL_SMTP_ENCRYPTION = 'ssl'
+
+JANGAN unggah kredensial SMTP ke repository publik.
+Gunakan App Password jika penyedia email mewajibkannya.
+
+TEST SETELAH KONFIGURASI:
+1. Daftar akun baru menggunakan email aktif.
+2. Pastikan akun berhasil dibuat.
+3. Setelah masuk, buka Email & Keamanan.
+4. Kirim kode verifikasi.
+5. Pastikan kode 6 digit masuk ke email.
+6. Verifikasi email.
+7. Logout.
+8. Pilih Lupa password / PIN?.
+9. Minta token pemulihan.
+10. Reset password dan/atau PIN.
+11. Login kembali memakai data baru.
+
+CATATAN PENGGUNA LAMA:
+- users.json tidak perlu dimigrasikan manual.
+- User lama tanpa field email tetap dapat login.
+- Setelah login, aplikasi otomatis memberi notifikasi untuk melengkapi email.
+- Jangan menghapus atau menimpa data/users.json pada website production.
+
+============================================================
+5. UPGRADE WEBSITE YANG SUDAH AKTIF
+============================================================
+
+INI BAGIAN PALING PENTING.
+
+Sebelum update:
+
+1. Download backup seluruh website.
+2. Backup khusus folder:
+   data/
+3. Pastikan backup mencakup:
+   - users.json
+   - subscriptions.json
+   - assistant_learning.json
+   - user_finance/
+   - payment_proofs/
+
+Untuk upgrade, gunakan PATCH v8.
+
+Upload isi patch ke root website dan pilih:
+OVERWRITE / REPLACE
+
+JANGAN overwrite folder data dengan data kosong/sample.
+
+JANGAN hapus:
+data/users.json
+data/subscriptions.json
+data/user_finance/
+data/payment_proofs/
+
+Setelah upload:
+- Tutup PWA/Android app.
+- Buka kembali.
+- Refresh halaman.
+- Pastikan Service Worker terbaru aktif.
+
+============================================================
+6. KONFIGURASI SUPER ADMIN
+============================================================
+
+Hak Super Admin ditentukan oleh role:
+
+"role": "super_admin"
+
+Untuk memeriksa:
+
+Buka:
+data/users.json
+
+Contoh konsep user Super Admin:
+
+{
+    "id": 1,
+    "username": "charlie",
+    "role": "super_admin",
+    "plan": "free"
+}
+
+Super Admin tetap memperoleh akses penuh Premium melalui role.
+
+Jangan mengubah:
+password_hash
+pin_hash
+device_tokens
+
+secara manual kecuali memahami dampaknya.
+
+Jika menu Admin tidak muncul:
+1. Logout.
+2. Periksa role.
+3. Login ulang.
+4. Buka PIN.
+5. Refresh aplikasi.
+
+============================================================
+7. KONFIGURASI REKENING PREMIUM
+============================================================
+
+Login sebagai Super Admin.
+
+Buka:
+
+Menu > Admin > Rekening Pembayaran
+
+Konfigurasikan minimal satu bank.
+
+Bank default:
+- SeaBank
+- BCA
+- BRI
+
+Untuk setiap bank isi:
+- Nama Bank
+- Nomor Rekening
+- Nama Pemilik
+- Status Aktif
+
+User hanya dapat memilih bank yang:
+- enabled
+- mempunyai nomor rekening
+- mempunyai nama pemilik
+
+Setelah simpan, uji menggunakan akun Free.
+
+============================================================
+8. PAKET PREMIUM
+============================================================
+
+Paket default:
+
+BULANAN
+Rp50.000
+Masa aktif 1 bulan
+
+TAHUNAN
+Rp360.000 dibayar sekaligus
+Setara Rp30.000/bulan
+Masa aktif 12 bulan
+
+PERMANEN
+Rp600.000
+Sekali beli
+Tidak kedaluwarsa
+
+Harga ditentukan backend.
+
+Jangan hanya mengubah harga di HTML/JavaScript.
+Jika harga ingin diubah secara permanen, sesuaikan source paket backend dengan hati-hati.
+
+============================================================
+9. TEST ALUR PEMBELIAN
+============================================================
+
+Gunakan akun Free.
+
+1. Buka Premium.
+2. Pilih paket.
+3. Pilih bank.
+4. Isi nama pengirim.
+5. Isi nomor rekening pengirim.
+6. Klik Buat Invoice.
+7. Periksa:
+   - Nomor invoice
+   - Paket
+   - Total
+   - Rekening tujuan
+8. Klik Bayar.
+9. Upload JPG/PNG/WEBP.
+10. Pastikan status menjadi:
+    Menunggu Verifikasi
+11. Buka Chat.
+12. Pastikan pesan verifikasi muncul.
+
+Kemudian login Super Admin.
+
+13. Buka Admin.
+14. Buka Pembayaran Premium.
+15. Pastikan order terlihat.
+16. Buka bukti pembayaran.
+17. Klik Verifikasi.
+
+Kembali ke user.
+
+18. Pastikan akun menjadi Premium.
+19. Pastikan chat sukses muncul.
+20. Pastikan invoice LUNAS muncul di chat.
+
+Ulangi sekali dengan Reject untuk memastikan pesan penolakan bekerja.
+
+============================================================
+10. UPLOAD BUKTI BAYAR
+============================================================
+
+Format:
+- JPG/JPEG
+- PNG
+- WEBP
+
+Maksimum:
+8 MB
+
+Folder penyimpanan:
+
+data/payment_proofs/
+
+Jika upload gagal, periksa:
+- permission folder
+- upload_max_filesize
+- post_max_size
+- fileinfo
+- ukuran file
+- MIME gambar
+
+Rekomendasi PHP:
+
+upload_max_filesize = 10M
+post_max_size = 12M
+
+Nilai hosting boleh lebih besar.
+
+============================================================
+11. INSTALL LOCALHOST XAMPP
+============================================================
+
+Contoh macOS/Windows XAMPP.
+
+Copy project ke:
+
+Windows:
+C:\xampp\htdocs\catatan-keuangan\
+
+macOS:
+Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/
+
+Jalankan:
+Apache
+
+Tidak perlu menjalankan MySQL.
+
+Buka:
+
+http://localhost/catatan-keuangan/
+
+Jika folder data tidak writable pada macOS/Linux:
+
+chmod -R 775 data
+
+Gunakan chmod sesuai user/group web server.
+
+Jangan otomatis menggunakan 777.
+
+============================================================
+12. INSTALL PADA MAMP
+============================================================
+
+Copy project ke document root MAMP.
+
+Contoh:
+
+/Applications/MAMP/htdocs/catatan-keuangan/
+
+Jalankan Apache/Nginx + PHP.
+
+Tidak membutuhkan database MySQL.
+
+Buka URL localhost MAMP sesuai port Anda.
+
+Pastikan folder data writable PHP.
+
+============================================================
+13. INSTALL PADA NGINX
+============================================================
+
+PERINGATAN:
+Nginx tidak membaca .htaccess.
+
+Anda WAJIB memblokir akses publik ke folder data.
+
+Contoh konsep konfigurasi:
+
+location ^~ /data/ {
+    deny all;
+    return 403;
+}
+
+Jika aplikasi dipasang dalam subfolder, sesuaikan path.
+
+Pastikan PHP-FPM mempunyai izin tulis pada:
+data/
+data/user_finance/
+data/payment_proofs/
+
+Reload Nginx setelah konfigurasi.
+
+Tes secara manual:
+
+https://domainanda.com/data/users.json
+
+Hasil yang benar:
+403 / Forbidden / Not Found
+
+Hasil yang SALAH:
+isi JSON tampil di browser
+
+============================================================
+14. TEST KEAMANAN DATA
+============================================================
+
+Coba buka:
+
+/data/users.json
+/data/subscriptions.json
+/data/user_finance/user_1.json
+
+Semua HARUS ditolak.
+
+Jangan lanjut publikasi bila salah satu file dapat dibaca dari browser.
+
+============================================================
+15. KONFIGURASI DOMAIN
+============================================================
+
+Build saat ini memakai:
+
+https://charlie-finance.rf.gd
+
+Jika tetap memakai domain itu:
+tidak perlu diubah.
+
+Jika domain berubah, cari referensi domain di:
+
+index.php
+assets/app.js
+project Android WebView
+
+Pada index.php, periksa:
+syncBase
+
+Periksa juga URL APK Android.
+
+Setelah mengubah domain:
+- ubah APP_URL / APP_HOST project Android
+- naikkan versi aplikasi Android
+- naikkan cache Service Worker
+- refresh browser/PWA
+
+============================================================
+16. SERVICE WORKER / CACHE
+============================================================
+
+Versi cache saat dokumentasi:
+
+finance-shell-v10
+
+File:
+sw.js
+
+Jika update CSS/JS tidak muncul:
+1. Pastikan sw.js terbaru ter-upload.
+2. Tutup semua tab aplikasi.
+3. Tutup Android WebView dari recent apps.
+4. Buka kembali.
+5. Hard refresh browser.
+6. Bila perlu clear site data/unregister Service Worker.
+
+Jangan menonaktifkan cache secara permanen hanya untuk mengatasi update.
+
+============================================================
+17. TEST EDIT TRANSAKSI V8
+============================================================
+
+Edit transaksi sekarang BASIC, bukan Premium-only.
+
+Test memakai akun Free:
+
+1. Tambah pengeluaran:
+   makan 20rb
+2. Buka tab Transaksi.
+3. Tekan Edit pada transaksi.
+4. Ubah nominal:
+   25000
+5. Ubah tanggal.
+6. Ubah kategori/keterangan jika perlu.
+7. Simpan.
+8. Pastikan nominal berubah.
+9. Refresh.
+10. Pastikan perubahan tetap tersimpan.
+
+File penting:
+
+ajax/edit_transaction.php
+assets/app.js
+index.php
+db.php
+finance_features.php
+auth.php
+
+Jika modal terbuka tetapi Simpan gagal:
+- buka error log PHP
+- periksa response ajax/edit_transaction.php
+- periksa permission user_finance
+- pastikan semua file v8 ter-upload
+
+============================================================
+18. TEST SEARCH V8
+============================================================
+
+Buka:
+Transaksi
+
+Search harus langsung terlihat.
+
+Search TIDAK berada di dalam panel:
+Filter & Urutkan
+
+Coba cari:
+makan
+
+Coba cari:
+50000
+
+Coba cari:
+bensin
+
+Kemudian uji filter tanggal dan kategori.
+
+============================================================
+19. TEST MENU UNDUH V8
+============================================================
+
+Pada halaman Transaksi:
+
+Tombol utama:
+Unduh
+
+Klik tombol.
+
+Pilihan harus muncul:
+- PDF
+- CSV
+- Excel
+
+Klik area luar atau Escape:
+menu harus menutup.
+
+Akun Free:
+download harus ditolak sebagai fitur Premium.
+
+Akun Premium/Super Admin:
+download harus berjalan.
+
+============================================================
+20. TEST PDF
+============================================================
+
+Login Premium.
+
+Buka Transaksi.
+Atur filter bila perlu.
+Klik:
+
+Unduh > PDF
+
+Pastikan file dapat dibuka.
+
+PDF menggunakan:
+ajax/report.php
+report_pdf_helper.php
+
+Jika blank/error:
+- cek PHP error log
+- pastikan helper ada
+- pastikan sesi unlocked
+- pastikan Premium aktif
+
+============================================================
+21. TEST CSV / EXCEL
+============================================================
+
+Klik:
+Unduh > CSV
+Unduh > Excel
+
+CSV:
+- encoding UTF-8
+- separator ;
+
+Excel:
+- file .xls compatible
+
+Jika browser Android tidak menyimpan file:
+- cek WebView DownloadListener
+- cek cookie/session yang dikirim saat download
+- test dulu melalui Chrome
+
+============================================================
+22. TEST FREE VS PREMIUM
+============================================================
+
+Akun Free wajib masih bisa:
+- login
+- PIN
+- chat
+- tambah transaksi
+- saldo
+- search
+- filter
+- edit transaksi
+- hapus transaksi
+- batas harian
+- foto nota/OCR
+
+Akun Free tidak boleh mendapat akses server-side ke:
+- laporan PDF
+- CSV
+- Excel
+- backup/restore
+- fitur lanjutan Premium
+
+Jangan hanya mengandalkan tombol terkunci di frontend.
+Endpoint backend sudah memiliki pengecekan dan harus tetap dipertahankan.
+
+============================================================
+23. TEST OFFLINE
+============================================================
+
+Pertama kali harus online.
+
+1. Login.
+2. Buka PIN.
+3. Tunggu dashboard selesai.
+4. Pastikan Service Worker aktif.
+5. Matikan internet.
+6. Buka/navigasi aplikasi.
+7. Periksa status Mode Offline.
+8. Lakukan operasi yang didukung queue.
+9. Hidupkan internet.
+10. Tekan Sinkronkan bila diperlukan.
+11. Pastikan antrean kembali 0.
+
+Offline database browser:
+
+charlie_finance_offline_v1
+
+============================================================
+24. OCR
+============================================================
+
+OCR membutuhkan resource Tesseract.js dari CDN saat pertama kali digunakan:
+
+https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
+
+Setelah resource pernah berhasil dimuat, Service Worker mencoba menyimpannya.
+
+Jika OCR gagal:
+- test internet
+- test CDN tidak diblokir
+- gunakan gambar lebih jelas
+- crop nota
+- hindari foto miring/gelap
+
+============================================================
+25. BACKUP SEBELUM UPDATE
+============================================================
+
+Backup minimum:
+
+data/users.json
+data/subscriptions.json
+data/assistant_learning.json
+data/user_finance/
+data/payment_proofs/
+
+Simpan backup di luar public_html/htdocs jika memungkinkan.
+
+Jangan menyimpan ZIP backup berisi users.json pada URL publik.
+
+============================================================
+26. RESTORE WEBSITE MANUAL
+============================================================
+
+Jika update menyebabkan masalah:
+
+1. Hentikan perubahan data sementara.
+2. Backup kondisi saat ini.
+3. Restore file source versi sebelumnya.
+4. Restore folder data hanya jika benar-benar diperlukan.
+5. Jangan mengganti data produksi dengan data sample.
+6. Login.
+7. Test satu akun terlebih dahulu.
+
+============================================================
+27. ERROR 403
+============================================================
+
+Jika endpoint tertentu 403:
+
+Periksa:
+- .htaccess
+- aturan hosting
+- security filter provider
+- permission
+- nama file endpoint
+- login/PIN
+- Premium access
+
+Folder data memang seharusnya 403.
+
+Endpoint ajax tidak seharusnya 403 kecuali:
+- akses Premium ditolak
+- admin endpoint dipanggil non-admin
+- hosting memblokir request
+
+============================================================
+28. ERROR 500
+============================================================
+
+Periksa PHP error log.
+
+Penyebab umum:
+- file belum ter-upload lengkap
+- function helper hilang
+- permission data
+- JSON rusak
+- PHP terlalu lama
+- syntax error
+- disk quota
+- file upload problem
+
+Pastikan PHP >= 7.4.
+
+Rekomendasi PHP 8.1/8.2.
+
+============================================================
+29. DATA JSON RUSAK
+============================================================
+
+Jangan edit JSON produksi saat aplikasi sedang menulis data.
+
+Gunakan editor yang tidak merusak encoding.
+
+JSON harus valid.
+
+Sebelum edit manual:
+- backup file
+- logout user bila memungkinkan
+
+Jika users.json rusak:
+login dapat gagal.
+
+Jika user_<ID>.json rusak:
+data user dapat kembali ke default saat tidak terbaca, sehingga backup sangat penting.
+
+============================================================
+30. PERMISSION
+============================================================
+
+Rekomendasi:
+
+755 folder
+644 file
+
+Jika tidak writable:
+775 pada folder data yang diperlukan
+
+Contoh Linux:
+
+chmod 755 .
+chmod -R 775 data
+find data -type f -exec chmod 664 {} \;
+
+Sesuaikan ownership web server.
+
+Jangan copy command ownership secara membabi buta pada shared hosting.
+
+============================================================
+31. PRIVACY POLICY
+============================================================
+
+Pastikan:
+
+privacy-policy.php
+
+bisa dibuka publik.
+
+Untuk rencana upload Google Play, URL privacy policy publik akan membantu proses listing terutama karena aplikasi memproses:
+- data akun
+- data keuangan
+- foto nota
+- bukti pembayaran
+
+Pastikan isi kebijakan sesuai perilaku aplikasi produksi.
+
+============================================================
+32. DELETE ACCOUNT
+============================================================
+
+Test:
+
+delete-account.php
+
+Pastikan alur penghapusan akun bekerja dan menjelaskan konsekuensi.
+
+Sebelum publikasi besar, uji dengan akun test, jangan akun produksi utama.
+
+============================================================
+33. ANDROID WEBVIEW
+============================================================
+
+Website dapat dibungkus menggunakan Android WebView project Charlie Finance.
+
+Saat domain berubah:
+- ubah APP_URL
+- ubah APP_HOST
+
+Untuk Play Store:
+- gunakan signed AAB/release
+- jangan upload debug APK
+- versionCode harus naik setiap release
+- versionName sebaiknya diperbarui
+- HTTPS harus valid
+- privacy policy harus tersedia
+
+APK yang ada di folder apks/ merupakan file distribusi website, bukan pengganti source Android project.
+
+============================================================
+34. TEST SETELAH DEPLOY
+============================================================
+
+Checklist:
+
+[ ] Website terbuka HTTPS
+[ ] Register bekerja
+[ ] Login bekerja
+[ ] PIN bekerja
+[ ] Logout bekerja
+[ ] Lupa password bekerja
+[ ] Folder data tidak publik
+[ ] Tambah pemasukan bekerja
+[ ] Tambah pengeluaran bekerja
+[ ] Edit transaksi Free bekerja
+[ ] Hapus transaksi bekerja
+[ ] Search terlihat
+[ ] Filter bekerja
+[ ] Batas harian bekerja
+[ ] Foto nota bekerja
+[ ] OCR berjalan
+[ ] Chat berjalan
+[ ] Premium page terbuka
+[ ] Bank tampil
+[ ] Invoice dibuat
+[ ] Bukti bayar upload
+[ ] Admin melihat order
+[ ] Admin melihat bukti
+[ ] Approve Premium bekerja
+[ ] Reject bekerja
+[ ] Chat pembayaran muncul
+[ ] Invoice lunas muncul
+[ ] Free tidak bisa export
+[ ] Premium bisa PDF
+[ ] Premium bisa CSV
+[ ] Premium bisa Excel
+[ ] Backup Premium bekerja
+[ ] Offline shell bekerja
+[ ] Sync queue bekerja
+[ ] PWA install
+[ ] Android WebView login
+[ ] Android download file
+
+============================================================
+35. UPDATE V8 YANG WAJIB TERPASANG
+============================================================
+
+Pastikan file terbaru:
+
+index.php
+auth.php
+assets/app.js
+assets/style.css
+sw.js
+ajax/edit_transaction.php
+ajax/report.php
+ajax/export.php
+ajax/backup.php
+
+v8 mencakup:
+- fix edit transaksi
+- edit Free
+- search selalu tampil
+- menu Unduh compact
+- PDF/CSV/Excel di dropdown
+- proteksi Premium download
+- Service Worker v10
+
+============================================================
+36. KONTAK PEMBELIAN YANG TERTANAM DI SISTEM
+============================================================
+
+Chat WA Only:
++6282259866048
+
+Jam:
+Senin - Sabtu
+09.00 WITA - 17.00 WITA
+
+Jika nomor/jam berubah, update pesan pada source pembelian/reject agar informasi user tetap benar.
+
+============================================================
+37. CATATAN PRODUKSI
+============================================================
+
+JSON cocok untuk:
+- personal app
+- user kecil/menengah
+- shared hosting ringan
+- prototipe/produk sederhana
+
+Jika traffic dan concurrent write sangat besar, evaluasi storage yang lebih scalable.
+
+Untuk versi ini, arsitektur tetap:
+PHP Native + JSON
+
+============================================================
+38. SELESAI
+============================================================
+
+Setelah semua checklist lolos, aplikasi siap digunakan.
+
+Simpan:
+- FULL package
+- PATCH terakhir
+- README.md
+- INSTALL.txt
+- backup folder data
+
+di tempat terpisah dari server produksi.
+
+CATATAN KEUANGAN / CHARLIE FINANCE
+v8
