@@ -102,6 +102,7 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     $balance=(int)$p['current_balance'];
     $gross=(int)($p['gross_balance']??$balance);
     $reserved=max(0,(int)($p['reserved_balance']??0));
+    $minimum=max(0,(int)($p['minimum_balance']??0));
     $days=max(1,(int)$p['days_left']);
     $average=max(0,(int)$p['average_daily_expense']);
     $dailyTotal=max(0,(int)$p['estimated_daily_spend']);
@@ -133,9 +134,10 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     }
     $lines[]="\nDasar perhitungan (total semua dompet):";
     $lines[]='• Saldo tersedia untuk dibelanjakan: '.rupiah($balance);
-    if($reserved>0){
-        $lines[]='• Saldo total sebelum dana disisihkan: '.rupiah($gross);
-        $lines[]='• Dana disisihkan (tidak dipakai untuk proyeksi belanja): '.rupiah($reserved);
+    if($reserved>0||$minimum>0){
+        $lines[]='• Saldo total sebelum dana terlindungi: '.rupiah($gross);
+        if($reserved>0)$lines[]='• Dana disisihkan (tidak dipakai untuk proyeksi belanja): '.rupiah($reserved);
+        if($minimum>0)$lines[]='• Saldo minimum rekening (tidak dapat dipakai): '.rupiah($minimum);
     }
     $lines[]='• Waktu menuju gajian: '.$days.' hari';
     $lines[]='• Rata-rata transaksi berjenis Harian: '.rupiah($average).'/hari dari '.(int)$p['history_days'].' hari pengamatan';
@@ -220,9 +222,9 @@ function smartFinanceReply(string $message): ?string {
     if (!$expense&&!$income&&!$overview&&(preg_match('/\b(?:saldo|uang|duit)\b/u',$t)||$wallet)&&!preg_match('/\b(?:terbesar|terkecil|terakhir|kategori|rata-rata|transaksi)\b/u',$t)) {
         if($from || preg_match('/\b(?:awal|dulu|waktu itu)\b/u',$t))return 'Saya bisa menampilkan saldo saat ini. Untuk riwayat periode, coba “ringkasan pengeluaran dan pemasukan bulan ini”.';
         if($wallet&&function_exists('financeWalletsWithBalances')){
-            $available=0;$gross=0;$reserved=0;
-            foreach(financeWalletsWithBalances() as $w) if((int)($w['id']??0)===$wid){$available=(int)($w['available_balance']??$w['balance']??0);$gross=(int)($w['balance']??0);$reserved=(int)($w['reserved_balance']??0);break;}
-            return 'Uangmu'.$walletLabel.' yang tersedia saat ini '.rupiah($available).($reserved>0?' (total '.rupiah($gross).', dana disisihkan '.rupiah($reserved).').':'.');
+            $available=0;$gross=0;$reserved=0;$minimum=0;
+            foreach(financeWalletsWithBalances() as $w) if((int)($w['id']??0)===$wid){$available=(int)($w['available_balance']??$w['balance']??0);$gross=(int)($w['balance']??0);$reserved=(int)($w['reserved_balance']??0);$minimum=(int)($w['minimum_balance']??0);break;}
+            return 'Uangmu'.$walletLabel.' yang tersedia saat ini '.rupiah($available).(($reserved>0||$minimum>0)?' (total '.rupiah($gross).($reserved>0?', dana disisihkan '.rupiah($reserved):'').($minimum>0?', saldo minimum '.rupiah($minimum):'').').':'.');
         }
         $s=summary();return 'Uangmu saat ini '.rupiah($s['balance']).' untuk total semua dompet.';
     }

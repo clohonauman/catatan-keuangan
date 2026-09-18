@@ -129,7 +129,7 @@ function renderWalletBalanceDetails() {
       <div class="wallet-balance-icon">${walletBalanceIcon(w.type)}</div>
       <div class="wallet-balance-name">
         <b>${esc(w.name || "Dompet")}</b>
-        <small>${esc(w.type === "bank" ? "Bank" : w.type === "ewallet" ? "E-Wallet" : w.type === "savings" ? "Tabungan" : "Cash")} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}</small>
+        <small>${esc(w.type === "bank" ? "Bank" : w.type === "ewallet" ? "E-Wallet" : w.type === "savings" ? "Tabungan" : "Cash")} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}</small>
       </div>
       <strong>${rupiah(w.available_balance ?? w.balance ?? 0)}</strong>
     </div>
@@ -1653,8 +1653,9 @@ function renderInitialWalletForm() {
     const locked = index > 0 && !isPremiumUser();
     return `<div class="initial-wallet-row"><div class="initial-wallet-heading"><b>${esc(w.name)}</b><span>Tersedia: ${esc(rupiah(w.available_balance ?? w.balance ?? 0))}</span></div>
       <div class="initial-wallet-fields"><label for="initial-wallet-${Number(w.id)}">Saldo awal${locked?' · Premium':''}<input id="initial-wallet-${Number(w.id)}" type="number" min="0" step="1" inputmode="numeric" required data-initial-wallet="${Number(w.id)}" data-original-initial="${Number(w.initial_balance || 0)}" value="${Number(w.initial_balance || 0)}" ${locked?'disabled':''}></label>
-      <label for="reserved-wallet-${Number(w.id)}">Dana disisihkan<input id="reserved-wallet-${Number(w.id)}" type="number" min="0" step="1" inputmode="numeric" required data-reserved-wallet="${Number(w.id)}" data-original-reserved="${Number(w.reserved_balance || 0)}" value="${Number(w.reserved_balance || 0)}" ${locked?'disabled':''}></label></div>
-      <small>Dana disisihkan tetap ada di saldo total, tetapi tidak dianggap uang belanja pada prediksi aman sampai gajian.</small></div>`;
+      <label for="reserved-wallet-${Number(w.id)}">Dana disisihkan<input id="reserved-wallet-${Number(w.id)}" type="number" min="0" step="1" inputmode="numeric" required data-reserved-wallet="${Number(w.id)}" data-original-reserved="${Number(w.reserved_balance || 0)}" value="${Number(w.reserved_balance || 0)}" ${locked?'disabled':''}></label>
+      <label for="minimum-wallet-${Number(w.id)}">Saldo minimum<input id="minimum-wallet-${Number(w.id)}" type="number" min="0" step="1" inputmode="numeric" required data-minimum-wallet="${Number(w.id)}" data-original-minimum="${Number(w.minimum_balance || 0)}" value="${Number(w.minimum_balance || 0)}" ${locked?'disabled':''}></label></div>
+      <small>Dana disisihkan dan saldo minimum tidak termasuk uang yang dapat dipakai. Saldo minimum cocok untuk saldo mengendap wajib dari bank.</small></div>`;
   }).join('') || '<p class="muted">Belum ada dompet aktif. Tambahkan dompet untuk mulai mengatur saldo.</p>';
   document.getElementById('saveSetting').disabled = !wallets.length;
 }
@@ -1673,6 +1674,7 @@ document.getElementById('addInitialWallet')?.addEventListener('click', async () 
     document.getElementById('walletName').value = '';
     document.getElementById('walletInitial').value = '';
     if (document.getElementById('walletReserved')) document.getElementById('walletReserved').value = '';
+    if (document.getElementById('walletMinimum')) document.getElementById('walletMinimum').value = '';
     document.getElementById('walletType').value = 'cash';
     document.getElementById('walletName').focus();
     document.getElementById('walletName').scrollIntoView({block:'center'});
@@ -1684,22 +1686,25 @@ document.getElementById('saveSetting').addEventListener('click', async () => {
   const changes = [...modal.querySelectorAll('[data-initial-wallet]:not(:disabled)')].map(input => {
     const id = Number(input.dataset.initialWallet);
     const reserved = modal.querySelector(`[data-reserved-wallet="${id}"]`);
+    const minimum = modal.querySelector(`[data-minimum-wallet="${id}"]`);
     return {
       id,
       initial_balance:Number(input.value),
       expected_initial_balance:Number(input.dataset.originalInitial),
       reserved_balance:Number(reserved?.value || 0),
-      expected_reserved_balance:Number(reserved?.dataset.originalReserved || 0)
+      expected_reserved_balance:Number(reserved?.dataset.originalReserved || 0),
+      minimum_balance:Number(minimum?.value || 0),
+      expected_minimum_balance:Number(minimum?.dataset.originalMinimum || 0)
     };
-  }).filter(w => w.initial_balance !== w.expected_initial_balance || w.reserved_balance !== w.expected_reserved_balance);
+  }).filter(w => w.initial_balance !== w.expected_initial_balance || w.reserved_balance !== w.expected_reserved_balance || w.minimum_balance !== w.expected_minimum_balance);
   if (!changes.length) { modal.close(); return; }
-  if (changes.some(w => !Number.isSafeInteger(w.initial_balance) || w.initial_balance < 0 || !Number.isSafeInteger(w.reserved_balance) || w.reserved_balance < 0)) return alert('Saldo awal dan dana disisihkan harus berupa bilangan bulat rupiah yang valid dan tidak negatif.');
+  if (changes.some(w => !Number.isSafeInteger(w.initial_balance) || w.initial_balance < 0 || !Number.isSafeInteger(w.reserved_balance) || w.reserved_balance < 0 || !Number.isSafeInteger(w.minimum_balance) || w.minimum_balance < 0)) return alert('Saldo awal, dana disisihkan, dan saldo minimum harus berupa bilangan bulat rupiah yang valid dan tidak negatif.');
   const button = document.getElementById('saveSetting');
   button.disabled = true;
   try {
     const result = await fetchJson('ajax/settings.php', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wallet_initial_balances:changes})});
     modal.close();
-    if (result.offline_queued) showOfflineToast('Perubahan saldo awal/dana disisihkan menunggu sinkronisasi saat online.');
+    if (result.offline_queued) showOfflineToast('Perubahan saldo awal/dana disisihkan/saldo minimum menunggu sinkronisasi saat online.');
     await load();
   } catch (err) { alert(err.message); }
   finally { button.disabled = false; }
@@ -2605,11 +2610,11 @@ function renderFinanceCenter() {
 
 function renderWallets(wallets) {
   const box = el("walletList"); if (!box) return;
-  box.innerHTML = wallets.length ? wallets.map(w => `<div class="feature-list-row"><div class="feature-row-icon">${w.type === "bank" ? "🏦" : w.type === "ewallet" ? "📱" : w.type === "savings" ? "🏁" : "💵"}</div><div class="feature-row-main"><b>${esc(w.name)}</b><small>${esc(w.type)} · total ${rupiah(w.balance)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}</small></div><strong>${rupiah(w.available_balance ?? w.balance ?? 0)}<small class="money-caption"> tersedia</small></strong><div class="row-actions"><button data-wallet-edit="${w.id}">Edit</button><button class="danger-link" data-wallet-archive="${w.id}">Arsip</button></div></div>`).join("") : '<div class="empty">Belum ada dompet.</div>';
-  box.querySelectorAll("[data-wallet-edit]").forEach(b => b.onclick = () => { const w=wallets.find(x=>Number(x.id)===Number(b.dataset.walletEdit)); if(!w)return;el("walletId").value=w.id;el("walletName").value=w.name;el("walletType").value=w.type;el("walletInitial").value=w.initial_balance;if(el("walletReserved"))el("walletReserved").value=Number(w.reserved_balance||0); });
+  box.innerHTML = wallets.length ? wallets.map(w => `<div class="feature-list-row"><div class="feature-row-icon">${w.type === "bank" ? "🏦" : w.type === "ewallet" ? "📱" : w.type === "savings" ? "🏁" : "💵"}</div><div class="feature-row-main"><b>${esc(w.name)}</b><small>${esc(w.type)} · total ${rupiah(w.balance)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}</small></div><strong>${rupiah(w.available_balance ?? w.balance ?? 0)}<small class="money-caption"> tersedia</small></strong><div class="row-actions"><button data-wallet-edit="${w.id}">Edit</button><button class="danger-link" data-wallet-archive="${w.id}">Arsip</button></div></div>`).join("") : '<div class="empty">Belum ada dompet.</div>';
+  box.querySelectorAll("[data-wallet-edit]").forEach(b => b.onclick = () => { const w=wallets.find(x=>Number(x.id)===Number(b.dataset.walletEdit)); if(!w)return;el("walletId").value=w.id;el("walletName").value=w.name;el("walletType").value=w.type;el("walletInitial").value=w.initial_balance;if(el("walletReserved"))el("walletReserved").value=Number(w.reserved_balance||0);if(el("walletMinimum"))el("walletMinimum").value=Number(w.minimum_balance||0); });
   box.querySelectorAll("[data-wallet-archive]").forEach(b => b.onclick = async()=>{if(confirm("Arsipkan dompet ini? Transaksi lama tetap tersimpan.")){try{await featureAction({action:"wallet_archive",id:Number(b.dataset.walletArchive)},"Dompet diarsipkan");await load();}catch(e){alert(e.message)}}});
 }
-el("saveWallet")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_save",id:Number(el("walletId").value||0),name:el("walletName").value,type:el("walletType").value,initial_balance:Number(el("walletInitial").value||0),reserved_balance:Number(el("walletReserved")?.value||0)},"Dompet disimpan");el("walletId").value="";el("walletName").value="";el("walletInitial").value="";if(el("walletReserved"))el("walletReserved").value="";await load();}catch(e){alert(e.message)}});
+el("saveWallet")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_save",id:Number(el("walletId").value||0),name:el("walletName").value,type:el("walletType").value,initial_balance:Number(el("walletInitial").value||0),reserved_balance:Number(el("walletReserved")?.value||0),minimum_balance:Number(el("walletMinimum")?.value||0)},"Dompet disimpan");el("walletId").value="";el("walletName").value="";el("walletInitial").value="";if(el("walletReserved"))el("walletReserved").value="";if(el("walletMinimum"))el("walletMinimum").value="";await load();}catch(e){alert(e.message)}});
 
 el("saveTransfer")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_transfer",from_wallet_id:Number(el("transferFrom").value),to_wallet_id:Number(el("transferTo").value),amount:Number(el("transferAmount").value||0),note:el("transferNote").value},"Transfer dicatat");el("transferAmount").value="";el("transferNote").value="";await load();}catch(e){alert(e.message)}});
 
@@ -2628,7 +2633,7 @@ function renderBills(bills){const box=el("billList");if(!box)return;box.innerHTM
 box.querySelectorAll("[data-bill-pay]").forEach(x=>x.onclick=async()=>{if(confirm("Tandai lunas dan catat sebagai pengeluaran?")){try{await featureAction({action:"bill_pay",id:Number(x.dataset.billPay)},"Tagihan dibayar");await load();}catch(e){alert(e.message)}}});box.querySelectorAll("[data-bill-edit]").forEach(x=>x.onclick=()=>{const b=bills.find(v=>Number(v.id)===Number(x.dataset.billEdit));if(!b)return;el("billId").value=b.id;el("billName").value=b.name;el("billAmount").value=b.amount;el("billDueDate").value=b.due_date||"";el("billCategory").value=b.category;el("billWallet").value=String(b.wallet_id||1);});box.querySelectorAll("[data-bill-delete]").forEach(x=>x.onclick=async()=>{if(confirm("Hapus tagihan ini?")){try{await featureAction({action:"bill_delete",id:Number(x.dataset.billDelete)},"Tagihan dihapus");}catch(e){alert(e.message)}}});}
 el("saveBill")?.addEventListener("click",async()=>{try{const dueDate=el("billDueDate").value;if(!dueDate)throw new Error("Pilih tanggal jatuh tempo terlebih dahulu.");await featureAction({action:"bill_save",id:Number(el("billId").value||0),name:el("billName").value,amount:Number(el("billAmount").value||0),due_date:dueDate,category:el("billCategory").value,wallet_id:Number(el("billWallet").value||1),reminder_days:3,active:true},"Tagihan disimpan");el("billId").value="";el("billName").value="";el("billAmount").value="";el("billDueDate").value="";}catch(e){alert(e.message)}});
 
-function renderRecurring(items){const box=el("recurringList");if(!box)return;box.innerHTML=items.length?items.map(r=>`<div class="feature-list-row"><div class="feature-row-icon">↻</div><div class="feature-row-main"><b>${esc(r.name)}</b><small>${r.type==="income"?"Pemasukan":"Pengeluaran"} · ${esc(r.frequency)} setiap ${r.interval} · berikutnya ${esc(r.next_run)}</small></div><strong class="${r.type}">${rupiah(r.amount)}</strong><div class="row-actions"><button data-recurring-edit="${r.id}">Edit</button><button class="danger-link" data-recurring-delete="${r.id}">Hapus</button></div></div>`).join(""):'<div class="empty">Belum ada transaksi berulang.</div>';
+function renderRecurring(items){const box=el("recurringList");if(!box)return;box.innerHTML=items.length?items.map(r=>`<div class="feature-list-row"><div class="feature-row-icon">↻</div><div class="feature-row-main"><b>${esc(r.name)}</b><small>${r.type==="income"?"Pemasukan":"Pengeluaran"} · ${esc(r.frequency)} setiap ${r.interval} · berikutnya ${esc(r.next_run)}${r.last_error?` · <span class="danger-text">tertahan: ${esc(r.last_error)}</span>`:""}</small></div><strong class="${r.type}">${rupiah(r.amount)}</strong><div class="row-actions"><button data-recurring-edit="${r.id}">Edit</button><button class="danger-link" data-recurring-delete="${r.id}">Hapus</button></div></div>`).join(""):'<div class="empty">Belum ada transaksi berulang.</div>';
 box.querySelectorAll("[data-recurring-edit]").forEach(x=>x.onclick=()=>{const r=items.find(v=>Number(v.id)===Number(x.dataset.recurringEdit));if(!r)return;el("recurringId").value=r.id;el("recurringName").value=r.name;el("recurringType").value=r.type;el("recurringAmount").value=r.amount;el("recurringCategory").value=r.category;el("recurringWallet").value=String(r.wallet_id||1);el("recurringFrequency").value=r.frequency;el("recurringInterval").value=r.interval;el("recurringNextRun").value=r.next_run;});box.querySelectorAll("[data-recurring-delete]").forEach(x=>x.onclick=async()=>{if(confirm("Hapus transaksi berulang ini?")){try{await featureAction({action:"recurring_delete",id:Number(x.dataset.recurringDelete)},"Jadwal dihapus");}catch(e){alert(e.message)}}});}
 el("saveRecurring")?.addEventListener("click",async()=>{try{await featureAction({action:"recurring_save",id:Number(el("recurringId").value||0),name:el("recurringName").value,type:el("recurringType").value,amount:Number(el("recurringAmount").value||0),category:el("recurringCategory").value,wallet_id:Number(el("recurringWallet").value||1),frequency:el("recurringFrequency").value,interval:Number(el("recurringInterval").value||1),next_run:el("recurringNextRun").value,active:true},"Jadwal berulang disimpan");el("recurringId").value="";el("recurringName").value="";el("recurringAmount").value="";await load();}catch(e){alert(e.message)}});
 
@@ -2639,7 +2644,7 @@ el("saveGoal")?.addEventListener("click",async()=>{try{await featureAction({acti
 function auditActionLabel(row) {
   if (row.action === "delete" && row.entity_type === "transaction") return "Transaksi dihapus";
   if (row.action === "update" && row.entity_type === "transaction") return "Transaksi diubah";
-  if (row.action === "initial_balance") return "Saldo awal / dana disisihkan diubah";
+  if (row.action === "initial_balance") return "Saldo awal / dana disisihkan / saldo minimum diubah";
   if (row.action === "update" && row.entity_type === "wallet") return "Dompet diubah";
   if (row.action === "create" && row.entity_type === "transaction") return "Transaksi dibuat";
   if (row.action === "undo") return "Perubahan dibatalkan";
@@ -2648,7 +2653,7 @@ function auditActionLabel(row) {
 function auditValueSummary(row) {
   const src = row.before || row.after || {};
   if (row.entity_type === "transaction") return `${src.category || "Transaksi"}${src.amount ? ` · ${rupiah(src.amount)}` : ""}${src.transaction_date ? ` · ${src.transaction_date}` : ""}`;
-  if (row.entity_type === "wallet") return `${src.name || "Dompet"}${src.initial_balance != null ? ` · saldo awal ${rupiah(src.initial_balance)}` : ""}${src.reserved_balance ? ` · disisihkan ${rupiah(src.reserved_balance)}` : ""}`;
+  if (row.entity_type === "wallet") return `${src.name || "Dompet"}${src.initial_balance != null ? ` · saldo awal ${rupiah(src.initial_balance)}` : ""}${src.reserved_balance ? ` · disisihkan ${rupiah(src.reserved_balance)}` : ""}${src.minimum_balance ? ` · minimum ${rupiah(src.minimum_balance)}` : ""}`;
   return row.label || "Perubahan data";
 }
 function renderHistory(rows) {
@@ -2666,7 +2671,7 @@ function renderAnalytics(a,p){const card=el("predictionCard");if(card){
 const status=p.status||"unknown";
 const labels={risk:"Berisiko kurang",tight:"Cukup ketat",safe:"Diperkirakan aman",unknown:"Data harian belum cukup",conditional:"Aman bersyarat"};
 card.className="prediction-card "+(["unknown","conditional"].includes(status)?"tight":status);
-card.innerHTML=`<div><small>Perkiraan sisa sebelum gajian ${esc(p.payday_date||"-")}</small><strong>${rupiah(p.predicted_balance||0)}</strong><p><b>Saldo tersedia ${rupiah(p.current_balance||0)}</b>${Number(p.reserved_balance||0)>0?` · dana disisihkan ${rupiah(p.reserved_balance)} dari total ${rupiah(p.gross_balance||0)}`:""}</p><p>${p.days_left||0} hari lagi · pola pengeluaran <b>Harian</b> ${rupiah(p.average_daily_expense||0)}/hari. Transaksi Sekali bayar dan Berulang tidak dipaksakan menjadi rata-rata harian.</p><p>Estimasi belanja harian tersisa ${rupiah(p.estimated_daily_spend||0)} · tagihan belum lunas ${rupiah(p.upcoming_bills_total||0)} · pengeluaran berulang ${rupiah(p.recurring_expense||0)}</p><p>Hari ini sudah belanja ${rupiah(p.daily_spent_today||0)}; perkiraan tambahan ${rupiah(p.remaining_daily_spend_today||0)}. Pemasukan terjadwal ${rupiah(p.recurring_income||0)} belum merupakan saldo tersedia.</p><p>Dana disisihkan tidak dihitung sebagai uang belanja. Pengeluaran historis non-harian ${rupiah(p.excluded_history_total||0)} tetap masuk laporan aktual tetapi tidak membesar-besarkan proyeksi harian.</p></div><span class="prediction-status">${labels[status]||labels.unknown}</span>`;
+card.innerHTML=`<div><small>Perkiraan sisa sebelum gajian ${esc(p.payday_date||"-")}</small><strong>${rupiah(p.predicted_balance||0)}</strong><p><b>Saldo tersedia ${rupiah(p.current_balance||0)}</b>${Number(p.reserved_balance||0)>0?` · dana disisihkan ${rupiah(p.reserved_balance)}`:""}${Number(p.minimum_balance||0)>0?` · saldo minimum ${rupiah(p.minimum_balance)}`:""}${Number(p.reserved_balance||0)>0||Number(p.minimum_balance||0)>0?` dari total ${rupiah(p.gross_balance||0)}`:""}</p><p>${p.days_left||0} hari lagi · pola pengeluaran <b>Harian</b> ${rupiah(p.average_daily_expense||0)}/hari. Transaksi Sekali bayar dan Berulang tidak dipaksakan menjadi rata-rata harian.</p><p>Estimasi belanja harian tersisa ${rupiah(p.estimated_daily_spend||0)} · tagihan belum lunas ${rupiah(p.upcoming_bills_total||0)} · pengeluaran berulang ${rupiah(p.recurring_expense||0)}</p><p>Hari ini sudah belanja ${rupiah(p.daily_spent_today||0)}; perkiraan tambahan ${rupiah(p.remaining_daily_spend_today||0)}. Pemasukan terjadwal ${rupiah(p.recurring_income||0)} belum merupakan saldo tersedia.</p><p>Dana disisihkan dan saldo minimum tidak dihitung sebagai uang belanja. Pengeluaran historis non-harian ${rupiah(p.excluded_history_total||0)} tetap masuk laporan aktual tetapi tidak membesar-besarkan proyeksi harian.</p></div><span class="prediction-status">${labels[status]||labels.unknown}</span>`;
 }
 const k=el("analyticsKpis");if(k)k.innerHTML=`<div><small>Pemasukan bulan ini</small><b>${rupiah(a.income||0)}</b></div><div><small>Pengeluaran bulan ini</small><b>${rupiah(a.expense||0)}</b></div><div><small>Rata-rata aktual / hari (semua pengeluaran)</small><b>${rupiah(a.average_daily_expense||0)}</b></div><div><small>Vs bulan lalu</small><b>${a.expense_change_percent===null?"-":(a.expense_change_percent>0?"+":"")+a.expense_change_percent+"%"}</b></div>`;
 const cat=el("analyticsCategoryBars");if(cat)cat.innerHTML=barRows(a.categories||[],a.expense||0);

@@ -1321,7 +1321,7 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                                         <option value="ewallet">E-Wallet</option>
                                         <option value="savings">Tabungan</option>
                                     </select></label><label>Saldo awal<input type="number" id="walletInitial" min="0"
-                                        step="1000"></label><label>Dana disisihkan<input type="number" id="walletReserved" min="0" step="1000" placeholder="0"></label><button class="btn primary" type="button" id="saveWallet">Simpan
+                                        step="1000"></label><label>Dana disisihkan<input type="number" id="walletReserved" min="0" step="1000" placeholder="0"></label><label>Saldo minimum<input type="number" id="walletMinimum" min="0" step="1000" placeholder="Contoh: 50000"><small>Saldo yang wajib tetap tersisa dan tidak dapat dipakai.</small></label><button class="btn primary" type="button" id="saveWallet">Simpan
                                     Dompet</button>
                             </div>
                             <div class="feature-card">
@@ -1662,9 +1662,13 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                         <summary><span>Apa beda Saldo Tersedia dan Dana Disisihkan?</span><i>+</i></summary>
                         <div class="help-faq-answer"><b>Saldo Tersedia</b> adalah uang yang dianggap dapat digunakan untuk kebutuhan sehari-hari. <b>Dana Disisihkan</b> tetap bagian dari total uang Anda, tetapi tidak dianggap sebagai uang belanja pada prediksi <b>aman sampai gajian</b>.</div>
                     </details>
+                    <details class="help-faq-item" data-faq-category="saldo" data-faq-keywords="saldo minimum bank rekening tidak bisa dipakai mengendap minimum balance">
+                        <summary><span>Apa itu Saldo Minimum Dompet?</span><i>+</i></summary>
+                        <div class="help-faq-answer"><b>Saldo Minimum Dompet</b> adalah nominal yang wajib tetap tersisa pada dompet/rekening dan tidak dapat digunakan untuk transaksi atau transfer, misalnya saldo mengendap minimum dari bank. Saldo tersedia dihitung setelah mengurangi dana disisihkan dan saldo minimum.</div>
+                    </details>
                     <details class="help-faq-item" data-faq-category="saldo" data-faq-keywords="saldo awal ubah dompet rekening atur saldo">
                         <summary><span>Bagaimana mengubah saldo awal?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Buka menu <b>Atur saldo awal</b>. Semua dompet aktif akan ditampilkan sehingga saldo awal dan dana yang disisihkan dapat diperbarui per dompet.</div>
+                        <div class="help-faq-answer">Buka menu <b>Atur saldo awal</b>. Semua dompet aktif akan ditampilkan sehingga saldo awal, dana yang disisihkan, dan saldo minimum dapat diperbarui per dompet.</div>
                     </details>
                     <details class="help-faq-item" data-faq-category="saldo" data-faq-keywords="dompet rekening cash ewallet bank tambah wallet">
                         <summary><span>Bagaimana menambah dompet atau rekening?</span><i>+</i></summary>

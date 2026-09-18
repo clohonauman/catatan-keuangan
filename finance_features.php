@@ -48,6 +48,7 @@ function financeEnsureFeatureData(&$d) {
             'type'=>'cash',
             'initial_balance'=>$legacyInitial,
             'reserved_balance'=>0,
+            'minimum_balance'=>0,
             'archived'=>false,
             'created_at'=>date('Y-m-d H:i:s'),
         ]];
@@ -77,7 +78,11 @@ function financeEnsureFeatureData(&$d) {
     }
 
     // Transaksi lama otomatis diarahkan ke dompet utama.
-    foreach ($d['wallets'] as &$w) if(!isset($w['reserved_balance'])) $w['reserved_balance']=0; unset($w);
+    foreach ($d['wallets'] as &$w) {
+        if(!isset($w['reserved_balance'])) $w['reserved_balance']=0;
+        if(!isset($w['minimum_balance'])) $w['minimum_balance']=0;
+    }
+    unset($w);
     foreach ($d['transactions'] as &$t) {
         if (!isset($t['wallet_id']) && ($t['type'] ?? '') !== 'transfer') $t['wallet_id'] = 1;
         if (($t['type'] ?? '') !== 'transfer' && !isset($t['spending_kind'])) $t['spending_kind']=transactionSpendingKind($t);
@@ -153,9 +158,13 @@ function financeWalletsWithBalances() {
         if (!empty($w['archived'])) continue;
         $gross=(int)($balances[(int)$w['id']] ?? 0);
         $reserved=max(0,(int)($w['reserved_balance'] ?? 0));
+        $minimum=max(0,(int)($w['minimum_balance'] ?? 0));
+        $protected=$reserved+$minimum;
         $w['balance']=$gross;
         $w['reserved_balance']=$reserved;
-        $w['available_balance']=max(0,$gross-$reserved);
+        $w['minimum_balance']=$minimum;
+        $w['protected_balance']=$protected;
+        $w['available_balance']=max(0,$gross-$protected);
         $out[] = $w;
     }
     return $out;
@@ -167,22 +176,23 @@ function financeSaveWallet($input) {
     $type = strtolower(trim((string)($input['type'] ?? 'cash')));
     $initial = (int)($input['initial_balance'] ?? 0);
     $reserved = max(0,(int)($input['reserved_balance'] ?? 0));
+    $minimum = max(0,(int)($input['minimum_balance'] ?? 0));
     if ($name === '') throw new InvalidArgumentException('Nama dompet/rekening wajib diisi.');
     if (!in_array($type, ['cash','bank','ewallet','savings'], true)) $type = 'cash';
     if ($initial < 0) throw new InvalidArgumentException('Saldo awal tidak boleh negatif.');
 
-    $r = financeMutate(function (&$d) use ($id,$name,$type,$initial,$reserved) {
+    $r = financeMutate(function (&$d) use ($id,$name,$type,$initial,$reserved,$minimum) {
         if ($id > 0) {
             foreach ($d['wallets'] as &$w) if ((int)$w['id'] === $id) {
                 $before=$w;
-                $w['name'] = substr($name,0,60); $w['type']=$type; $w['initial_balance']=$initial; $w['reserved_balance']=$reserved; $w['archived']=false;
+                $w['name'] = substr($name,0,60); $w['type']=$type; $w['initial_balance']=$initial; $w['reserved_balance']=$reserved; $w['minimum_balance']=$minimum; $w['archived']=false;
                 auditAdd($d,'update','wallet',$id,$before,$w,true,'Dompet diperbarui');
                 return $w;
             }
             unset($w);
             throw new InvalidArgumentException('Dompet tidak ditemukan.');
         }
-        $new = ['id'=>(int)$d['meta']['next_wallet_id']++,'name'=>substr($name,0,60),'type'=>$type,'initial_balance'=>$initial,'reserved_balance'=>$reserved,'archived'=>false,'created_at'=>date('Y-m-d H:i:s')];
+        $new = ['id'=>(int)$d['meta']['next_wallet_id']++,'name'=>substr($name,0,60),'type'=>$type,'initial_balance'=>$initial,'reserved_balance'=>$reserved,'minimum_balance'=>$minimum,'archived'=>false,'created_at'=>date('Y-m-d H:i:s')];
         $d['wallets'][] = $new;
         auditAdd($d,'create','wallet',(int)$new['id'],null,$new,false,'Dompet dibuat');
         return $new;
@@ -257,9 +267,12 @@ function financeMonthlyBudgetStatus($month='') {
 }
 
 function financeAppendTransactionData(&$d,$t) {
-    $id=(int)$d['meta']['next_transaction_id']++;
     $type=(string)($t['type']??'expense');
-    $x=['id'=>$id,'type'=>$type,'category'=>(string)($t['category']??'Lainnya'),'amount'=>max(0,(int)($t['amount']??0)),'note'=>substr(trim((string)($t['note']??'')),0,255),'transaction_date'=>(string)($t['transaction_date']??date('Y-m-d')),'created_at'=>date('Y-m-d H:i:s')];
+    $amount=max(0,(int)($t['amount']??0));
+    if($type==='expense') assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
+    elseif($type==='transfer') assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
+    $id=(int)$d['meta']['next_transaction_id']++;
+    $x=['id'=>$id,'type'=>$type,'category'=>(string)($t['category']??'Lainnya'),'amount'=>$amount,'note'=>substr(trim((string)($t['note']??'')),0,255),'transaction_date'=>(string)($t['transaction_date']??date('Y-m-d')),'created_at'=>date('Y-m-d H:i:s')];
     if($type==='transfer'){$x['from_wallet_id']=(int)($t['from_wallet_id']??0);$x['to_wallet_id']=(int)($t['to_wallet_id']??0);}
     else {$x['wallet_id']=(int)($t['wallet_id']??1);$x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));}
     if(!empty($t['source']))$x['source']=$t['source'];
@@ -276,8 +289,6 @@ function financeTransfer($from,$to,$amount,$note='',$date='') {
     if($from<1||$to<1||$from===$to)throw new InvalidArgumentException('Pilih dua dompet yang berbeda.');
     if($amount<=0)throw new InvalidArgumentException('Nominal transfer harus lebih dari nol.');
     if(!financeWalletById($from)||!financeWalletById($to))throw new InvalidArgumentException('Dompet transfer tidak ditemukan.');
-    $balances=financeWalletBalances();
-    if((int)($balances[$from]??0)<$amount)throw new InvalidArgumentException('Saldo dompet asal tidak cukup untuk transfer ini.');
     $r=financeMutate(function(&$d)use($from,$to,$amount,$note,$date){return financeAppendTransactionData($d,['type'=>'transfer','category'=>'Transfer Antar Dompet','amount'=>$amount,'note'=>$note?:'Transfer antar dompet','transaction_date'=>$date,'from_wallet_id'=>$from,'to_wallet_id'=>$to,'source'=>'wallet_transfer']);});
     return $r['result'];
 }
@@ -428,7 +439,32 @@ function financeNextRecurringDate($date,$frequency,$interval){$interval=max(1,(i
 function financeSaveRecurring($input){$id=(int)($input['id']??0);$name=trim((string)($input['name']??''));$type=strtolower((string)($input['type']??'expense'));$amount=max(0,(int)($input['amount']??0));$category=trim((string)($input['category']??'Lainnya'));$wallet=(int)($input['wallet_id']??financeDefaultWalletId());$freq=strtolower((string)($input['frequency']??'monthly'));$interval=max(1,min(365,(int)($input['interval']??1)));$next=(string)($input['next_run']??date('Y-m-d'));$active=isset($input['active'])?(bool)$input['active']:true;if($name===''||$amount<=0)throw new InvalidArgumentException('Nama dan nominal transaksi berulang wajib diisi.');if(!in_array($type,['expense','income'],true))$type='expense';if(!in_array($freq,['daily','weekly','monthly'],true))$freq='monthly';if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$next))throw new InvalidArgumentException('Tanggal berikutnya tidak valid.');$r=financeMutate(function(&$d)use($id,$name,$type,$amount,$category,$wallet,$freq,$interval,$next,$active){if($id>0){foreach($d['recurring'] as &$x)if((int)$x['id']===$id){$x=array_merge($x,['name'=>substr($name,0,80),'type'=>$type,'amount'=>$amount,'category'=>$category,'wallet_id'=>$wallet,'frequency'=>$freq,'interval'=>$interval,'next_run'=>$next,'active'=>$active]);return $x;}unset($x);throw new InvalidArgumentException('Transaksi berulang tidak ditemukan.');}$new=['id'=>(int)$d['meta']['next_recurring_id']++,'name'=>substr($name,0,80),'type'=>$type,'amount'=>$amount,'category'=>$category,'wallet_id'=>$wallet,'frequency'=>$freq,'interval'=>$interval,'next_run'=>$next,'active'=>$active,'created_at'=>date('Y-m-d H:i:s')];$d['recurring'][]=$new;return $new;});return $r['result'];}
 function financeDeleteRecurring($id){financeMutate(function(&$d)use($id){$d['recurring']=array_values(array_filter($d['recurring'],function($x)use($id){return(int)$x['id']!==(int)$id;}));});}
 function financeRecurring(){return financeReadData()['recurring'];}
-function financeProcessRecurring($throughDate=''){$through=$throughDate?:date('Y-m-d');$r=financeMutate(function(&$d)use($through){$created=[];foreach($d['recurring'] as &$x){if(empty($x['active']))continue;$guard=0;while(($x['next_run']??'9999-99-99')<=$through && $guard++<24){$created[]=financeAppendTransactionData($d,['type'=>$x['type'],'category'=>$x['category'],'amount'=>$x['amount'],'note'=>$x['name'],'transaction_date'=>$x['next_run'],'wallet_id'=>$x['wallet_id'],'source'=>'recurring']);$x['last_run']=$x['next_run'];$x['next_run']=financeNextRecurringDate($x['next_run'],$x['frequency'],$x['interval']);}}unset($x);return $created;});return $r['result'];}
+function financeProcessRecurring($throughDate=''){
+    $through=$throughDate?:date('Y-m-d');
+    $r=financeMutate(function(&$d)use($through){
+        $created=[];
+        foreach($d['recurring'] as &$x){
+            if(empty($x['active']))continue;
+            $guard=0;
+            while(($x['next_run']??'9999-99-99')<=$through && $guard++<24){
+                try{
+                    $created[]=financeAppendTransactionData($d,['type'=>$x['type'],'category'=>$x['category'],'amount'=>$x['amount'],'note'=>$x['name'],'transaction_date'=>$x['next_run'],'wallet_id'=>$x['wallet_id'],'source'=>'recurring']);
+                    $x['last_run']=$x['next_run'];
+                    $x['next_run']=financeNextRecurringDate($x['next_run'],$x['frequency'],$x['interval']);
+                    unset($x['last_error'],$x['last_error_at']);
+                }catch(InvalidArgumentException $e){
+                    // Jangan menembus dana disisihkan / saldo minimum. Biarkan jadwal tetap menunggu.
+                    $x['last_error']=$e->getMessage();
+                    $x['last_error_at']=date('Y-m-d H:i:s');
+                    break;
+                }
+            }
+        }
+        unset($x);
+        return $created;
+    });
+    return $r['result'];
+}
 
 function financeSaveGoal($input){$id=(int)($input['id']??0);$name=trim((string)($input['name']??''));$target=max(0,(int)($input['target_amount']??0));$current=max(0,(int)($input['current_amount']??0));$deadline=trim((string)($input['deadline']??''));if($name===''||$target<=0)throw new InvalidArgumentException('Nama dan target tabungan wajib diisi.');if($deadline!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$deadline))throw new InvalidArgumentException('Deadline tidak valid.');$r=financeMutate(function(&$d)use($id,$name,$target,$current,$deadline){if($id>0){foreach($d['goals'] as &$g)if((int)$g['id']===$id){$g['name']=substr($name,0,80);$g['target_amount']=$target;$g['current_amount']=min($target,$current);$g['deadline']=$deadline;$g['active']=$g['current_amount']<$target;return $g;}unset($g);throw new InvalidArgumentException('Target tidak ditemukan.');}$new=['id'=>(int)$d['meta']['next_goal_id']++,'name'=>substr($name,0,80),'target_amount'=>$target,'current_amount'=>min($target,$current),'deadline'=>$deadline,'active'=>$current<$target,'created_at'=>date('Y-m-d H:i:s')];$d['goals'][]=$new;return $new;});return $r['result'];}
 function financeContributeGoal($id,$amount){$id=(int)$id;$amount=(int)$amount;if($amount<=0)throw new InvalidArgumentException('Nominal progress harus lebih dari nol.');$r=financeMutate(function(&$d)use($id,$amount){foreach($d['goals'] as &$g)if((int)$g['id']===$id){$g['current_amount']=min((int)$g['target_amount'],(int)$g['current_amount']+$amount);$g['active']=$g['current_amount']<$g['target_amount'];return $g;}unset($g);throw new InvalidArgumentException('Target tidak ditemukan.');});return $r['result'];}
@@ -515,7 +551,7 @@ function financePrediction(){
     $withoutIncome=$pred-(int)$rec['income'];
     $status=$pred<0?'risk':(!$sufficient?'unknown':($withoutIncome<0?'conditional':($pred<max(100000,$avg*3)?'tight':'safe')));
     return array_merge($history,[
-        'payday_date'=>$payday->format('Y-m-d'),'days_left'=>$days,'current_balance'=>(int)$sum['balance'],'gross_balance'=>(int)($sum['gross_balance']??$sum['balance']),'reserved_balance'=>(int)($sum['reserved']??0),
+        'payday_date'=>$payday->format('Y-m-d'),'days_left'=>$days,'current_balance'=>(int)$sum['balance'],'gross_balance'=>(int)($sum['gross_balance']??$sum['balance']),'reserved_balance'=>(int)($sum['reserved']??0),'minimum_balance'=>(int)($sum['minimum_balance']??0),'protected_balance'=>(int)($sum['protected_balance']??0),
         'estimated_daily_spend'=>$dailyEstimate,'remaining_daily_spend_today'=>$remainingToday,
         'upcoming_bills'=>$billRows,'upcoming_bills_total'=>$billTotal,
         'recurring_income'=>(int)$rec['income'],'recurring_expense'=>(int)$rec['expense'],
@@ -602,6 +638,17 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
         }
         $draft['bill_id']=$billId;$prepared[]=$draft;
     }
+    // Validasi seluruh draft lebih dulu agar konfirmasi multi-transaksi tidak tersimpan sebagian.
+    $requiredByWallet=[];
+    foreach($prepared as $draft){
+        if(($draft['type']??'expense')!=='expense')continue;
+        $wid=(int)($draft['wallet_id']??financeDefaultWalletId());
+        $requiredByWallet[$wid]=($requiredByWallet[$wid]??0)+(int)($draft['amount']??0);
+    }
+    if($requiredByWallet){
+        $snapshot=financeReadData();
+        foreach($requiredByWallet as $wid=>$needed) assertWalletSpendAllowedData($snapshot,(int)$wid,(int)$needed);
+    }
     $saved=[];
     foreach($prepared as $draft){
         $billId=(int)($draft['bill_id']??0);$tx=addTransaction($draft);
@@ -621,10 +668,15 @@ function financeUndoAudit($auditId){
         $type=(string)($a['entity_type']??'');$id=(int)($a['entity_id']??0);
         if($type==='transaction' && ($a['action']??'')==='delete'){
             foreach($d['transactions'] as $x)if((int)($x['id']??0)===$id)throw new InvalidArgumentException('Transaksi dengan ID ini sudah ada.');
-            $row=(array)($a['before']??[]);$d['transactions'][]=$row;$d['meta']['next_transaction_id']=max((int)$d['meta']['next_transaction_id'],$id+1);
+            $row=(array)($a['before']??[]);
+            if(($row['type']??'')==='expense') assertWalletSpendAllowedData($d,(int)($row['wallet_id']??financeDefaultWalletId()),(int)($row['amount']??0));
+            elseif(($row['type']??'')==='transfer') assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0));
+            $d['transactions'][]=$row;$d['meta']['next_transaction_id']=max((int)$d['meta']['next_transaction_id'],$id+1);
             if(!empty($row['bill_id'])){foreach($d['bills'] as &$b)if((int)$b['id']===(int)$row['bill_id']){$key=financeBillPaymentKey($b,(string)($row['transaction_date']??date('Y-m-d')));$b['payments'][$key]=['date'=>$row['transaction_date'],'transaction_id'=>$id];}unset($b);}
         } elseif($type==='transaction' && ($a['action']??'')==='update'){
             $row=(array)$a['before'];$found=false;
+            if(($row['type']??'')==='expense') assertWalletSpendAllowedData($d,(int)($row['wallet_id']??financeDefaultWalletId()),(int)($row['amount']??0),$id);
+            elseif(($row['type']??'')==='transfer') assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0),$id);
             foreach($d['bills'] as &$bill){foreach((array)($bill['payments']??[]) as $key=>$payment)if((int)($payment['transaction_id']??0)===$id)unset($bill['payments'][$key]);}unset($bill);
             foreach($d['transactions'] as &$x)if((int)($x['id']??0)===$id){$x=$row;$found=true;break;}unset($x);if(!$found)throw new InvalidArgumentException('Transaksi yang akan dipulihkan sudah tidak ada.');
             if(!empty($row['bill_id'])){foreach($d['bills'] as &$bill)if((int)($bill['id']??0)===(int)$row['bill_id']){$key=financeBillPaymentKey($bill,(string)($row['transaction_date']??date('Y-m-d')));if(isset($bill['payments'][$key])&&(int)($bill['payments'][$key]['transaction_id']??0)!==$id)throw new InvalidArgumentException('Tagihan lama sudah terhubung ke transaksi lain, sehingga perubahan tidak dapat dibatalkan.');$bill['payments'][$key]=['date'=>$row['transaction_date'],'transaction_id'=>$id];break;}unset($bill);}

@@ -304,22 +304,66 @@ function transactionSpendingKind(array $t): string {
     return 'daily';
 }
 
+function walletBalancesFromData($d,$excludeTransactionId=0) {
+    $balances=[];
+    foreach((array)($d['wallets']??[]) as $w) $balances[(int)($w['id']??0)]=(int)($w['initial_balance']??0);
+    foreach((array)($d['transactions']??[]) as $t){
+        if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId)continue;
+        $type=(string)($t['type']??'');$amount=(int)($t['amount']??0);
+        if($type==='income'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)+$amount;}
+        elseif($type==='expense'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)-$amount;}
+        elseif($type==='transfer'){
+            $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
+            $balances[$from]=($balances[$from]??0)-$amount;$balances[$to]=($balances[$to]??0)+$amount;
+        }
+    }
+    return $balances;
+}
+function walletProtectionFromData($d,$walletId) {
+    foreach((array)($d['wallets']??[]) as $w)if((int)($w['id']??0)===(int)$walletId){
+        $reserved=max(0,(int)($w['reserved_balance']??0));
+        $minimum=max(0,(int)($w['minimum_balance']??0));
+        return ['name'=>(string)($w['name']??'Dompet'),'reserved'=>$reserved,'minimum'=>$minimum,'protected'=>$reserved+$minimum];
+    }
+    throw new InvalidArgumentException('Dompet transaksi tidak ditemukan.');
+}
+function assertWalletSpendAllowedData($d,$walletId,$amount,$excludeTransactionId=0) {
+    $walletId=(int)$walletId;$amount=max(0,(int)$amount);
+    if($walletId<=0)throw new InvalidArgumentException('Dompet transaksi tidak valid.');
+    if($amount<=0)return true;
+    $protection=walletProtectionFromData($d,$walletId);
+    $balances=walletBalancesFromData($d,(int)$excludeTransactionId);
+    $gross=(int)($balances[$walletId]??0);
+    $available=max(0,$gross-(int)$protection['protected']);
+    if($amount>$available){
+        $fmt=function($n){return 'Rp'.number_format((int)$n,0,',','.');};
+        $parts=[];
+        if((int)$protection['reserved']>0)$parts[]='dana disisihkan '.$fmt($protection['reserved']);
+        if((int)$protection['minimum']>0)$parts[]='saldo minimum '.$fmt($protection['minimum']);
+        $protectedText=$parts?' '.ucfirst(implode(' dan ',$parts)).' tidak dapat digunakan.':'';
+        throw new InvalidArgumentException('Saldo tersedia '.$protection['name'].' hanya '.$fmt($available).'.'.$protectedText);
+    }
+    return true;
+}
+
 function summary() {
     $d=readData(); $income=0; $expense=0;
     foreach($d['transactions'] as $t){
         if(($t['type']??'')==='income')$income+=(int)$t['amount'];
         elseif(($t['type']??'')==='expense')$expense+=(int)$t['amount'];
     }
-    $initial=0;$reserved=0;
+    $initial=0;$reserved=0;$minimum=0;
     if (isset($d['wallets']) && is_array($d['wallets']) && count($d['wallets'])) {
         foreach($d['wallets'] as $w) if(empty($w['archived'])) {
             $initial+=(int)($w['initial_balance']??0);
             $reserved+=max(0,(int)($w['reserved_balance']??0));
+            $minimum+=max(0,(int)($w['minimum_balance']??0));
         }
     } else $initial=(int)($d['settings']['initial_balance']??0);
     $gross=$initial+$income-$expense;
-    $available=max(0,$gross-$reserved);
-    return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'available_balance'=>$available,'balance'=>$available];
+    $protected=$reserved+$minimum;
+    $available=max(0,$gross-$protected);
+    return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'minimum_balance'=>$minimum,'protected_balance'=>$protected,'available_balance'=>$available,'balance'=>$available];
 }
 function addChat($role,$message,$attachment=null) {
     $r=mutateData(function(&$d)use($role,$message,$attachment){
@@ -333,13 +377,16 @@ function addChat($role,$message,$attachment=null) {
 }
 function addTransaction($t) {
     $r=mutateData(function(&$d)use($t){
-        $id=(int)$d['meta']['next_transaction_id']++;
         $type=(string)($t['type']??'expense');
+        $amount=max(0,(int)($t['amount']??0));
+        if($type==='expense')assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
+        elseif($type==='transfer')assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
+        $id=(int)$d['meta']['next_transaction_id']++;
         $x=[
             'id'=>$id,
             'type'=>$type,
             'category'=>$t['category']??'Lainnya',
-            'amount'=>(int)$t['amount'],
+            'amount'=>$amount,
             'note'=>$t['note']??'',
             'transaction_date'=>$t['transaction_date']??date('Y-m-d'),
             'created_at'=>date('Y-m-d H:i:s')
@@ -387,6 +434,8 @@ function updateTransaction($id, $patch) {
                 if(array_key_exists('bill_id',$patch)) { if((int)$patch['bill_id']>0)$t['bill_id']=(int)$patch['bill_id']; else unset($t['bill_id']); }
                 unset($t['from_wallet_id'],$t['to_wallet_id']);
             }
+            if(($t['type']??'')==='expense')assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),(int)($t['amount']??0),$id);
+            elseif(($t['type']??'')==='transfer')assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),(int)($t['amount']??0),$id);
             $t['updated_at']=date('Y-m-d H:i:s');
             auditAdd($d,'update','transaction',$id,$before,$t,true,'Transaksi diperbarui');
             return $t;
