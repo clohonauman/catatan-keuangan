@@ -1,4 +1,4 @@
-const CACHE = 'finance-shell-v31';
+const CACHE = 'finance-shell-v32';
 const OFFLINE_SHELL_KEY = './__offline_shell__';
 const STATIC_ASSETS = [
   './assets/icon.webp',

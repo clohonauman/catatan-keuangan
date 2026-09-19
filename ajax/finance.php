@@ -6,6 +6,7 @@ require_once __DIR__.'/../native_assistant.php';
 require_once __DIR__.'/../receipt_helper.php';
 require_once __DIR__.'/../finance_features.php';
 require_once __DIR__.'/../offline_sync_helper.php';
+require_once __DIR__.'/../humanoid_assistant_helper.php';
 
 function financeFail($msg,$code=400){http_response_code($code);echo json_encode(['ok'=>false,'error'=>$msg],JSON_UNESCAPED_UNICODE);exit;}
 function financeConfirmationReply(array $pending): string {
@@ -56,8 +57,8 @@ try {
     }
 
     $rawMessage=trim((string)($input['message']??''));
-    $normalized=$rawMessage!==''?normalizeChatMessage($rawMessage):'';
-    $message=$normalized!==''?assistantResolveFollowup($normalized):'';
+    $normalized=$rawMessage!==''?humanoidNormalizeMessage($rawMessage):'';
+    $message=$normalized!==''?humanoidResolveContext($normalized):'';
     $mode=strtolower(trim((string)($input['image_mode']??'auto')));if(!in_array($mode,['auto','receipt','attachment'],true))$mode='auto';
     $attachment=null;if($multipart&&isset($_FILES['photo']))$attachment=saveReceiptUpload($_FILES['photo']);
     if($message===''&&!$attachment)financeFail('Pesan atau foto harus diisi.');
@@ -69,6 +70,15 @@ try {
 
     // Natural-language shortcut for a pending confirmation.
     $pendingBefore=financePendingChatConfirmation();
+    if(!$attachment && $pendingBefore){
+        $draftEdit=humanoidEditPendingConfirmation($message,$pendingBefore);
+        if($draftEdit){
+            $reply=(string)$draftEdit['message']."\n".financeConfirmationReply((array)$draftEdit['pending']);
+            addChat('assistant',$reply);
+            $response=financeResponse($reply,[],[],['normalized_message'=>$message]);
+            offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
+        }
+    }
     if(!$attachment && $pendingBefore && preg_match('/^(?:ya|iya|iyo|ok|oke|simpan|catat|lanjut|konfirmasi)(?:\s+transaksi)?[.!]?$/u',norm($message))){
         $saved=financeConfirmPendingChat((int)$pendingBefore['id']);$reply=nativeReply((string)($pendingBefore['message']??'konfirmasi transaksi'),$saved);addChat('assistant',$reply);
         $response=financeResponse($reply,$saved,[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
@@ -81,6 +91,16 @@ try {
     if(!$attachment&&$message!==''){
         $learning=learningHandleTeachingInput($message);
         if(!empty($learning['handled'])){$reply=(string)$learning['reply'];addChat('assistant',$reply);$response=financeResponse($reply,[],[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;}
+
+        // Human-like/simple intents run before transaction extraction so a
+        // hypothetical question such as “kalau beli 500rb aman?” is never
+        // mistaken for an actual purchase.
+        $humanReply=humanoidDirectReply($message);
+        if($humanReply!==null){
+            $reply=(string)$humanReply;addChat('assistant',$reply);
+            $response=financeResponse($reply,[],[],['normalized_message'=>$message]);
+            offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
+        }
     }
 
     $drafts=$message!==''?extractTransactions($message):[];

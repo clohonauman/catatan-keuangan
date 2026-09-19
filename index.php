@@ -885,7 +885,7 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                 <article class="stat balance-stat" id="balanceStatCard" role="button" tabindex="0" aria-label="Lihat rincian saldo setiap dompet">
                     <div class="stat-icon">◉</div>
                     <div class="balance-stat-content">
-                        <div class="balance-stat-copy"><small>Saldo tersedia</small><strong id="balance">Rp0</strong><span class="balance-detail-hint">Lihat saldo tiap dompet</span></div>
+                        <div class="balance-stat-copy"><small>Saldo tersedia</small><strong id="balance">Rp0</strong><span class="balance-detail-hint">Akumulatif seluruh bulan · lihat saldo tiap dompet</span></div>
                         <div class="balance-stat-actions">
                             <button type="button" class="balance-visibility-toggle" id="balanceVisibilityToggle"
                                 aria-label="Sembunyikan saldo, pemasukan, dan pengeluaran" title="Sembunyikan nominal"></button>
@@ -898,11 +898,11 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                 </article>
                 <article class="stat income-stat">
                     <div class="stat-icon">↙</div>
-                    <div><small>Pemasukan</small><strong id="income">Rp0</strong></div>
+                    <div><small id="incomePeriodLabel">Pemasukan · bulan berjalan</small><strong id="income">Rp0</strong></div>
                 </article>
                 <article class="stat expense-stat">
                     <div class="stat-icon">↗</div>
-                    <div><small>Pengeluaran</small><strong id="expense">Rp0</strong></div>
+                    <div><small id="expensePeriodLabel">Pengeluaran · bulan berjalan</small><strong id="expense">Rp0</strong></div>
                 </article>
                 <article class="stat initial-stat">
                     <div class="stat-icon">◎</div>
@@ -1005,6 +1005,16 @@ $assetVersion = max(@filemtime(__DIR__ . '/assets/style.css') ?: 1, @filemtime(_
                     </div>
 
                     <div class="tx-filter-wrap">
+                        <div class="tx-period-bar">
+                            <div class="tx-period-copy">
+                                <b>Periode data</b>
+                                <small id="txPeriodCaption">Bulan berjalan</small>
+                            </div>
+                            <div class="tx-period-switch" role="group" aria-label="Periode transaksi">
+                                <button type="button" class="active" data-tx-period="month" aria-pressed="true">Bulan berjalan</button>
+                                <button type="button" data-tx-period="all" aria-pressed="false">Semua</button>
+                            </div>
+                        </div>
                         <div class="tx-search-export-row">
                             <label class="tx-search-box" for="txFilterSearch">
                                 <span class="tx-search-icon" aria-hidden="true">

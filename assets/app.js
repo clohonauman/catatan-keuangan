@@ -82,6 +82,12 @@ const DAILY_BUDGET_MINIMIZED_KEY = "finance_daily_budget_minimized";
 const DAILY_BUDGET_DISMISSED_KEY = "finance_daily_budget_dismissed";
 
 function balanceIsHidden() { return localStorage.getItem(BALANCE_VISIBILITY_KEY) === "1"; }
+function summaryDisplayValue(key) {
+  if ((key === "income" || key === "expense") && state.period_summary && Number.isFinite(Number(state.period_summary[key]))) {
+    return Number(state.period_summary[key] || 0);
+  }
+  return Number(state.summary?.[key] || 0);
+}
 function balanceEyeSvg(hidden) {
   return hidden
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.5 3.2M6.1 6.1C3.8 7.7 2.5 12 2.5 12S6 18 12 18a10.8 10.8 0 0 0 3-.4"/><path d="M9.9 9.9A3 3 0 0 0 14.1 14.1"/></svg>'
@@ -92,7 +98,7 @@ function applyBalanceVisibility() {
   const btn = document.getElementById("balanceVisibilityToggle");
   ["balance", "income", "expense", "initial"].forEach(key => {
     const value = document.getElementById(key);
-    if (value) value.textContent = hidden ? "Rp ••••••" : rupiah(state.summary?.[key] || 0);
+    if (value) value.textContent = hidden ? "Rp ••••••" : rupiah(summaryDisplayValue(key));
   });
   if (btn) {
     btn.innerHTML = balanceEyeSvg(hidden);
@@ -163,13 +169,38 @@ function syncDailyBudgetMinimizeButton() {
   btn.title = minimized ? "Besarkan peringatan" : "Kecilkan peringatan";
 }
 
+function txLocalYmd(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function txCurrentMonthRange() {
+  const now = new Date();
+  return {
+    from: txLocalYmd(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: txLocalYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+function txCurrentMonthCaption() {
+  try {
+    return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date());
+  } catch (_) {
+    return txCurrentMonthRange().from.slice(0, 7);
+  }
+}
+
+let txPeriodMode = "month"; // month | all | custom
+const txInitialMonth = txCurrentMonthRange();
 const txFilters = {
   type: "all",
   search: "",
   wallet_id: 0,
   category: "",
-  from: "",
-  to: "",
+  from: txInitialMonth.from,
+  to: txInitialMonth.to,
   sort: "date_desc",
 };
 
@@ -278,6 +309,16 @@ async function fetchTransactionView() {
   return fetchJson("ajax/transactions.php?" + params.toString());
 }
 
+// Ringkasan kartu pemasukan/pengeluaran hanya mengikuti PERIODE, bukan filter
+// kategori/dompet/pencarian. Saldo tetap berasal dari summary server yang
+// menghitung seluruh riwayat transaksi.
+async function fetchPeriodSummaryView() {
+  const params = new URLSearchParams({ type: "all", sort: "date_desc" });
+  if (txFilters.from) params.set("from", txFilters.from);
+  if (txFilters.to) params.set("to", txFilters.to);
+  return fetchJson("ajax/transactions.php?" + params.toString());
+}
+
 function offlineAmount(raw) {
   let s = String(raw || "").toLowerCase().trim().replace(/\s+/g, "").replace(/^rp\.?/i, "");
   let mult = 1;
@@ -308,6 +349,19 @@ function offlineParsePendingFinance(record) {
   // Chat/scan yang belum tersinkron hanya dianggap draft. Saldo baru berubah
   // setelah server menampilkan konfirmasi dan pengguna menyimpannya.
   return [];
+}
+
+function localPeriodSummary(items) {
+  let income = 0, expense = 0, count = 0;
+  (items || []).forEach(t => {
+    const date = String(t.transaction_date || "");
+    if (txFilters.from && date < txFilters.from) return;
+    if (txFilters.to && date > txFilters.to) return;
+    count++;
+    if (t.type === "income") income += Number(t.amount || 0);
+    if (t.type === "expense") expense += Number(t.amount || 0);
+  });
+  return { income, expense, count, from: txFilters.from, to: txFilters.to, mode: txPeriodMode };
 }
 
 function localFilterTransactions(items) {
@@ -366,9 +420,11 @@ async function loadFromOfflineSnapshot() {
   if (!dashboard) throw new Error("Belum ada data offline. Buka aplikasi sekali saat online agar data disimpan ke perangkat.");
   const overlay = await applyOfflineQueueOverlay(dashboard, allTransactions || dashboard.transactions || []);
   const filtered = localFilterTransactions(overlay.allTransactions);
+  const periodSummary = localPeriodSummary(overlay.allTransactions);
   state = overlay.state;
   state.transactions = filtered.transactions;
   state.transaction_meta = filtered.meta;
+  state.period_summary = periodSummary;
   state.offline_mode = true;
   render();
   updateConnectionUi();
@@ -387,14 +443,23 @@ async function cacheOnlineSnapshot(dashboard, allTx) {
 
 async function load() {
   try {
-    const [dashboard, txView, allView] = await Promise.all([
+    const [dashboard, txView, allView, periodView] = await Promise.all([
       fetchJson("ajax/dashboard.php"),
       fetchTransactionView(),
       fetchJson("ajax/transactions.php?type=all&sort=date_desc"),
+      fetchPeriodSummaryView(),
     ]);
     state = dashboard;
     state.transactions = txView.transactions || [];
     state.transaction_meta = txView.meta || {};
+    state.period_summary = {
+      income: Number(periodView.meta?.income || 0),
+      expense: Number(periodView.meta?.expense || 0),
+      count: Number(periodView.meta?.count || 0),
+      from: txFilters.from,
+      to: txFilters.to,
+      mode: txPeriodMode,
+    };
     state.offline_mode = false;
     realtimeRevision = Number(dashboard.realtime?.revision ?? dashboard.revision ?? realtimeRevision ?? 0);
     realtimeChatSignature = String(dashboard.realtime?.chat_signature || realtimeChatSignature || "");
@@ -411,18 +476,30 @@ async function load() {
 
 async function reloadTransactionsOnly() {
   try {
-    const txView = await fetchTransactionView();
+    const [txView, periodView] = await Promise.all([fetchTransactionView(), fetchPeriodSummaryView()]);
     state.transactions = txView.transactions || [];
     state.transaction_meta = txView.meta || {};
+    state.period_summary = {
+      income: Number(periodView.meta?.income || 0),
+      expense: Number(periodView.meta?.expense || 0),
+      count: Number(periodView.meta?.count || 0),
+      from: txFilters.from,
+      to: txFilters.to,
+      mode: txPeriodMode,
+    };
+    renderSummaryCards();
     renderTransactions();
   } catch (err) {
     if (!(isNetworkError(err) || !navigator.onLine)) throw err;
     const allTransactions = (await FinanceOffline?.getSnapshot("all_transactions")) || state.transactions || [];
     const overlay = await applyOfflineQueueOverlay(state, allTransactions);
     const filtered = localFilterTransactions(overlay.allTransactions);
+    const periodSummary = localPeriodSummary(overlay.allTransactions);
     state = overlay.state;
     state.transactions = filtered.transactions;
     state.transaction_meta = filtered.meta;
+    state.period_summary = periodSummary;
+    renderSummaryCards();
     renderTransactions();
   }
 }
@@ -445,10 +522,19 @@ function bindStoredPhotos(root = document) {
 
 function renderSummaryCards() {
   const s = state.summary || {};
-  ["income", "expense", "initial"].forEach((k) => {
-    const el = document.getElementById(k);
-    if (el) el.textContent = rupiah(s[k]);
-  });
+  const period = state.period_summary || {};
+  const income = document.getElementById("income");
+  const expense = document.getElementById("expense");
+  const initialValue = document.getElementById("initial");
+  if (income) income.textContent = rupiah(period.income ?? s.income ?? 0);
+  if (expense) expense.textContent = rupiah(period.expense ?? s.expense ?? 0);
+  if (initialValue) initialValue.textContent = rupiah(s.initial || 0);
+
+  const incomeLabel = document.getElementById("incomePeriodLabel");
+  const expenseLabel = document.getElementById("expensePeriodLabel");
+  const labelSuffix = txPeriodMode === "all" ? "semua data" : (txPeriodMode === "month" ? "bulan berjalan" : "periode terpilih");
+  if (incomeLabel) incomeLabel.textContent = `Pemasukan · ${labelSuffix}`;
+  if (expenseLabel) expenseLabel.textContent = `Pengeluaran · ${labelSuffix}`;
   applyBalanceVisibility();
 
   const initial = document.getElementById("initialBalance");
@@ -717,10 +803,30 @@ function transactionFilterCount() {
   if (txFilters.type !== "all") count++;
   if (txFilters.wallet_id) count++;
   if (txFilters.category) count++;
-  if (txFilters.from) count++;
-  if (txFilters.to) count++;
+  // Bulan berjalan adalah tampilan default, bukan dianggap filter tambahan.
+  if (txPeriodMode === "custom") {
+    if (txFilters.from) count++;
+    if (txFilters.to) count++;
+  }
   if (txFilters.sort !== "date_desc") count++;
   return count;
+}
+
+function syncTransactionPeriodUi() {
+  document.querySelectorAll("[data-tx-period]").forEach(btn => {
+    const active = btn.dataset.txPeriod === txPeriodMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  const caption = document.getElementById("txPeriodCaption");
+  if (!caption) return;
+  if (txPeriodMode === "month") caption.textContent = `Bulan berjalan · ${txCurrentMonthCaption()}`;
+  else if (txPeriodMode === "all") caption.textContent = "Seluruh riwayat transaksi";
+  else {
+    const a = txFilters.from || "awal";
+    const b = txFilters.to || "sekarang";
+    caption.textContent = `Rentang khusus · ${a} s.d. ${b}`;
+  }
 }
 
 function syncTransactionFilterUi() {
@@ -738,6 +844,7 @@ function syncTransactionFilterUi() {
   if (from) { from.value = txFilters.from; from.max = txFilters.to || ""; }
   if (to) { to.value = txFilters.to; to.min = txFilters.from || ""; }
   if (sort) sort.value = txFilters.sort;
+  syncTransactionPeriodUi();
 
   const n = transactionFilterCount();
   const badge = document.getElementById("txFilterActiveCount");
@@ -760,6 +867,10 @@ function readTransactionFilterForm() {
   txFilters.from = from;
   txFilters.to = to;
   txFilters.sort = document.getElementById("txFilterSort")?.value || "date_desc";
+  const month = txCurrentMonthRange();
+  if (from === month.from && to === month.to) txPeriodMode = "month";
+  else if (!from && !to) txPeriodMode = "all";
+  else txPeriodMode = "custom";
 }
 
 async function applyTransactionFilters() {
@@ -773,13 +884,30 @@ async function applyTransactionFilters() {
 }
 
 async function resetTransactionFilters() {
+  const month = txCurrentMonthRange();
+  txPeriodMode = "month";
   txFilters.type = "all";
   txFilters.search = "";
   txFilters.wallet_id = 0;
   txFilters.category = "";
-  txFilters.from = "";
-  txFilters.to = "";
+  txFilters.from = month.from;
+  txFilters.to = month.to;
   txFilters.sort = "date_desc";
+  syncTransactionFilterUi();
+  try { await reloadTransactionsOnly(); } catch (err) { alert(err.message); }
+}
+
+async function setTransactionPeriod(mode) {
+  if (!['month','all'].includes(mode)) return;
+  txPeriodMode = mode;
+  if (mode === 'month') {
+    const month = txCurrentMonthRange();
+    txFilters.from = month.from;
+    txFilters.to = month.to;
+  } else {
+    txFilters.from = '';
+    txFilters.to = '';
+  }
   syncTransactionFilterUi();
   try { await reloadTransactionsOnly(); } catch (err) { alert(err.message); }
 }
@@ -1855,6 +1983,7 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") setTransactionExportMenu(false);
 });
+document.querySelectorAll("[data-tx-period]").forEach(btn => btn.addEventListener("click", () => setTransactionPeriod(btn.dataset.txPeriod)));
 document.getElementById("txFilterApply")?.addEventListener("click", applyTransactionFilters);
 document.getElementById("txFilterReset")?.addEventListener("click", resetTransactionFilters);
 document.getElementById("txDownloadReport")?.addEventListener("click", downloadTransactionReport);
@@ -2799,7 +2928,7 @@ el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())r
 // PWA install
 let deferredInstallPrompt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;el("installPwaBtn")?.classList.add("ready");});
 el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;}else alert("Jika tombol install tidak tersedia, gunakan menu browser → Tambahkan ke layar utama / Install app.");});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=29",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=32",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
 
 // Admin
 async function adminPost(payload) {
