@@ -217,6 +217,28 @@ function txIcon(category = "") {
   return "💳";
 }
 
+function formatTransactionDate(value = "") {
+  const raw = String(value || "").slice(0, 10);
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return raw || "-";
+  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  return `${Number(m[3])} ${months[Math.max(0, Number(m[2]) - 1)]} ${m[1]}`;
+}
+
+function transactionKindLabel(type = "") {
+  if (type === "expense") return "Pengeluaran";
+  if (type === "income") return "Pemasukan";
+  if (type === "transfer") return "Transfer";
+  return "Transaksi";
+}
+
+function transactionPatternLabel(value = "") {
+  if (value === "daily") return "Harian";
+  if (value === "recurring") return "Berulang";
+  if (value === "once") return "Sekali bayar";
+  return "";
+}
+
 const OFFLINE_QUEUE_ENDPOINTS = [
   "ajax/finance.php",
   "ajax/settings.php",
@@ -762,15 +784,56 @@ function renderTransactions() {
     const sign = t.type === "expense" ? "-" : (t.type === "income" ? "+" : "↔ ");
     const cls = t.type === "expense" ? "expense" : (t.type === "income" ? "income" : "transfer");
     const x = document.createElement("div");
-    x.className = "tx" + (t.offline_pending ? " offline-pending" : "");
-    const sourceLabel = t.source === "receipt_scan" ? '<span class="scan-badge">scan nota</span>' : (t.offline_pending ? '<span class="sync-badge">offline</span>' : "");
+    x.className = `tx tx-card tx-${cls}` + (t.offline_pending ? " offline-pending" : "");
+
     const walletLabel = isTransfer
       ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
       : (wallets[Number(t.wallet_id || 1)] || "Utama");
-    const typeLabel = isTransfer ? '<span class="transfer-badge">transfer</span>' : '';
+    const pattern = transactionPatternLabel(String(t.spending_kind || ""));
+    const typeText = transactionKindLabel(String(t.type || ""));
+    const displayDate = formatTransactionDate(t.transaction_date);
+    const note = String(t.note || "").trim();
+
+    const statusBadges = [
+      `<span class="tx-kind-badge ${cls}">${esc(typeText)}</span>`,
+      pattern ? `<span class="tx-pattern-badge">${esc(pattern)}</span>` : "",
+      t.source === "receipt_scan" ? '<span class="scan-badge">scan nota</span>' : "",
+      t.offline_pending ? '<span class="sync-badge">offline</span>' : ""
+    ].filter(Boolean).join("");
+
     const detailAction = `<button type="button" class="tx-detail-btn" data-detail-id="${esc(String(t.id))}" aria-label="Lihat detail transaksi">Detail</button>`;
-    const actions = detailAction + (t.offline_pending ? '<span class="pending-sync-text">menunggu sinkronisasi</span>' : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">edit</button><button type="button" data-delete-id="${Number(t.id)}">hapus</button>`);
-    x.innerHTML = `<div class="tx-main">${t.attachment ? attachmentHtml(t.attachment, true) : `<div class="tx-icon">${txIcon(t.category)}</div>`}<div class="tx-info"><b>${esc(t.category)} ${sourceLabel} ${typeLabel}</b><p>${esc(t.note || "")} · ${esc(t.transaction_date)} · ${esc(walletLabel)}</p></div></div><div class="tx-right"><b class="${cls}">${sign}${rupiah(t.amount)}</b><div class="tx-actions">${actions}</div></div>`;
+    const actions = detailAction + (t.offline_pending
+      ? '<span class="pending-sync-text">Menunggu sinkronisasi</span>'
+      : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
+
+    x.innerHTML = `
+      <div class="tx-card-head">
+        <div class="tx-main">
+          ${t.attachment ? attachmentHtml(t.attachment, true) : `<div class="tx-icon" aria-hidden="true">${txIcon(t.category)}</div>`}
+          <div class="tx-info">
+            <div class="tx-title-row">
+              <b class="tx-title">${esc(t.category || "Lainnya")}</b>
+              <div class="tx-badges">${statusBadges}</div>
+            </div>
+            <div class="tx-meta">
+              <span class="tx-meta-item tx-meta-date"><span aria-hidden="true">◷</span>${esc(displayDate)}</span>
+              <span class="tx-meta-item tx-meta-wallet"><span aria-hidden="true">${isTransfer ? "↔" : "⌑"}</span>${esc(walletLabel)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="tx-right">
+          <small class="tx-amount-label">${esc(typeText)}</small>
+          <b class="${cls}">${sign}${rupiah(t.amount)}</b>
+        </div>
+      </div>
+      <div class="tx-note${note ? "" : " is-empty"}">
+        <span class="tx-note-label">Keterangan</span>
+        <p>${esc(note || "Tanpa keterangan")}</p>
+      </div>
+      <div class="tx-card-footer">
+        <div class="tx-card-id">#${esc(String(t.id))}</div>
+        <div class="tx-actions">${actions}</div>
+      </div>`;
     list.appendChild(x);
   });
 
@@ -798,6 +861,7 @@ function renderTransactions() {
   list.querySelectorAll("[data-detail-id]").forEach(btn => btn.addEventListener("click", () => openTransactionDetail(btn.dataset.detailId)));
   bindStoredPhotos(list);
 }
+
 function transactionFilterCount() {
   let count = 0;
   if (txFilters.type !== "all") count++;
@@ -1948,6 +2012,82 @@ async function clearAllMessages() {
 }
 
 document.getElementById("clearChatsBtn")?.addEventListener("click", clearAllMessages);
+
+// ---------------- COMPACT TRANSACTION PANEL RUNTIME LAYOUT v7.10.9 ----------------
+function installCompactTransactionPanel() {
+  const txPanel = document.getElementById("txPanel");
+  const filterPanel = document.getElementById("txFilterPanel");
+  const filterToggle = document.getElementById("txFilterToggle");
+  if (!txPanel || !filterPanel || !filterToggle) return;
+  if (txPanel.dataset.compactLayoutV7109 === "1") return;
+  txPanel.dataset.compactLayoutV7109 = "1";
+  txPanel.classList.add("tx-layout-v7109");
+
+  const periodBar = txPanel.querySelector(".tx-period-bar");
+  const searchRow = txPanel.querySelector(".tx-search-export-row");
+  const summary = txPanel.querySelector(".tx-filter-summary");
+  const filterWrap = filterToggle.closest(".tx-filter-wrap") || filterPanel.parentElement;
+
+  // Pencarian + Unduh harus selalu terlihat di luar dropdown filter.
+  if (filterWrap && searchRow && searchRow.parentElement !== filterWrap) {
+    filterWrap.insertBefore(searchRow, filterToggle);
+  } else if (filterWrap && searchRow && searchRow.nextElementSibling !== filterToggle) {
+    filterWrap.insertBefore(searchRow, filterToggle);
+  }
+
+  // Semua kontrol lainnya, termasuk periode dan ringkasan, masuk ke dropdown.
+  if (periodBar && periodBar.parentElement !== filterPanel) {
+    filterPanel.insertBefore(periodBar, filterPanel.firstChild);
+  } else if (periodBar && filterPanel.firstElementChild !== periodBar) {
+    filterPanel.insertBefore(periodBar, filterPanel.firstChild);
+  }
+  if (summary && summary.parentElement !== filterPanel) filterPanel.appendChild(summary);
+
+  // Label dibuat singkat dan konsisten.
+  const drawerLabel = filterToggle.querySelector(".tx-filter-drawer-label");
+  if (drawerLabel) {
+    drawerLabel.innerHTML = '<b>Filter & Urutkan</b><small>Periode, jenis, dompet, kategori, tanggal & urutan</small>';
+  } else {
+    const textNodes = Array.from(filterToggle.childNodes).filter(n => n.nodeType === Node.TEXT_NODE && (n.textContent || "").trim());
+    if (textNodes.length) {
+      const label = document.createElement("span");
+      label.className = "tx-filter-runtime-label";
+      label.textContent = "Filter & Urutkan";
+      filterToggle.replaceChild(label, textNodes[0]);
+    }
+  }
+
+  filterPanel.hidden = true;
+  filterToggle.setAttribute("aria-expanded", "false");
+  filterToggle.classList.remove("is-open");
+}
+
+function ensureSidebarHistoryMenu() {
+  const menu = document.querySelector("#appSidebar .sidebar-menu");
+  if (!menu || menu.querySelector('[data-finance-open="history"]')) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "sidebar-menu-item";
+  button.dataset.financeOpen = "history";
+  button.innerHTML = `
+    <span class="sidebar-menu-icon sidebar-history-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+        <path d="M3 3v5h5"></path>
+        <path d="M12 7v5l3 2"></path>
+      </svg>
+    </span>
+    <span><b>Riwayat</b><small>Perubahan transaksi & undo</small></span>
+    <span class="sidebar-arrow">›</span>`;
+
+  const backup = menu.querySelector('[data-finance-open="backup"]');
+  if (backup) menu.insertBefore(button, backup);
+  else menu.appendChild(button);
+}
+
+installCompactTransactionPanel();
+ensureSidebarHistoryMenu();
 
 // ---------------- FILTER & SORT TRANSAKSI ----------------
 document.getElementById("txFilterToggle")?.addEventListener("click", () => {

@@ -48,8 +48,8 @@ import java.util.concurrent.Executor;
 
 public class MainActivity extends FragmentActivity {
 
-    private static final String APP_URL = "https://charlie-finance.rf.gd/";
-    private static final String APP_HOST = "charlie-finance.rf.gd";
+    private static final String APP_URL = "https://catatan-keuangan.cloud/";
+    private static final String APP_HOST = "catatan-keuangan.cloud";
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final String SECURITY_PREFS = "catatan_keuangan_security";
     private static final String PREF_BIOMETRIC_ENABLED = "biometric_enabled";
@@ -143,8 +143,7 @@ public class MainActivity extends FragmentActivity {
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
         settings.setUserAgentString(
-                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.2"
-        );
+                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.2");
 
         // Cookie/session login tetap tersimpan
         CookieManager cookieManager = CookieManager.getInstance();
@@ -160,8 +159,7 @@ public class MainActivity extends FragmentActivity {
         webView.addJavascriptInterface(new BiometricBridge(), "AndroidBiometric");
 
         // Debug WebView hanya aktif pada debug build
-        boolean isDebuggable =
-                (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
 
         if (isDebuggable) {
             WebView.setWebContentsDebuggingEnabled(true);
@@ -206,9 +204,12 @@ public class MainActivity extends FragmentActivity {
         PackageManager pm = getPackageManager();
         boolean face = pm.hasSystemFeature("android.hardware.biometrics.face");
         boolean fingerprint = pm.hasSystemFeature("android.hardware.fingerprint");
-        if (face && fingerprint) return "Pengenalan wajah / sidik jari";
-        if (face) return "Pengenalan wajah";
-        if (fingerprint) return "Sidik jari";
+        if (face && fingerprint)
+            return "Pengenalan wajah / sidik jari";
+        if (face)
+            return "Pengenalan wajah";
+        if (fingerprint)
+            return "Sidik jari";
         return "Biometrik perangkat";
     }
 
@@ -240,7 +241,8 @@ public class MainActivity extends FragmentActivity {
     }
 
     private String jsonEscape(String value) {
-        if (value == null) return "";
+        if (value == null)
+            return "";
         return value.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
@@ -248,12 +250,12 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void notifyWebBiometricStatus() {
-        if (webView == null) return;
+        if (webView == null)
+            return;
         String status = getBiometricStatusJson();
         webView.evaluateJavascript(
                 "window.dispatchEvent(new CustomEvent('finance-biometric-status',{detail:" + status + "}));",
-                null
-        );
+                null);
     }
 
     private void showBiometricOverlay(String message) {
@@ -277,8 +279,7 @@ public class MainActivity extends FragmentActivity {
             Toast.makeText(
                     this,
                     "PIN aplikasi memerlukan koneksi untuk mengunci ulang sesi dengan aman.",
-                    Toast.LENGTH_LONG
-            ).show();
+                    Toast.LENGTH_LONG).show();
             return;
         }
         biometricPromptVisible = false;
@@ -287,17 +288,20 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void authenticateBiometric(int mode) {
-        if (biometricPromptVisible) return;
+        if (biometricPromptVisible)
+            return;
 
         int capability = biometricCapability();
         if (capability != BiometricManager.BIOMETRIC_SUCCESS) {
             if (mode == BIOMETRIC_MODE_UNLOCK && isBiometricEnabled()) {
-                // Jangan otomatis mematikan pengamanan hanya karena sensor sementara tidak tersedia.
+                // Jangan otomatis mematikan pengamanan hanya karena sensor sementara tidak
+                // tersedia.
                 // Pengguna tetap dapat memilih fallback PIN aplikasi.
                 showBiometricOverlay(biometricUnavailableMessage(capability) + " Gunakan PIN aplikasi bila perlu.");
                 Toast.makeText(this, biometricUnavailableMessage(capability), Toast.LENGTH_LONG).show();
             } else if (mode == BIOMETRIC_MODE_DISABLE) {
-                // Pengguna sudah berada di sesi aplikasi yang terbuka; izinkan mematikan setting lokal
+                // Pengguna sudah berada di sesi aplikasi yang terbuka; izinkan mematikan
+                // setting lokal
                 // jika sensor memang sudah tidak tersedia agar tidak terjadi lockout permanen.
                 securityPrefs.edit().putBoolean(PREF_BIOMETRIC_ENABLED, false).apply();
                 hideBiometricOverlay();
@@ -322,7 +326,8 @@ public class MainActivity extends FragmentActivity {
                                 useApplicationPinFallback();
                                 return;
                             }
-                            showBiometricOverlay("Aplikasi tetap terkunci. Coba biometrik lagi atau gunakan PIN aplikasi.");
+                            showBiometricOverlay(
+                                    "Aplikasi tetap terkunci. Coba biometrik lagi atau gunakan PIN aplikasi.");
                         }
                         notifyWebBiometricStatus();
                     }
@@ -336,7 +341,8 @@ public class MainActivity extends FragmentActivity {
                             Toast.makeText(MainActivity.this, "Kunci biometrik diaktifkan.", Toast.LENGTH_SHORT).show();
                         } else if (mode == BIOMETRIC_MODE_DISABLE) {
                             securityPrefs.edit().putBoolean(PREF_BIOMETRIC_ENABLED, false).apply();
-                            Toast.makeText(MainActivity.this, "Kunci biometrik dinonaktifkan.", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Kunci biometrik dinonaktifkan.", Toast.LENGTH_SHORT)
+                                    .show();
                         }
                         hideBiometricOverlay();
                         notifyWebBiometricStatus();
@@ -349,8 +355,7 @@ public class MainActivity extends FragmentActivity {
                             showBiometricOverlay("Biometrik tidak cocok. Silakan coba lagi.");
                         }
                     }
-                }
-        );
+                });
 
         BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
                 .setTitle(mode == BIOMETRIC_MODE_DISABLE ? "Nonaktifkan kunci biometrik" : "Buka Catatan Keuangan")
@@ -362,8 +367,7 @@ public class MainActivity extends FragmentActivity {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             promptBuilder.setNegativeButtonText(
-                    mode == BIOMETRIC_MODE_UNLOCK ? "Gunakan PIN aplikasi" : "Batal"
-            );
+                    mode == BIOMETRIC_MODE_UNLOCK ? "Gunakan PIN aplikasi" : "Batal");
         }
 
         biometricPromptVisible = true;
@@ -395,10 +399,9 @@ public class MainActivity extends FragmentActivity {
 
     private void configureServiceWorker() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ServiceWorkerWebSettings sw =
-                    ServiceWorkerController
-                            .getInstance()
-                            .getServiceWorkerWebSettings();
+            ServiceWorkerWebSettings sw = ServiceWorkerController
+                    .getInstance()
+                    .getServiceWorkerWebSettings();
 
             sw.setCacheMode(WebSettings.LOAD_DEFAULT);
             sw.setAllowContentAccess(true);
@@ -408,8 +411,7 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void registerNetworkWatcher() {
-        connectivityManager =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
 
         if (connectivityManager == null ||
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
@@ -428,8 +430,7 @@ public class MainActivity extends FragmentActivity {
                         // IndexedDB/offline sync segera diproses.
                         webView.evaluateJavascript(
                                 "window.dispatchEvent(new Event('online'));",
-                                null
-                        );
+                                null);
                     }
                 });
             }
@@ -446,8 +447,7 @@ public class MainActivity extends FragmentActivity {
         @Override
         public boolean shouldOverrideUrlLoading(
                 WebView view,
-                WebResourceRequest request
-        ) {
+                WebResourceRequest request) {
             return handleNavigation(request.getUrl());
         }
 
@@ -460,8 +460,7 @@ public class MainActivity extends FragmentActivity {
         public void onPageStarted(
                 WebView view,
                 String url,
-                Bitmap favicon
-        ) {
+                Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
 
             if (url != null && url.startsWith("http")) {
@@ -486,8 +485,7 @@ public class MainActivity extends FragmentActivity {
         public void onReceivedError(
                 WebView view,
                 WebResourceRequest request,
-                WebResourceError error
-        ) {
+                WebResourceError error) {
             super.onReceivedError(view, request, error);
 
             if (request.isForMainFrame() && !isConnected()) {
@@ -528,8 +526,7 @@ public class MainActivity extends FragmentActivity {
                 Toast.makeText(
                         MainActivity.this,
                         "Tidak dapat membuka tautan ini.",
-                        Toast.LENGTH_SHORT
-                ).show();
+                        Toast.LENGTH_SHORT).show();
             }
 
             return true;
@@ -541,20 +538,17 @@ public class MainActivity extends FragmentActivity {
         @Override
         public void onProgressChanged(
                 WebView view,
-                int newProgress
-        ) {
+                int newProgress) {
             progressBar.setProgress(newProgress);
             progressBar.setVisibility(
-                    newProgress >= 100 ? View.GONE : View.VISIBLE
-            );
+                    newProgress >= 100 ? View.GONE : View.VISIBLE);
         }
 
         @Override
         public boolean onShowFileChooser(
                 WebView webView,
                 ValueCallback<Uri[]> callback,
-                FileChooserParams fileChooserParams
-        ) {
+                FileChooserParams fileChooserParams) {
             if (filePathCallback != null) {
                 filePathCallback.onReceiveValue(null);
             }
@@ -562,96 +556,79 @@ public class MainActivity extends FragmentActivity {
             filePathCallback = callback;
 
             // Galeri
-            Intent galleryIntent =
-                    new Intent(Intent.ACTION_GET_CONTENT);
+            Intent galleryIntent = new Intent(Intent.ACTION_GET_CONTENT);
             galleryIntent.addCategory(Intent.CATEGORY_OPENABLE);
             galleryIntent.setType("image/*");
 
             // Kamera
-            Intent cameraIntent =
-                    new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
 
             try {
                 cameraPhotoUri = createCameraUri();
 
                 cameraIntent.putExtra(
                         android.provider.MediaStore.EXTRA_OUTPUT,
-                        cameraPhotoUri
-                );
+                        cameraPhotoUri);
 
                 cameraIntent.addFlags(
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                                | Intent.FLAG_GRANT_READ_URI_PERMISSION
-                );
+                                | Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             } catch (IOException e) {
                 cameraIntent = null;
                 cameraPhotoUri = null;
             }
 
-            Intent chooser =
-                    Intent.createChooser(
-                            galleryIntent,
-                            "Pilih foto nota"
-                    );
+            Intent chooser = Intent.createChooser(
+                    galleryIntent,
+                    "Pilih foto nota");
 
             if (cameraIntent != null) {
                 chooser.putExtra(
                         Intent.EXTRA_INITIAL_INTENTS,
-                        new Intent[]{cameraIntent}
-                );
+                        new Intent[] { cameraIntent });
             }
 
             startActivityForResult(
                     chooser,
-                    FILE_CHOOSER_REQUEST
-            );
+                    FILE_CHOOSER_REQUEST);
 
             return true;
         }
     }
 
     private Uri createCameraUri() throws IOException {
-        File dir =
-                new File(getCacheDir(), "camera");
+        File dir = new File(getCacheDir(), "camera");
 
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException(
-                    "Tidak dapat membuat folder kamera"
-            );
+                    "Tidak dapat membuat folder kamera");
         }
 
-        String timestamp =
-                new SimpleDateFormat(
-                        "yyyyMMdd_HHmmss",
-                        Locale.US
-                ).format(new Date());
+        String timestamp = new SimpleDateFormat(
+                "yyyyMMdd_HHmmss",
+                Locale.US).format(new Date());
 
-        File image =
-                File.createTempFile(
-                        "CF_" + timestamp + "_",
-                        ".jpg",
-                        dir
-                );
+        File image = File.createTempFile(
+                "CF_" + timestamp + "_",
+                ".jpg",
+                dir);
 
         return FileProvider.getUriForFile(
                 this,
                 getPackageName() + ".fileprovider",
-                image
-        );
+                image);
     }
 
     @Override
     protected void onActivityResult(
             int requestCode,
             int resultCode,
-            Intent data
-    ) {
+            Intent data) {
         super.onActivityResult(
                 requestCode,
                 resultCode,
-                data
-        );
+                data);
 
         if (requestCode != FILE_CHOOSER_REQUEST
                 || filePathCallback == null) {
@@ -662,19 +639,16 @@ public class MainActivity extends FragmentActivity {
 
         if (resultCode == RESULT_OK) {
             if (data != null && data.getData() != null) {
-                result = new Uri[]{data.getData()};
+                result = new Uri[] { data.getData() };
 
             } else if (cameraPhotoUri != null) {
-                result = new Uri[]{cameraPhotoUri};
+                result = new Uri[] { cameraPhotoUri };
 
             } else {
-                result =
-                        WebChromeClient
-                                .FileChooserParams
-                                .parseResult(
-                                        resultCode,
-                                        data
-                                );
+                result = WebChromeClient.FileChooserParams
+                        .parseResult(
+                                resultCode,
+                                data);
             }
         }
 
@@ -692,56 +666,44 @@ public class MainActivity extends FragmentActivity {
                 String userAgent,
                 String contentDisposition,
                 String mimeType,
-                long contentLength
-        ) {
+                long contentLength) {
             try {
-                String filename =
-                        android.webkit.URLUtil.guessFileName(
-                                url,
-                                contentDisposition,
-                                mimeType
-                        );
+                String filename = android.webkit.URLUtil.guessFileName(
+                        url,
+                        contentDisposition,
+                        mimeType);
 
-                DownloadManager.Request request =
-                        new DownloadManager.Request(
-                                Uri.parse(url)
-                        );
+                DownloadManager.Request request = new DownloadManager.Request(
+                        Uri.parse(url));
 
                 request.setTitle(filename);
                 request.setDescription(
-                        "Mengunduh laporan Catatan Keuangan"
-                );
+                        "Mengunduh laporan Catatan Keuangan");
 
                 request.setMimeType(mimeType);
                 request.setAllowedOverMetered(true);
                 request.setAllowedOverRoaming(true);
 
                 request.setNotificationVisibility(
-                        DownloadManager.Request
-                                .VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                );
+                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
 
                 request.addRequestHeader(
                         "User-Agent",
-                        userAgent
-                );
+                        userAgent);
 
                 request.addRequestHeader(
                         "Referer",
-                        APP_URL
-                );
+                        APP_URL);
 
-                String cookies =
-                        CookieManager
-                                .getInstance()
-                                .getCookie(url);
+                String cookies = CookieManager
+                        .getInstance()
+                        .getCookie(url);
 
                 if (cookies != null
                         && !cookies.isEmpty()) {
                     request.addRequestHeader(
                             "Cookie",
-                            cookies
-                    );
+                            cookies);
                 }
 
                 /*
@@ -752,33 +714,26 @@ public class MainActivity extends FragmentActivity {
                  * simpan ke folder external app-specific
                  * tanpa permission storage tambahan.
                  */
-                if (Build.VERSION.SDK_INT
-                        >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
                     request.setDestinationInExternalPublicDir(
                             Environment.DIRECTORY_DOWNLOADS,
-                            filename
-                    );
+                            filename);
 
                 } else {
 
                     request.setDestinationInExternalFilesDir(
                             MainActivity.this,
                             Environment.DIRECTORY_DOWNLOADS,
-                            filename
-                    );
+                            filename);
                 }
 
-                DownloadManager dm =
-                        (DownloadManager)
-                                getSystemService(
-                                        DOWNLOAD_SERVICE
-                                );
+                DownloadManager dm = (DownloadManager) getSystemService(
+                        DOWNLOAD_SERVICE);
 
                 if (dm == null) {
                     throw new IllegalStateException(
-                            "DownloadManager tidak tersedia"
-                    );
+                            "DownloadManager tidak tersedia");
                 }
 
                 dm.enqueue(request);
@@ -786,15 +741,13 @@ public class MainActivity extends FragmentActivity {
                 Toast.makeText(
                         MainActivity.this,
                         "Download dimulai: " + filename,
-                        Toast.LENGTH_SHORT
-                ).show();
+                        Toast.LENGTH_SHORT).show();
 
             } catch (Exception e) {
                 Toast.makeText(
                         MainActivity.this,
                         "Download gagal. Coba lagi.",
-                        Toast.LENGTH_LONG
-                ).show();
+                        Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -808,46 +761,34 @@ public class MainActivity extends FragmentActivity {
         progressBar.setVisibility(View.GONE);
 
         webView.loadUrl(
-                "file:///android_asset/offline.html"
-        );
+                "file:///android_asset/offline.html");
     }
 
     private boolean isConnected() {
-        ConnectivityManager cm =
-                (ConnectivityManager)
-                        getSystemService(
-                                Context.CONNECTIVITY_SERVICE
-                        );
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(
+                Context.CONNECTIVITY_SERVICE);
 
         if (cm == null) {
             return false;
         }
 
-        Network network =
-                cm.getActiveNetwork();
+        Network network = cm.getActiveNetwork();
 
         if (network == null) {
             return false;
         }
 
-        NetworkCapabilities caps =
-                cm.getNetworkCapabilities(network);
+        NetworkCapabilities caps = cm.getNetworkCapabilities(network);
 
         return caps != null
-                && (
-                caps.hasTransport(
-                        NetworkCapabilities.TRANSPORT_WIFI
-                )
+                && (caps.hasTransport(
+                        NetworkCapabilities.TRANSPORT_WIFI)
                         || caps.hasTransport(
-                        NetworkCapabilities.TRANSPORT_CELLULAR
-                )
+                                NetworkCapabilities.TRANSPORT_CELLULAR)
                         || caps.hasTransport(
-                        NetworkCapabilities.TRANSPORT_ETHERNET
-                )
+                                NetworkCapabilities.TRANSPORT_ETHERNET)
                         || caps.hasTransport(
-                        NetworkCapabilities.TRANSPORT_VPN
-                )
-        );
+                                NetworkCapabilities.TRANSPORT_VPN));
     }
 
     @Override
@@ -861,8 +802,7 @@ public class MainActivity extends FragmentActivity {
 
     @Override
     protected void onSaveInstanceState(
-            Bundle outState
-    ) {
+            Bundle outState) {
         webView.saveState(outState);
         super.onSaveInstanceState(outState);
     }
@@ -901,8 +841,7 @@ public class MainActivity extends FragmentActivity {
             // setelah aplikasi kembali aktif.
             webView.evaluateJavascript(
                     "window.dispatchEvent(new Event('online'));",
-                    null
-            );
+                    null);
         }
     }
 
@@ -922,14 +861,12 @@ public class MainActivity extends FragmentActivity {
 
         if (connectivityManager != null
                 && networkCallback != null
-                && Build.VERSION.SDK_INT
-                >= Build.VERSION_CODES.N) {
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 
             try {
                 connectivityManager
                         .unregisterNetworkCallback(
-                                networkCallback
-                        );
+                                networkCallback);
             } catch (Exception ignored) {
             }
         }

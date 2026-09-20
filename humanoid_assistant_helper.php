@@ -257,6 +257,186 @@ function humanoidHypotheticalReply(string $message): ?string {
     return $reply;
 }
 
+
+
+function humanoidMonthName(int $month): string {
+    $months=[1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'];
+    return $months[$month] ?? '';
+}
+
+function humanoidMonthLabel(DateTimeInterface $date): string {
+    return humanoidMonthName((int)$date->format('n')).' '.$date->format('Y');
+}
+
+/** Resolve the month being discussed without turning a plain transaction into analysis. */
+function humanoidMonthlyTarget(string $message): DateTimeImmutable {
+    $t=norm($message);$now=new DateTimeImmutable('today');
+    if(preg_match('/\\bbulan (?:lalu|kemarin)\\b/u',$t)) return $now->modify('first day of last month');
+    $months=['januari'=>1,'februari'=>2,'maret'=>3,'april'=>4,'mei'=>5,'juni'=>6,'juli'=>7,'agustus'=>8,'september'=>9,'oktober'=>10,'november'=>11,'desember'=>12];
+    foreach($months as $name=>$number){
+        if(!preg_match('/\\b'.$name.'(?:\\s+(\\d{4}))?\\b/u',$t,$m))continue;
+        $year=!empty($m[1])?(int)$m[1]:(int)$now->format('Y');
+        return new DateTimeImmutable(sprintf('%04d-%02d-01',$year,$number));
+    }
+    return $now->modify('first day of this month');
+}
+
+function humanoidMonthlyStats(DateTimeInterface $month, ?int $throughDay=null): array {
+    $key=$month->format('Y-m');$income=0;$expense=0;$count=0;$categories=[];$kinds=['daily'=>0,'once'=>0,'recurring'=>0];$top=null;
+    foreach((array)allTransactions() as $row){
+        $date=substr((string)($row['transaction_date']??''),0,10);
+        if(substr($date,0,7)!==$key)continue;
+        if($throughDay!==null && (int)substr($date,8,2)>$throughDay)continue;
+        $type=(string)($row['type']??'');$amount=max(0,(int)($row['amount']??0));
+        if($type==='income'){$income+=$amount;$count++;continue;}
+        if($type!=='expense')continue;
+        $expense+=$amount;$count++;
+        $cat=trim((string)($row['category']??'Lainnya')) ?: 'Lainnya';
+        $categories[$cat]=($categories[$cat]??0)+$amount;
+        $kind=function_exists('transactionSpendingKind')?transactionSpendingKind($row):(string)($row['spending_kind']??'once');
+        if(!isset($kinds[$kind]))$kind='once';$kinds[$kind]+=$amount;
+        if($top===null || $amount>(int)($top['amount']??0))$top=$row;
+    }
+    arsort($categories);
+    return ['month'=>$key,'income'=>$income,'expense'=>$expense,'net'=>$income-$expense,'count'=>$count,'categories'=>$categories,'kinds'=>$kinds,'top'=>$top];
+}
+
+function humanoidPercentChange(int $current,int $previous): ?float {
+    if($previous===0)return $current===0?0.0:null;
+    return (($current-$previous)/$previous)*100;
+}
+
+function humanoidMonthlyComparisonSentence(string $label,int $current,int $previous): string {
+    $change=humanoidPercentChange($current,$previous);
+    if($change===null)return $label.' '.rupiah($current).' (periode pembanding sebelumnya belum memiliki nilai).';
+    if(abs($change)<0.5)return $label.' '.rupiah($current).' — relatif sama dengan periode pembanding.';
+    return $label.' '.rupiah($current).' — '.($change>0?'naik ':'turun ').number_format(abs($change),1,',','.').'% dari '.rupiah($previous).'.';
+}
+
+function humanoidMonthlyProjection(DateTimeImmutable $month,array $stats): array {
+    $today=new DateTimeImmutable('today');
+    // Projection is only meaningful for the current calendar month.
+    if($month->format('Y-m')!==$today->format('Y-m'))return ['available'=>false];
+    $end=$today->modify('last day of this month');$remaining=max(0,(int)$today->diff($end)->days);
+    $dailyAverage=0;$historyDays=0;$dailyCount=0;
+    if(function_exists('financeDailyForecastHistory')){
+        $history=financeDailyForecastHistory(allTransactions(),$today->format('Y-m-d'));
+        $dailyAverage=max(0,(int)($history['average_daily_expense']??0));
+        $historyDays=max(0,(int)($history['history_days']??0));
+        $dailyCount=max(0,(int)($history['daily_expense_count']??0));
+    } else {
+        $elapsed=max(1,(int)$today->format('j'));
+        $dailyAverage=(int)round(((int)($stats['kinds']['daily']??0))/$elapsed);
+        $historyDays=$elapsed;$dailyCount=$dailyAverage>0?1:0;
+    }
+    $dailyRemaining=$dailyAverage*$remaining;
+    $billTotal=0;$billRows=[];
+    if(function_exists('financeForecastBills') && function_exists('financeBills')){
+        $start=$today->modify('+1 day')->format('Y-m-d');
+        $billRows=financeForecastBills(financeBills(),$start,$end->format('Y-m-d'));
+        foreach((array)$billRows as $b)$billTotal+=max(0,(int)($b['amount']??0));
+    }
+    $recIncome=0;$recExpense=0;
+    if(function_exists('financeUpcomingRecurringUntil')){
+        $rec=financeUpcomingRecurringUntil($end->format('Y-m-d'));
+        $recIncome=max(0,(int)($rec['income']??0));$recExpense=max(0,(int)($rec['expense']??0));
+    }
+    $projectedExpense=(int)$stats['expense']+$dailyRemaining+$billTotal+$recExpense;
+    $projectedIncome=(int)$stats['income']+$recIncome;
+    $availableNow=(int)(summary()['balance']??0);
+    $availableEnd=$availableNow-$dailyRemaining-$billTotal-$recExpense+$recIncome;
+    return [
+        'available'=>true,'remaining_days'=>$remaining,'daily_average'=>$dailyAverage,'daily_remaining'=>$dailyRemaining,
+        'bills'=>$billTotal,'recurring_expense'=>$recExpense,'recurring_income'=>$recIncome,
+        'projected_expense'=>$projectedExpense,'projected_income'=>$projectedIncome,'projected_net'=>$projectedIncome-$projectedExpense,
+        'available_now'=>$availableNow,'available_end'=>$availableEnd,'history_days'=>$historyDays,'daily_count'=>$dailyCount
+    ];
+}
+
+function humanoidMonthlyTrendReply(string $message): ?string {
+    $t=norm($message);
+    if(!preg_match('/\\b(?:tren|trend|pola|perbandingan|bandingkan)\\b.*\\b(?:bulan|bulanan)\\b/u',$t) && !preg_match('/\\b(?:3|4|5|6|12)\\s*bulan terakhir\\b/u',$t))return null;
+    $months=3;if(preg_match('/\\b(\\d{1,2})\\s*bulan\\b/u',$t,$m))$months=max(2,min(12,(int)$m[1]));
+    $now=new DateTimeImmutable('first day of this month');$rows=[];
+    for($i=$months-1;$i>=0;$i--){$m=$now->modify('-'.$i.' months');$rows[]=[$m,humanoidMonthlyStats($m)];}
+    $lines=['Tren '.$months.' bulan terakhir:'];
+    foreach($rows as [$m,$s]){
+        $partial=$m->format('Y-m')===$now->format('Y-m')?' (sampai hari ini)':'';
+        if((int)($s['count']??0)===0){$lines[]='• '.humanoidMonthLabel($m).$partial.': belum ada data transaksi.';continue;}
+        $lines[]='• '.humanoidMonthLabel($m).$partial.': pemasukan '.rupiah($s['income']).', pengeluaran '.rupiah($s['expense']).', net '.($s['net']>=0?'+':'-').rupiah(abs($s['net'])).'.';
+    }
+    $full=array_filter($rows,function($pair)use($now){return $pair[0]->format('Y-m')!==$now->format('Y-m') && (int)($pair[1]['count']??0)>0;});
+    if($full){$avg=(int)round(array_sum(array_map(fn($x)=>(int)$x[1]['expense'],$full))/count($full));$lines[]='Rata-rata pengeluaran bulan penuh pada periode ini: '.rupiah($avg).'.';}
+    return implode("\n",$lines);
+}
+
+/** Rich monthly analysis: actuals, fair same-date comparison, spending pattern and end-of-month projection. */
+function humanoidMonthlyAnalysisReply(string $message): ?string {
+    $t=norm($message);
+    $isMonthly=(bool)preg_match('/\b(?:analisis|analisa|evaluasi|review|ringkasan|kondisi|pola|proyeksi|perkiraan)\b.*\b(?:bulan|bulanan|akhir bulan)\b/u',$t)
+        || (bool)preg_match('/\b(?:bulan ini|bulan lalu)\b.*\b(?:boros|hemat|aman|sehat|bagus|buruk)\b/u',$t)
+        || (bool)preg_match('/\b(?:aman|cukup)\b.*\b(?:sampai )?akhir bulan\b/u',$t)
+        || (bool)preg_match('/\b(?:tren|trend)\b.*\b(?:bulan|bulanan)\b/u',$t)
+        || (bool)preg_match('/\b\d{1,2}\s*bulan terakhir\b/u',$t);
+    if(!$isMonthly)return null;
+    // Explicit multi-month trend is handled by the trend renderer.
+    $trend=humanoidMonthlyTrendReply($message);if($trend!==null)return $trend;
+
+    $target=humanoidMonthlyTarget($message);$stats=humanoidMonthlyStats($target);$now=new DateTimeImmutable('today');
+    if((int)($stats['count']??0)===0)return 'Belum ada data pemasukan/pengeluaran untuk '.humanoidMonthLabel($target).', jadi pola bulanan belum bisa dianalisis.';
+    $isCurrent=$target->format('Y-m')===$now->format('Y-m');
+    $label=humanoidMonthLabel($target);
+    $elapsed=$isCurrent?(int)$now->format('j'):(int)$target->format('t');
+    $prev=$target->modify('first day of last month');$sameDay=min($elapsed,(int)$prev->format('t'));
+    $currentComparable=humanoidMonthlyStats($target,$sameDay);$previousComparable=humanoidMonthlyStats($prev,$sameDay);
+
+    $lines=['📊 Analisis '.$label.($isCurrent?' (sampai hari ini)':'').':'];
+    $lines[]='• Pemasukan: '.rupiah($stats['income']);
+    $lines[]='• Pengeluaran: '.rupiah($stats['expense']);
+    $lines[]='• Arus bersih: '.($stats['net']>=0?'+':'-').rupiah(abs($stats['net']));
+    if($stats['income']>0){$saveRate=($stats['net']/$stats['income'])*100;$lines[]='• Rasio sisa dari pemasukan: '.number_format($saveRate,1,',','.').'%. ';}
+
+    $lines[]="\nPerbandingan tanggal 1–{$sameDay} dengan ".humanoidMonthLabel($prev).':';
+    $lines[]='• '.humanoidMonthlyComparisonSentence('Pengeluaran',$currentComparable['expense'],$previousComparable['expense']);
+    $lines[]='• '.humanoidMonthlyComparisonSentence('Pemasukan',$currentComparable['income'],$previousComparable['income']);
+    $expenseChange=humanoidPercentChange((int)$currentComparable['expense'],(int)$previousComparable['expense']);
+    if($expenseChange!==null){
+        if($expenseChange>10)$lines[]='↗️ Pola belanja pada periode setara sedang lebih tinggi dari bulan sebelumnya.';
+        elseif($expenseChange<-10)$lines[]='↘️ Pola belanja pada periode setara sedang lebih rendah dari bulan sebelumnya.';
+        else $lines[]='➡️ Pola belanja pada periode setara relatif stabil dibanding bulan sebelumnya.';
+    }
+
+    if($stats['categories']){
+        $topCats=array_slice($stats['categories'],0,3,true);$parts=[];foreach($topCats as $cat=>$amount)$parts[]=$cat.' '.rupiah($amount);
+        $lines[]="\nKategori pengeluaran terbesar: ".implode('; ',$parts).'.';
+    }
+    $k=$stats['kinds'];
+    $lines[]='Pola pengeluaran: Harian '.rupiah((int)$k['daily']).' · Sekali bayar '.rupiah((int)$k['once']).' · Berulang '.rupiah((int)$k['recurring']).'.';
+    if($isCurrent && function_exists('financeMonthlyBudgetStatus')){
+        $budgets=financeMonthlyBudgetStatus();$risk=[];
+        foreach((array)$budgets as $b)if((int)($b['percent']??0)>=80)$risk[]=(string)($b['category']??'Kategori').' '.(int)($b['percent']??0).'%';
+        if($risk)$lines[]='Budget yang perlu diperhatikan: '.implode('; ',array_slice($risk,0,4)).'.';
+    }
+
+    if($isCurrent){
+        $p=humanoidMonthlyProjection($target,$stats);
+        if(!empty($p['available'])){
+            $lines[]="\nProyeksi sampai akhir bulan:";
+            if((int)$p['daily_count']===0)$lines[]='• Belum ada pola transaksi Harian yang cukup; transaksi Sekali Bayar tidak saya gandakan ke hari-hari berikutnya.';
+            else $lines[]='• Rata-rata pola Harian: '.rupiah($p['daily_average']).'/hari; estimasi tambahan '.$p['remaining_days'].' hari: '.rupiah($p['daily_remaining']).'.';
+            if($p['bills']>0)$lines[]='• Tagihan belum lunas sampai akhir bulan: '.rupiah($p['bills']).'.';
+            if($p['recurring_expense']>0)$lines[]='• Pengeluaran berulang terjadwal: '.rupiah($p['recurring_expense']).'.';
+            if($p['recurring_income']>0)$lines[]='• Pemasukan berulang yang diharapkan: '.rupiah($p['recurring_income']).'.';
+            $lines[]='• Perkiraan total pengeluaran bulan: '.rupiah($p['projected_expense']).'.';
+            $lines[]='• Perkiraan saldo tersedia akhir bulan: '.rupiah($p['available_end']).'.';
+            if($p['available_end']<0)$lines[]='⚠️ Dengan data saat ini, saldo tersedia berpotensi tidak cukup sebelum bulan berakhir.';
+            elseif($p['available_end']<100000)$lines[]='🟡 Masih positif, tetapi ruang saldo tersedia diperkirakan cukup tipis.';
+            else $lines[]='🟢 Berdasarkan data yang tercatat, saldo tersedia masih diproyeksikan positif di akhir bulan.';
+        }
+    }
+    return implode("\n",$lines);
+}
+
 function humanoidUtilityReply(string $message): ?string {
     $t=norm($message);
     if(preg_match('/\b(?:hari apa|tanggal berapa|tanggal sekarang|hari ini tanggal berapa)\b/u',$t)){
@@ -275,7 +455,7 @@ function humanoidHelpReply(string $message): ?string {
         ."• Catat: “makan 25rb tadi siang dari BCA”\n"
         ."• Koreksi sebelum simpan: “eh, ubah jadi 20rb” atau “pakai SeaBank saja”\n"
         ."• Tanya: “berapa uang saya?”, “kemarin habis berapa?”, “kalau bulan lalu?”\n"
-        ."• Analisis: “aman sampai gajian?”, “kategori paling boros bulan ini”\n"
+        ."• Analisis: “aman sampai gajian?”, “analisis bulan ini”, “tren 6 bulan”\n"
         ."• Simulasi: “kalau beli sepatu 500rb masih aman?”\n"
         ."• Budget: “sisa budget makan berapa?”\n"
         ."• Dompet: “saldo BCA yang benar-benar bisa dipakai berapa?”\n"
@@ -310,7 +490,7 @@ function humanoidDirectReply(string $message): ?string {
     foreach([
         'humanoidHelpReply','humanoidSmallTalkReply','humanoidUtilityReply',
         'humanoidPaydayWhenReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',
-        'humanoidBudgetReply','humanoidGoalReply','humanoidHypotheticalReply'
+        'humanoidMonthlyAnalysisReply','humanoidBudgetReply','humanoidGoalReply','humanoidHypotheticalReply'
     ] as $fn){$reply=$fn($message);if($reply!==null)return $reply;}
     return null;
 }

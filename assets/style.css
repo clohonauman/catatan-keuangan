@@ -1634,3 +1634,999 @@ dialog.tx-detail-dialog{width:min(600px,calc(100% - 24px));max-height:calc(100dv
   .tx-period-copy small{max-width:115px}
   .tx-period-switch button{padding:0 7px;font-size:8px}
 }
+
+/* =========================================================
+   v7.10 - TRANSAKSI MOBILE CARD UI
+   Fokus: data utuh, hierarchy jelas, tidak terpotong di layar kecil.
+   ========================================================= */
+.tx.tx-card{display:block}
+.tx-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+.tx-card-head .tx-main{flex:1 1 auto}
+.tx-card-head .tx-right{flex:0 0 auto}
+.tx-card .tx-title-row{display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap;min-width:0}
+.tx-card .tx-title{min-width:0;overflow-wrap:anywhere}
+.tx-card .tx-badges{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.tx-kind-badge,.tx-pattern-badge{
+  display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border-radius:999px;
+  font-size:8px;font-weight:850;line-height:1.2;white-space:nowrap
+}
+.tx-kind-badge.expense{background:#fff0ee;color:#b42318}
+.tx-kind-badge.income{background:#ecfdf3;color:#067647}
+.tx-kind-badge.transfer{background:#eef2ff;color:#4058ba}
+.tx-pattern-badge{background:#f3f5f8;color:#667085}
+.tx-card .scan-badge,.tx-card .sync-badge,.tx-card .transfer-badge{margin-left:0}
+.tx-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;min-width:0}
+.tx-meta-item{
+  display:inline-flex;align-items:center;gap:4px;max-width:100%;min-height:24px;padding:4px 7px;
+  border-radius:8px;background:#f6f8fb;color:#697586;font-size:9px;font-weight:700;
+  white-space:normal;overflow-wrap:anywhere;word-break:break-word
+}
+.tx-meta-item>span{flex:0 0 auto;color:#91a0b4;font-size:10px}
+.tx-note{margin:10px 0 0;padding:9px 10px;border:1px solid #edf0f4;border-radius:11px;background:#fafbfc}
+.tx-note-label{display:block;margin-bottom:3px;color:#98a2b3;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.35px}
+.tx-note p{max-width:none!important;margin:0!important;color:#475467!important;font-size:10px!important;line-height:1.5!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;word-break:break-word}
+.tx-note.is-empty p{color:#a0a9b6!important;font-style:italic}
+.tx-card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid #eef1f5}
+.tx-card-id{color:#a0a9b6;font-size:8px;font-weight:750;white-space:nowrap}
+.tx-card .tx-amount-label{display:block;margin-bottom:3px;color:#98a2b3;font-size:8px;font-weight:800}
+
+@media(max-width:760px){
+  .transactions-panel.mobile-view.active{
+    background:#f5f7fb!important;
+    border-radius:18px!important;
+  }
+  .transactions-panel .panel-head{
+    padding:12px 13px!important;
+    background:#fff!important;
+    border-bottom:1px solid #edf0f4!important;
+  }
+  .transactions-panel .panel-head>div{min-width:0}
+  .transactions-panel .panel-head b{font-size:15px!important}
+  .transactions-panel .panel-subtitle{display:block;margin-top:2px;white-space:normal!important;line-height:1.35!important}
+  .tx-filter-wrap{background:#fff!important}
+  .transactions-panel .tx-list{
+    display:grid!important;
+    align-content:start!important;
+    gap:10px!important;
+    padding:10px!important;
+    background:#f5f7fb!important;
+  }
+  .transactions-panel .tx{
+    display:block!important;
+    margin:0!important;
+    padding:12px!important;
+    border:1px solid #e7ebf1!important;
+    border-radius:16px!important;
+    background:#fff!important;
+    box-shadow:0 3px 12px rgba(16,24,40,.045)!important;
+    overflow:visible!important;
+  }
+  .transactions-panel .tx.offline-pending{
+    border-style:dashed!important;
+    border-color:#e8cc78!important;
+    background:#fffdf7!important;
+  }
+  .tx-card-head{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:start!important;
+    gap:10px!important;
+  }
+  .transactions-panel .tx-main{
+    min-width:0!important;
+    display:flex!important;
+    align-items:flex-start!important;
+    gap:10px!important;
+  }
+  .transactions-panel .tx-icon{
+    width:44px!important;height:44px!important;flex:0 0 44px!important;
+    border-radius:13px!important;background:#f3f6fa!important;font-size:19px!important;
+  }
+  .transactions-panel .tx-main>.stored-photo{
+    width:44px!important;max-width:44px!important;flex:0 0 44px!important;margin:0!important
+  }
+  .transactions-panel .tx-main>.stored-photo img{
+    width:44px!important;height:44px!important;object-fit:cover!important;border-radius:13px!important
+  }
+  .transactions-panel .tx-info{min-width:0!important;flex:1 1 auto!important}
+  .transactions-panel .tx-info b,
+  .transactions-panel .tx-title{
+    display:block!important;
+    max-width:none!important;
+    color:#172235!important;
+    font-size:13px!important;
+    line-height:1.3!important;
+    white-space:normal!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    overflow-wrap:anywhere!important;
+  }
+  .transactions-panel .tx-right{
+    min-width:92px!important;
+    max-width:42%!important;
+    text-align:right!important;
+    white-space:normal!important;
+  }
+  .transactions-panel .tx-right>b{
+    display:block!important;
+    max-width:100%!important;
+    margin:0!important;
+    font-size:14px!important;
+    line-height:1.25!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+    word-break:break-word!important;
+  }
+  .tx-meta{margin-top:7px!important;gap:5px!important}
+  .tx-meta-item{font-size:9px!important;line-height:1.35!important}
+  .tx-meta-wallet{max-width:100%!important}
+  .tx-note{margin-top:10px!important;padding:9px 10px!important}
+  .tx-note p{font-size:10.5px!important;line-height:1.55!important}
+  .tx-card-footer{align-items:center!important}
+  .transactions-panel .tx-actions{
+    display:flex!important;align-items:center!important;justify-content:flex-end!important;
+    gap:6px!important;flex-wrap:wrap!important;margin-left:auto!important
+  }
+  .transactions-panel .tx-right .tx-actions{display:none!important}
+  .transactions-panel .tx-actions button{
+    display:inline-flex!important;align-items:center!important;justify-content:center!important;
+    min-height:34px!important;margin:0!important;padding:6px 10px!important;
+    border-radius:9px!important;font-size:9px!important;font-weight:850!important;line-height:1!important
+  }
+  .transactions-panel .tx-actions .tx-detail-btn{
+    min-width:58px!important;border:1px solid #cfe0ff!important;background:#edf4ff!important;color:#175cd3!important
+  }
+  .transactions-panel .tx-actions .tx-edit-btn{
+    min-width:48px!important;border:1px solid #dce6f4!important;background:#f7f9fc!important;color:#3b587a!important
+  }
+  .transactions-panel .tx-actions button[data-delete-id]{
+    min-width:50px!important;border:1px solid #ffd8d3!important;background:#fff3f2!important;color:#b42318!important
+  }
+  .transactions-panel .pending-sync-text{
+    display:inline-flex;align-items:center;min-height:32px;padding:0 8px;border-radius:8px;
+    background:#fff5d8;color:#8b6513;font-size:8.5px!important;white-space:normal
+  }
+  .tx-filter-summary{
+    padding-bottom:9px!important;
+  }
+  .tx-filter-summary>span{
+    min-height:26px;display:inline-flex;align-items:center
+  }
+}
+
+@media(max-width:390px){
+  .transactions-panel .tx-list{padding:8px!important;gap:8px!important}
+  .transactions-panel .tx{padding:10px!important;border-radius:14px!important}
+  .tx-card-head{grid-template-columns:minmax(0,1fr) minmax(82px,36%)!important;gap:8px!important}
+  .transactions-panel .tx-icon{width:40px!important;height:40px!important;flex-basis:40px!important}
+  .transactions-panel .tx-main>.stored-photo,
+  .transactions-panel .tx-main>.stored-photo img{width:40px!important;height:40px!important;max-width:40px!important;flex-basis:40px!important}
+  .transactions-panel .tx-right{min-width:0!important;max-width:none!important}
+  .transactions-panel .tx-right>b{font-size:13px!important}
+  .tx-kind-badge,.tx-pattern-badge{font-size:7.5px!important;padding:2px 6px!important}
+  .tx-card-footer{align-items:flex-start!important;flex-direction:column!important}
+  .transactions-panel .tx-actions{width:100%!important;justify-content:stretch!important}
+  .transactions-panel .tx-actions button{flex:1 1 0!important}
+  .transactions-panel .pending-sync-text{width:100%;justify-content:center}
+}
+
+/* =========================================================
+   v7.10.1 - MOBILE TRANSACTION FILTER COMPACT
+   Memaksimalkan area daftar transaksi tanpa mengurangi fungsi filter.
+   ========================================================= */
+@media (max-width:760px){
+  /* Periode dibuat seperti toolbar tipis. */
+  .tx-period-bar{
+    min-height:30px!important;
+    padding:3px 8px 2px!important;
+    gap:5px!important;
+  }
+  .tx-period-copy{gap:0!important;min-width:0!important}
+  .tx-period-copy b{
+    font-size:8.5px!important;
+    line-height:1.05!important;
+    white-space:nowrap!important;
+  }
+  .tx-period-copy small{display:none!important}
+  .tx-period-switch{
+    gap:2px!important;
+    padding:2px!important;
+    border-radius:9px!important;
+  }
+  .tx-period-switch button{
+    min-height:25px!important;
+    height:25px!important;
+    padding:0 8px!important;
+    border-radius:7px!important;
+    font-size:8px!important;
+    line-height:1!important;
+  }
+
+  /* Tombol pembuka filter cukup satu baris kecil. */
+  .tx-filter-toggle{
+    height:31px!important;
+    min-height:31px!important;
+    padding:0 9px!important;
+    gap:5px!important;
+    font-size:9.5px!important;
+    line-height:1!important;
+  }
+  .tx-filter-toggle-icon{
+    width:22px!important;
+    height:22px!important;
+    flex:0 0 22px!important;
+    border-radius:7px!important;
+  }
+  .tx-filter-toggle-icon svg{width:12px!important;height:12px!important}
+  .tx-filter-chevron{font-size:12px!important}
+  .tx-filter-active-count{
+    min-width:17px!important;
+    height:17px!important;
+    padding:0 5px!important;
+    font-size:8px!important;
+  }
+
+  /* Ringkasan jumlah/pemasukan/pengeluaran tidak perlu memakan ruang di mobile.
+     Nilai utama sudah tersedia di kartu ringkasan dashboard. */
+  .tx-filter-summary{display:none!important}
+
+  /* Saat filter dibuka, tetap padat tetapi mudah disentuh. */
+  .tx-filter-panel{
+    padding:6px 8px 8px!important;
+    max-height:min(42dvh,250px)!important;
+    overflow-y:auto!important;
+    background:#f8faff!important;
+  }
+  .tx-filter-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:5px 6px!important;
+  }
+  .tx-filter-grid label{
+    gap:3px!important;
+    font-size:7.8px!important;
+    line-height:1.05!important;
+  }
+  .tx-filter-grid input,
+  .tx-filter-grid select{
+    height:31px!important;
+    min-height:31px!important;
+    padding:0 7px!important;
+    border-radius:8px!important;
+    font-size:9.5px!important;
+  }
+  .tx-filter-actions{
+    gap:6px!important;
+    margin-top:6px!important;
+  }
+  .tx-filter-reset,
+  .tx-filter-apply{
+    height:31px!important;
+    min-height:31px!important;
+    padding:0 9px!important;
+    border-radius:8px!important;
+    font-size:9px!important;
+  }
+
+  /* Sedikit rapatkan jarak awal list setelah toolbar filter. */
+  .transactions-panel .tx-list{scroll-padding-top:6px!important}
+}
+
+@media (max-width:370px){
+  .tx-period-bar{padding-left:6px!important;padding-right:6px!important}
+  .tx-period-copy b{font-size:8px!important}
+  .tx-period-switch button{padding:0 6px!important;font-size:7.7px!important}
+  .tx-filter-panel{padding-left:6px!important;padding-right:6px!important}
+  .tx-filter-grid{gap:5px!important}
+  .tx-filter-grid input,.tx-filter-grid select{font-size:9px!important;padding:0 5px!important}
+}
+
+/* =========================================================
+   v7.10.3 - MOBILE TRANSACTION VIEW ULTRA COMPACT
+   Tujuan: ruang daftar transaksi lebih besar tanpa memotong data kartu.
+   Perubahan hanya CSS; tidak menyentuh renderer/logic transaksi.
+   ========================================================= */
+@media (max-width:760px){
+  /* Kompres area atas khusus saat halaman Transaksi aktif. */
+  body:has(#txPanel.mobile-view.active) .stats{
+    gap:5px!important;
+    margin-bottom:5px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat{
+    min-height:64px!important;
+    padding:9px 12px!important;
+    border-radius:17px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat small{
+    margin-bottom:2px!important;
+    font-size:9px!important;
+    line-height:1.15!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat strong{
+    font-size:22px!important;
+    line-height:1.08!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-detail-hint{
+    margin-top:1px!important;
+    font-size:8px!important;
+    line-height:1.15!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat-actions{
+    gap:3px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat-actions .balance-visibility-toggle,
+  body:has(#txPanel.mobile-view.active) #balanceRefresh{
+    width:30px!important;
+    height:30px!important;
+    flex-basis:30px!important;
+    border-radius:9px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat-actions svg{
+    width:16px!important;
+    height:16px!important;
+  }
+
+  body:has(#txPanel.mobile-view.active) .income-stat,
+  body:has(#txPanel.mobile-view.active) .expense-stat,
+  body:has(#txPanel.mobile-view.active) .initial-stat{
+    min-height:45px!important;
+    padding:6px 7px!important;
+    border-radius:14px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .income-stat small,
+  body:has(#txPanel.mobile-view.active) .expense-stat small,
+  body:has(#txPanel.mobile-view.active) .initial-stat small{
+    margin-bottom:2px!important;
+    font-size:8px!important;
+    line-height:1.05!important;
+  }
+  body:has(#txPanel.mobile-view.active) .income-stat strong,
+  body:has(#txPanel.mobile-view.active) .expense-stat strong,
+  body:has(#txPanel.mobile-view.active) .initial-stat strong{
+    font-size:11px!important;
+    line-height:1.1!important;
+  }
+
+  /* Batas harian tetap terlihat tetapi menjadi satu baris informasi. */
+  body:has(#txPanel.mobile-view.active) .daily-budget-card{
+    margin-bottom:5px!important;
+    border-radius:14px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-main{
+    min-height:44px!important;
+    padding:5px 7px!important;
+    gap:7px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-icon{
+    width:28px!important;
+    height:28px!important;
+    flex-basis:28px!important;
+    border-radius:9px!important;
+    font-size:13px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-copy{
+    min-width:0!important;
+    display:flex!important;
+    align-items:center!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-title-row{
+    width:100%!important;
+    margin:0!important;
+    gap:5px!important;
+    flex-wrap:nowrap!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-title-row b{
+    min-width:0!important;
+    font-size:9.5px!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-status{
+    flex:0 0 auto!important;
+    margin-left:auto!important;
+    padding:2px 5px!important;
+    font-size:7.5px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-values,
+  body:has(#txPanel.mobile-view.active) .daily-budget-progress,
+  body:has(#txPanel.mobile-view.active) .daily-budget-copy>small,
+  body:has(#txPanel.mobile-view.active) .budget-edit-btn{
+    display:none!important;
+  }
+  body:has(#txPanel.mobile-view.active) .daily-budget-actions{
+    gap:2px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .budget-card-icon-btn{
+    width:26px!important;
+    height:26px!important;
+    border-radius:8px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .budget-card-icon-btn svg{
+    width:13px!important;
+    height:13px!important;
+  }
+
+  /* Header transaksi dibuat tipis. */
+  #txPanel.mobile-view.active{
+    border-radius:16px!important;
+  }
+  #txPanel.mobile-view.active .panel-head{
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 10px!important;
+  }
+  #txPanel.mobile-view.active .panel-head b{
+    font-size:13px!important;
+  }
+  #txPanel.mobile-view.active #txCount{
+    min-width:28px!important;
+    height:25px!important;
+    padding:0 7px!important;
+    font-size:9px!important;
+  }
+
+  /* Periode cukup toggle saja. Caption panjang dihilangkan di mobile. */
+  #txPanel.mobile-view.active .tx-period-bar{
+    min-height:30px!important;
+    padding:3px 7px!important;
+    gap:0!important;
+  }
+  #txPanel.mobile-view.active .tx-period-copy{
+    display:none!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch{
+    width:100%!important;
+    padding:2px!important;
+    gap:2px!important;
+    border-radius:9px!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch button{
+    flex:1 1 0!important;
+    min-height:25px!important;
+    height:25px!important;
+    padding:0 6px!important;
+    font-size:8px!important;
+    border-radius:7px!important;
+  }
+
+  /* Search + Unduh satu baris dengan tinggi minimum. */
+  #txPanel.mobile-view.active .tx-search-export-row{
+    padding:4px 7px!important;
+    gap:5px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box{
+    height:34px!important;
+    min-height:34px!important;
+    padding:0 8px!important;
+    gap:5px!important;
+    border-radius:10px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-icon{
+    width:15px!important;
+    height:15px!important;
+    flex-basis:15px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-icon svg{
+    width:14px!important;
+    height:14px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box input{
+    font-size:10px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-toggle{
+    height:34px!important;
+    min-height:34px!important;
+    min-width:58px!important;
+    padding:0 8px!important;
+    gap:4px!important;
+    border-radius:10px!important;
+    font-size:8.5px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-chevron{
+    font-size:10px!important;
+  }
+
+  /* Filter tertutup hanya 29px. Ringkasan chips dihilangkan. */
+  #txPanel.mobile-view.active .tx-filter-toggle{
+    height:29px!important;
+    min-height:29px!important;
+    padding:0 7px!important;
+    gap:5px!important;
+    font-size:9px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-toggle-icon{
+    width:20px!important;
+    height:20px!important;
+    flex-basis:20px!important;
+    border-radius:6px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-toggle-icon svg{
+    width:11px!important;
+    height:11px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-chevron{
+    font-size:10px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-summary{
+    display:none!important;
+  }
+
+  /* Panel filter saat dibuka tetap dua kolom dan tidak terlalu tinggi. */
+  #txPanel.mobile-view.active .tx-filter-panel{
+    padding:5px 7px 7px!important;
+    max-height:min(38dvh,220px)!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:5px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-grid label{
+    gap:2px!important;
+    font-size:7.5px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-grid input,
+  #txPanel.mobile-view.active .tx-filter-grid select{
+    height:30px!important;
+    min-height:30px!important;
+    padding:0 6px!important;
+    font-size:9px!important;
+    border-radius:8px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-actions{
+    margin-top:5px!important;
+    gap:5px!important;
+  }
+  #txPanel.mobile-view.active .tx-filter-reset,
+  #txPanel.mobile-view.active .tx-filter-apply{
+    height:30px!important;
+    min-height:30px!important;
+    padding:0 8px!important;
+    font-size:8.5px!important;
+  }
+
+  /* Daftar dimulai segera setelah toolbar. Kartu tetap tidak memotong data. */
+  #txPanel.mobile-view.active .tx-list{
+    padding:6px!important;
+    gap:7px!important;
+  }
+  #txPanel.mobile-view.active .tx{
+    padding:9px!important;
+    border-radius:13px!important;
+  }
+  #txPanel.mobile-view.active .tx-note{
+    margin-top:7px!important;
+    padding:7px 8px!important;
+  }
+  #txPanel.mobile-view.active .tx-card-footer{
+    margin-top:7px!important;
+    padding-top:7px!important;
+  }
+}
+
+@media (max-width:390px){
+  body:has(#txPanel.mobile-view.active) .balance-stat{
+    min-height:60px!important;
+    padding:8px 11px!important;
+  }
+  body:has(#txPanel.mobile-view.active) .balance-stat strong{font-size:20px!important}
+  body:has(#txPanel.mobile-view.active) .income-stat,
+  body:has(#txPanel.mobile-view.active) .expense-stat,
+  body:has(#txPanel.mobile-view.active) .initial-stat{
+    min-height:42px!important;
+    padding:5px 6px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-toggle{min-width:52px!important;padding:0 6px!important}
+}
+
+/* =========================================================
+   v7.10.4 - Extra compact transaction header on mobile
+   Fokus: periode + pencarian/export saja. Tidak mengubah render/list.
+   ========================================================= */
+@media (max-width:768px){
+  /* Hilangkan ruang vertikal berlebih di toolbar transaksi */
+  #txPanel.mobile-view.active .tx-toolbar,
+  #txPanel.mobile-view.active .tx-toolbar-wrap,
+  #txPanel.mobile-view.active .tx-header-tools{
+    gap:2px!important;
+    margin:0!important;
+    padding-top:0!important;
+    padding-bottom:0!important;
+  }
+
+  /* Periode: satu strip sangat tipis */
+  #txPanel.mobile-view.active .tx-period-bar{
+    min-height:24px!important;
+    height:24px!important;
+    padding:1px 5px!important;
+    margin:0!important;
+    border-radius:0!important;
+  }
+  #txPanel.mobile-view.active .tx-period-copy{
+    display:none!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch{
+    width:100%!important;
+    height:22px!important;
+    min-height:22px!important;
+    padding:1px!important;
+    gap:1px!important;
+    border-radius:7px!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch button{
+    min-height:20px!important;
+    height:20px!important;
+    padding:0 5px!important;
+    font-size:7.5px!important;
+    line-height:20px!important;
+    border-radius:6px!important;
+  }
+
+  /* Search + unduh dibuat serendah mungkin, tetap mudah ditekan */
+  #txPanel.mobile-view.active .tx-search-export-row{
+    padding:2px 5px!important;
+    margin:0!important;
+    gap:4px!important;
+    min-height:32px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box{
+    height:30px!important;
+    min-height:30px!important;
+    padding:0 7px!important;
+    gap:4px!important;
+    border-radius:9px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-icon{
+    width:13px!important;
+    height:13px!important;
+    flex:0 0 13px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-icon svg{
+    width:12px!important;
+    height:12px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box input{
+    height:28px!important;
+    min-height:28px!important;
+    padding:0!important;
+    font-size:9px!important;
+    line-height:28px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box input::placeholder{
+    font-size:9px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-toggle{
+    height:30px!important;
+    min-height:30px!important;
+    min-width:52px!important;
+    padding:0 7px!important;
+    gap:3px!important;
+    border-radius:9px!important;
+    font-size:8px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-chevron{
+    font-size:9px!important;
+  }
+}
+
+@media (max-width:390px){
+  #txPanel.mobile-view.active .tx-period-bar{
+    height:23px!important;
+    min-height:23px!important;
+    padding-left:4px!important;
+    padding-right:4px!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch{
+    height:21px!important;
+    min-height:21px!important;
+  }
+  #txPanel.mobile-view.active .tx-period-switch button{
+    height:19px!important;
+    min-height:19px!important;
+    line-height:19px!important;
+    font-size:7px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-export-row{
+    padding-left:4px!important;
+    padding-right:4px!important;
+    gap:3px!important;
+  }
+  #txPanel.mobile-view.active .tx-search-box,
+  #txPanel.mobile-view.active .tx-export-toggle{
+    height:29px!important;
+    min-height:29px!important;
+  }
+  #txPanel.mobile-view.active .tx-export-toggle{
+    min-width:48px!important;
+    padding:0 5px!important;
+  }
+}
+
+/* =========================================================
+   v7.10.9 — Compact Transaction Panel + Modern Actions
+   Search + download remain visible. Everything else is inside
+   Filter & Urutkan to maximize visible transaction rows.
+   ========================================================= */
+#txPanel.tx-layout-v7109 .panel-head{
+  min-height:52px!important;
+  padding:11px 14px!important;
+}
+#txPanel.tx-layout-v7109 .panel-head>div{min-width:0}
+#txPanel.tx-layout-v7109 .panel-head>div>b{font-size:16px!important;line-height:1.1!important}
+#txPanel.tx-layout-v7109 .panel-head .panel-subtitle{font-size:9.5px!important;margin-top:2px!important}
+#txPanel.tx-layout-v7109 .panel-head .badge{min-width:32px!important;height:28px!important;padding:0 9px!important;font-size:10px!important}
+
+#txPanel.tx-layout-v7109 .tx-filter-wrap{
+  padding:7px 10px 8px!important;
+  background:#fff!important;
+  border-bottom:1px solid #edf1f6!important;
+}
+#txPanel.tx-layout-v7109 .tx-search-export-row{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  gap:7px!important;
+  padding:0!important;
+  margin:0 0 7px!important;
+}
+#txPanel.tx-layout-v7109 .tx-search-box{
+  min-height:38px!important;
+  height:38px!important;
+  border-radius:12px!important;
+  padding:0 10px!important;
+}
+#txPanel.tx-layout-v7109 .tx-search-box input{
+  font-size:10.5px!important;
+  min-width:0!important;
+}
+#txPanel.tx-layout-v7109 .tx-search-icon{width:16px!important;height:16px!important;flex-basis:16px!important}
+#txPanel.tx-layout-v7109 .tx-export-toggle{
+  min-height:38px!important;
+  height:38px!important;
+  padding:0 11px!important;
+  border-radius:12px!important;
+  font-size:10px!important;
+  gap:5px!important;
+}
+
+#txPanel.tx-layout-v7109 #txFilterToggle{
+  width:100%!important;
+  min-height:36px!important;
+  height:36px!important;
+  margin:0!important;
+  padding:4px 8px!important;
+  border-radius:11px!important;
+  gap:7px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterToggle .tx-filter-toggle-icon{
+  width:27px!important;
+  height:27px!important;
+  min-width:27px!important;
+  border-radius:8px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterToggle .tx-filter-toggle-icon svg{width:14px!important;height:14px!important}
+#txPanel.tx-layout-v7109 .tx-filter-drawer-label,
+#txPanel.tx-layout-v7109 .tx-filter-runtime-label{
+  flex:1!important;
+  min-width:0!important;
+  text-align:left!important;
+}
+#txPanel.tx-layout-v7109 .tx-filter-drawer-label b,
+#txPanel.tx-layout-v7109 .tx-filter-runtime-label{
+  font-size:10.5px!important;
+  line-height:1.1!important;
+  font-weight:800!important;
+}
+#txPanel.tx-layout-v7109 .tx-filter-drawer-label small{
+  display:block!important;
+  margin-top:1px!important;
+  font-size:7.5px!important;
+  line-height:1.1!important;
+  color:#98a2b3!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+#txPanel.tx-layout-v7109 .tx-filter-chevron{font-size:11px!important}
+
+#txPanel.tx-layout-v7109 #txFilterPanel[hidden]{display:none!important}
+#txPanel.tx-layout-v7109 #txFilterPanel:not([hidden]){
+  display:block!important;
+  margin:7px 0 0!important;
+  padding:8px 0 1px!important;
+  border-top:1px solid #edf1f6!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-period-bar{
+  min-height:36px!important;
+  padding:0!important;
+  margin:0 0 8px!important;
+  gap:7px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-period-copy b{font-size:9px!important}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-period-copy small{font-size:7.5px!important;max-width:150px!important}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-period-switch{
+  min-height:33px!important;
+  padding:2px!important;
+  border-radius:10px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-period-switch button{
+  min-height:29px!important;
+  padding:0 8px!important;
+  border-radius:8px!important;
+  font-size:8px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:7px!important;
+  margin:0!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid label{
+  gap:3px!important;
+  font-size:8px!important;
+  line-height:1.1!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid input,
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid select{
+  min-height:34px!important;
+  height:34px!important;
+  padding:0 8px!important;
+  border-radius:9px!important;
+  font-size:9px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-actions{
+  margin-top:7px!important;
+  gap:6px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-reset,
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-apply{
+  min-height:32px!important;
+  height:32px!important;
+  padding:0 10px!important;
+  border-radius:9px!important;
+  font-size:8.5px!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-summary{
+  display:flex!important;
+  min-height:0!important;
+  padding:7px 0 0!important;
+  margin:7px 0 0!important;
+  gap:5px!important;
+  border-top:1px solid #edf1f6!important;
+  flex-wrap:wrap!important;
+}
+#txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-summary>span{
+  padding:4px 6px!important;
+  border-radius:7px!important;
+  font-size:8px!important;
+}
+
+/* Transaction list/card density: compact without clipping text. */
+#txPanel.tx-layout-v7109 .tx-list{padding:5px 8px 12px!important;gap:7px!important}
+#txPanel.tx-layout-v7109 .tx-card{
+  padding:10px!important;
+  border-radius:14px!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-head{gap:8px!important}
+#txPanel.tx-layout-v7109 .tx-main{gap:8px!important;min-width:0!important}
+#txPanel.tx-layout-v7109 .tx-icon{width:35px!important;height:35px!important;min-width:35px!important;border-radius:11px!important;font-size:16px!important}
+#txPanel.tx-layout-v7109 .tx-title-row{gap:5px!important}
+#txPanel.tx-layout-v7109 .tx-title{font-size:11.5px!important;line-height:1.2!important}
+#txPanel.tx-layout-v7109 .tx-badges{gap:3px!important}
+#txPanel.tx-layout-v7109 .tx-kind-badge,
+#txPanel.tx-layout-v7109 .tx-pattern-badge,
+#txPanel.tx-layout-v7109 .scan-badge,
+#txPanel.tx-layout-v7109 .sync-badge{
+  padding:3px 5px!important;
+  font-size:6.8px!important;
+  line-height:1!important;
+}
+#txPanel.tx-layout-v7109 .tx-meta{margin-top:5px!important;gap:4px!important}
+#txPanel.tx-layout-v7109 .tx-meta-item{padding:4px 6px!important;font-size:7.5px!important;border-radius:7px!important;white-space:normal!important}
+#txPanel.tx-layout-v7109 .tx-right{min-width:82px!important}
+#txPanel.tx-layout-v7109 .tx-right small{font-size:7px!important}
+#txPanel.tx-layout-v7109 .tx-right>b{font-size:12.5px!important;line-height:1.2!important}
+#txPanel.tx-layout-v7109 .tx-note{
+  margin-top:7px!important;
+  padding:7px 8px!important;
+  border-radius:10px!important;
+}
+#txPanel.tx-layout-v7109 .tx-note-label{font-size:6.8px!important;margin-bottom:2px!important}
+#txPanel.tx-layout-v7109 .tx-note p{
+  margin:0!important;
+  font-size:9px!important;
+  line-height:1.35!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer{
+  margin-top:7px!important;
+  padding-top:7px!important;
+  gap:8px!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-id{font-size:7px!important;color:#98a2b3!important}
+
+/* Modern action buttons: no browser-default square buttons. */
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions{
+  display:flex!important;
+  justify-content:flex-end!important;
+  align-items:center!important;
+  gap:5px!important;
+  flex-wrap:nowrap!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:29px!important;
+  height:29px!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0 9px!important;
+  border-radius:9px!important;
+  border:1px solid transparent!important;
+  box-shadow:none!important;
+  font-family:inherit!important;
+  font-size:8.5px!important;
+  line-height:1!important;
+  font-weight:800!important;
+  cursor:pointer!important;
+  transition:transform .15s ease,background .15s ease,border-color .15s ease!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button:active{transform:scale(.97)!important}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions .tx-detail-btn{
+  color:#175cd3!important;
+  background:#eef4ff!important;
+  border-color:#d7e4fb!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions .tx-detail-btn:hover{background:#e4edff!important;border-color:#bdd2f7!important}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions .tx-edit-btn{
+  color:#344054!important;
+  background:#f7f8fa!important;
+  border-color:#e2e7ee!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions .tx-edit-btn:hover{background:#eef1f5!important;border-color:#d2d8e1!important}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button[data-delete-id]{
+  color:#b42318!important;
+  background:#fff2f0!important;
+  border-color:#ffd5cf!important;
+}
+#txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button[data-delete-id]:hover{background:#ffe8e4!important;border-color:#ffbbb1!important}
+
+/* New History shortcut injected into the sidebar. */
+#appSidebar .sidebar-history-icon svg{
+  width:20px!important;
+  height:20px!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.8!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+
+@media(max-width:760px){
+  #txPanel.tx-layout-v7109 .panel-head{min-height:46px!important;padding:10px 13px!important}
+  #txPanel.tx-layout-v7109 .panel-head>div>b{font-size:15px!important}
+  #txPanel.tx-layout-v7109 .panel-head .panel-subtitle{display:none!important}
+  #txPanel.tx-layout-v7109 .tx-filter-wrap{padding:6px 9px 7px!important}
+  #txPanel.tx-layout-v7109 .tx-search-export-row{gap:6px!important;margin-bottom:6px!important}
+  #txPanel.tx-layout-v7109 .tx-search-box,
+  #txPanel.tx-layout-v7109 .tx-export-toggle{height:36px!important;min-height:36px!important}
+  #txPanel.tx-layout-v7109 #txFilterToggle{height:34px!important;min-height:34px!important}
+  #txPanel.tx-layout-v7109 .tx-filter-drawer-label small{display:none!important}
+  #txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}
+  #txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid input,
+  #txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid select{height:33px!important;min-height:33px!important}
+  #txPanel.tx-layout-v7109 .tx-list{padding:4px 8px 12px!important;gap:7px!important}
+  #txPanel.tx-layout-v7109 .tx-card{padding:10px!important}
+  #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions{width:auto!important;justify-content:flex-end!important}
+  #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button{flex:0 0 auto!important;min-width:58px!important;height:30px!important}
+}
+@media(max-width:390px){
+  #txPanel.tx-layout-v7109 #txFilterPanel .tx-filter-grid{grid-template-columns:1fr 1fr!important}
+  #txPanel.tx-layout-v7109 #txFilterPanel .tx-period-copy small{display:none!important}
+  #txPanel.tx-layout-v7109 .tx-right{min-width:76px!important}
+  #txPanel.tx-layout-v7109 .tx-card-footer{align-items:center!important}
+  #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions{gap:4px!important}
+  #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button{min-width:54px!important;padding:0 7px!important;font-size:8px!important}
+}
