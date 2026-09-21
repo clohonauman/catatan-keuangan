@@ -1,7 +1,11 @@
+# Defense in depth: seluruh folder /data tidak boleh diakses via HTTP.
 Options -Indexes
+
 <IfModule mod_authz_core.c>
-Require all denied
+    Require all denied
 </IfModule>
+
 <IfModule !mod_authz_core.c>
-Deny from all
+    Order Allow,Deny
+    Deny from all
 </IfModule>
