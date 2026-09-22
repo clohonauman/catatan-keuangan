@@ -2630,3 +2630,120 @@ dialog.tx-detail-dialog{width:min(600px,calc(100% - 24px));max-height:calc(100dv
   #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions{gap:4px!important}
   #txPanel.tx-layout-v7109 .tx-card-footer .tx-actions button{min-width:54px!important;padding:0 7px!important;font-size:8px!important}
 }
+
+/* =========================================================
+   v7.11 — Unified minimal menu icon theme
+   ========================================================= */
+#appSidebar .sidebar-menu-icon,
+#appSidebar .sidebar-menu-item.sidebar-admin-item .sidebar-menu-icon,
+#appSidebar .sidebar-menu-item.sidebar-premium-item .sidebar-menu-icon,
+#appSidebar .sidebar-menu-item.danger-link .sidebar-menu-icon{
+  width:40px!important;
+  height:40px!important;
+  border-radius:12px!important;
+  background:#f2f5f9!important;
+  color:#536b86!important;
+  box-shadow:none!important;
+  font-size:0!important;
+  display:grid!important;
+  place-items:center!important;
+}
+#appSidebar .sidebar-menu-item:hover .sidebar-menu-icon{
+  background:#eaf1fb!important;
+  color:#2c63ad!important;
+}
+#appSidebar .sidebar-menu-item-active .sidebar-menu-icon{
+  background:#e8f1ff!important;
+  color:#2563d9!important;
+  box-shadow:none!important;
+}
+#appSidebar .sidebar-menu-icon svg,
+#appSidebar .sidebar-menu-icon.unified-menu-icon svg{
+  width:19px!important;
+  height:19px!important;
+  display:block!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.7!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+#appSidebar .sidebar-arrow{
+  width:18px!important;
+  height:18px!important;
+  display:grid!important;
+  place-items:center!important;
+  color:#a4adba!important;
+  font-size:0!important;
+}
+#appSidebar .sidebar-arrow svg{
+  width:15px!important;
+  height:15px!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.8!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+#appSidebar .sidebar-menu-item:hover .sidebar-arrow{color:#6f7c8e!important}
+#appSidebar .sidebar-premium-item,
+#appSidebar .sidebar-admin-item{
+  /* keep their card emphasis, but iconography remains one visual system */
+}
+
+/* Bottom navigation uses the same outline geometry. */
+.mobile-bottom-nav .nav-icon svg{
+  width:21px!important;
+  height:21px!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.7!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+
+@media(max-width:760px){
+  #appSidebar .sidebar-menu-icon,
+  #appSidebar .sidebar-menu-item.sidebar-admin-item .sidebar-menu-icon,
+  #appSidebar .sidebar-menu-item.sidebar-premium-item .sidebar-menu-icon,
+  #appSidebar .sidebar-menu-item.danger-link .sidebar-menu-icon{
+    width:38px!important;
+    height:38px!important;
+    border-radius:11px!important;
+  }
+  #appSidebar .sidebar-menu-icon svg,
+  #appSidebar .sidebar-menu-icon.unified-menu-icon svg{
+    width:18px!important;
+    height:18px!important;
+  }
+}
+
+
+/* =========================================================
+   v7.11.1 HOTFIX - Center transaction count badge
+   ========================================================= */
+.panel-head .badge,
+.transactions-panel .panel-head .badge,
+.mobile-view .panel-head .badge {
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+  line-height:1 !important;
+  min-width:54px !important;
+  height:54px !important;
+  padding:0 12px !important;
+  border-radius:999px !important;
+  font-size:18px !important;
+  font-weight:700 !important;
+}
+@media (max-width:760px){
+  .panel-head .badge,
+  .transactions-panel .panel-head .badge,
+  .mobile-view .panel-head .badge {
+    min-width:46px !important;
+    height:46px !important;
+    padding:0 10px !important;
+    font-size:16px !important;
+  }
+}

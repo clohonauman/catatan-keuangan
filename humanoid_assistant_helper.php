@@ -35,6 +35,9 @@ function humanoidNormalizeMessage(string $message): string {
         'trs'=>'terus','trus'=>'terus','aja'=>'saja','aj'=>'saja',
         'pake'=>'pakai','pke'=>'pakai','dr'=>'dari',
         'duitku'=>'uang saya','uangku'=>'uang saya','saldoku'=>'saldo saya',
+        'pwd'=>'password','pass'=>'password','passwd'=>'password',
+        'verif'=>'verifikasi','verivikasi'=>'verifikasi','verifikasiin'=>'verifikasi',
+        'emailnya'=>'email','akunku'=>'akun saya','pin-nya'=>'pin',
     ];
 
     $t = preg_replace_callback('/(?<![a-z0-9])([a-z]{1,12})(?![a-z0-9])/u', function($m) use ($aliases) {
@@ -60,7 +63,7 @@ function humanoidPreviousUserQuestion(string $current=''): string {
         $candidate = trim((string)($row['message'] ?? ''));
         if ($candidate === '' || norm($candidate) === norm($current)) continue;
         $candidate = humanoidNormalizeMessage($candidate);
-        if (smartIsQuestion($candidate) || preg_match('/\b(?:saldo|pengeluaran|pemasukan|budget|anggaran|tagihan|cicilan|dompet|rekening|gajian)\b/u',norm($candidate))) {
+        if (smartIsQuestion($candidate) || preg_match('/\b(?:saldo|pengeluaran|pemasukan|budget|anggaran|tagihan|cicilan|dompet|rekening|gajian|password|kata sandi|pin|email|verifikasi|akun|login|masuk|pemulihan|recovery|reset|token|perangkat|backup|laporan|premium|riwayat|hapus akun)\b/u',norm($candidate))) {
             return $candidate;
         }
     }
@@ -99,6 +102,16 @@ function humanoidResolveContext(string $message): string {
     $t = norm($current);
     $short = strlen($t) <= 100;
     if (!$short) return $resolved;
+
+    // Contextual help follow-ups: "kalau PIN?", "kalau email belum diverifikasi?", etc.
+    $supportFollowup = (bool)preg_match('/^(?:kalau|kalo|terus|lalu|bagaimana kalau|gimana kalau|kalau yang|dan kalau)\b/u',$t)
+        && (bool)preg_match('/\b(?:password|kata sandi|pin|email|verifikasi|akun|login|token|pemulihan|recovery|reset)\b/u',$t);
+    if ($supportFollowup) {
+        $previous = humanoidPreviousUserQuestion($current);
+        if ($previous !== '' && preg_match('/\b(?:password|kata sandi|pin|email|verifikasi|akun|login|token|pemulihan|recovery|reset)\b/u', norm($previous))) {
+            return humanoidNormalizeMessage($previous.' '.$current);
+        }
+    }
 
     $wallet = walletMentionForText($current);
     $category = null;
@@ -448,6 +461,109 @@ function humanoidUtilityReply(string $message): ?string {
     return null;
 }
 
+/**
+ * General application help / account-security knowledge base.
+ * This stays local/rule-based and intentionally runs before transaction parsing.
+ */
+function humanoidSupportEmailStatus(): array {
+    if (!function_exists('authCurrentUser') || !function_exists('authEmailStatus')) {
+        return ['has_email'=>false,'verified'=>false,'masked'=>''];
+    }
+    $user=authCurrentUser();
+    if(!$user)return ['has_email'=>false,'verified'=>false,'masked'=>''];
+    $s=authEmailStatus($user);
+    return [
+        'has_email'=>!empty($s['has_email']),
+        'verified'=>!empty($s['verified']),
+        'masked'=>(string)($s['masked']??''),
+    ];
+}
+
+function humanoidSupportReply(string $message): ?string {
+    $t=norm($message);
+    if($t==='')return null;
+
+    $isSupport=(bool)preg_match('/\b(?:password|kata sandi|pin|email|verifikasi|akun|login|masuk akun|pemulihan|recovery|reset|token|kode verifikasi|username|perangkat|device|backup|laporan|pdf|excel|csv|riwayat|hapus akun)\b/u',$t);
+    if(!$isSupport)return null;
+
+    // Status email akun yang sedang login.
+    if(preg_match('/\b(?:email saya|email akun saya|status email)\b.*\b(?:sudah|udah|telah|belum|verifikasi|terverifikasi)\b|\b(?:sudah|udah|belum)\b.*\bemail\b.*\bverifikasi/u',$t)){
+        $s=humanoidSupportEmailStatus();
+        if($s['verified'])return 'Email pemulihan akun ini sudah terverifikasi'.($s['masked']!==''?' ('.$s['masked'].')':'').'. Email tersebut dapat digunakan untuk menerima token reset password/PIN.';
+        if($s['has_email'])return 'Email pemulihan sudah tersimpan'.($s['masked']!==''?' ('.$s['masked'].')':'').', tetapi belum terverifikasi. Buka Lainnya → Email & Keamanan, kirim kode verifikasi, lalu masukkan kode 6 digit yang diterima.';
+        return 'Akun ini belum memiliki email pemulihan. Buka Lainnya → Email & Keamanan, tambahkan email, lalu lakukan verifikasi.';
+    }
+
+    $forgotPassword=(bool)preg_match('/\b(?:lupa|reset|pulihkan|pemulihan)\b.*\b(?:password|kata sandi)\b|\b(?:password|kata sandi)\b.*\b(?:lupa|reset|pulihkan)\b/u',$t);
+    $forgotPin=(bool)preg_match('/\b(?:lupa|reset|pulihkan|pemulihan)\b.*\bpin\b|\bpin\b.*\b(?:lupa|reset|pulihkan)\b/u',$t);
+    $unverified=(bool)preg_match('/\b(?:email)\b.*\b(?:belum|tidak|ga|gak|nggak|ndak|nyanda)\b.*\b(?:verifikasi|terverifikasi)\b|\b(?:belum|tidak)\b.*\bverifikasi\b.*\bemail\b/u',$t);
+
+    // Follow-up scenario: forgot password/PIN + email not verified.
+    if(($forgotPassword||$forgotPin||preg_match('/\b(?:pemulihan|reset|token)\b/u',$t)) && $unverified){
+        return "Kalau email belum terverifikasi, token pemulihan password/PIN tidak bisa dikirim.\n"
+            ."• Jika masih bisa masuk ke akun: buka Lainnya → Email & Keamanan, lalu verifikasi email terlebih dahulu.\n"
+            ."• Jika sudah tidak bisa masuk dan email memang belum terverifikasi/tidak tersedia: pemulihan otomatis lewat email tidak dapat digunakan; hubungi admin aplikasi untuk bantuan akun.\n"
+            ."Setelah email terverifikasi, menu “Lupa password / PIN?” di halaman login dapat digunakan kembali.";
+    }
+
+    if($forgotPassword || $forgotPin){
+        $what=$forgotPassword&&$forgotPin?'password dan PIN':($forgotPassword?'password':'PIN');
+        return "Untuk reset {$what}:\n"
+            ."1. Pada halaman login pilih “Lupa password / PIN?”.\n"
+            ."2. Masukkan username atau email akun.\n"
+            ."3. Sistem mengirim token 6 digit ke email yang sudah terverifikasi.\n"
+            ."4. Masukkan token tersebut, lalu isi ".($forgotPassword&&$forgotPin?'password baru dan/atau PIN baru':($forgotPassword?'password baru':'PIN baru')).".\n"
+            ."Token berlaku 15 menit. Kalau email belum terverifikasi, verifikasi email terlebih dahulu.";
+    }
+
+    // Generic unverified email question, including contextual follow-up after a recovery topic.
+    if($unverified){
+        return "Kalau email belum terverifikasi, fitur pemulihan password/PIN melalui email belum dapat digunakan. Jika masih login, buka Lainnya → Email & Keamanan → kirim kode verifikasi → masukkan kode 6 digit. Jika tidak bisa login sama sekali, hubungi admin karena token pemulihan hanya dikirim ke email yang sudah terverifikasi.";
+    }
+
+    if(preg_match('/\b(?:cara|bagaimana|gimana|mau|ingin)\b.*\bverifikasi\b.*\bemail\b|\bverifikasi email\b/u',$t)){
+        return "Untuk verifikasi email: buka Lainnya → Email & Keamanan. Pastikan alamat email benar, pilih kirim/kirim ulang kode verifikasi, lalu masukkan kode 6 digit dari email. Setelah berhasil, email itu dapat dipakai untuk reset password dan PIN.";
+    }
+
+    if(preg_match('/\b(?:token|kode)\b.*\b(?:tidak masuk|belum masuk|tidak dapat|tidak diterima|belum diterima|ga masuk|gak masuk)\b/u',$t)){
+        return "Kalau token email belum masuk: cek Inbox dan Spam, pastikan email akun benar, tunggu setidaknya 60 detik sebelum meminta kode lagi, lalu gunakan Kirim ulang. Token pemulihan berlaku 15 menit. Jika tetap tidak masuk, kemungkinan layanan email sedang bermasalah dan admin perlu memeriksa konfigurasi/pengiriman email.";
+    }
+
+    if(preg_match('/\b(?:token|kode)\b.*\b(?:kadaluarsa|kedaluwarsa|expired|habis masa)\b/u',$t)){
+        return 'Token pemulihan berlaku 15 menit. Jika sudah kedaluwarsa, kembali ke “Lupa password / PIN?” dan minta token baru. Setelah terlalu banyak token salah, sistem juga akan meminta token baru.';
+    }
+
+    if(preg_match('/\b(?:ganti|ubah)\b.*\b(?:password|kata sandi)\b/u',$t)){
+        return 'Kalau masih bisa masuk, buka Lainnya → Email & Keamanan → Ubah Kata Sandi. Masukkan password saat ini, password baru minimal 6 karakter, lalu konfirmasi. Perubahan ini tidak memerlukan kode verifikasi email.';
+    }
+
+    if(preg_match('/\b(?:ganti|ubah)\b.*\bpin\b/u',$t)){
+        return 'Kalau masih bisa masuk, buka Lainnya → Email & Keamanan → Ubah PIN. Masukkan PIN saat ini lalu PIN baru 4–6 digit. Perubahan PIN tidak memerlukan kode verifikasi email.';
+    }
+
+    if(preg_match('/\b(?:ganti|ubah)\b.*\busername\b|\busername\b.*\b(?:ganti|ubah)\b/u',$t)){
+        return 'Username akun bersifat tetap dan tidak dapat diubah dari aplikasi. Data keamanan lain seperti password, PIN, dan email pemulihan dikelola melalui menu Email & Keamanan.';
+    }
+
+    if(preg_match('/\b(?:perangkat|device)\b.*\b(?:login|masuk|keluar|hapus|cabut|revoke)\b|\b(?:keluarkan|logout)\b.*\bperangkat\b/u',$t)){
+        return 'Buka Lainnya → Email & Keamanan → Daftar Perangkat yang Login. Di sana Anda bisa melihat perangkat terpercaya dan mengeluarkan perangkat yang tidak dikenali.';
+    }
+
+    if(preg_match('/\b(?:unduh|download|export|ekspor|buat)\b.*\b(?:laporan|pdf|excel|csv)\b|\b(?:laporan keuangan|rekening koran)\b/u',$t)){
+        return 'Untuk laporan transaksi, buka menu Transaksi → Unduh. Pilih PDF, Excel, atau CSV. Filter periode/dompet/kategori yang sedang aktif akan digunakan pada laporan. Fitur unduh laporan tersedia untuk akun Premium.';
+    }
+
+    if(preg_match('/\b(?:backup|cadangan|restore|pulihkan data)\b/u',$t)){
+        return 'Menu backup ada di Lainnya → Backup & Aplikasi. Gunakan backup sebelum perubahan besar atau pindah perangkat, dan simpan file cadangan di tempat yang aman.';
+    }
+
+    if(preg_match('/\b(?:hapus akun|delete account|hapus account)\b/u',$t)){
+        return 'Penghapusan akun tersedia dari menu Lainnya → Hapus Akun. Pastikan sudah membuat backup bila data masih diperlukan, karena penghapusan akun ditujukan untuk menghapus data akun secara permanen.';
+    }
+
+    return null;
+}
+
 function humanoidHelpReply(string $message): ?string {
     $t=norm($message);
     if(!preg_match('/^(?:help|bantuan|kamu bisa apa|bisa apa saja|bisa ngapain|fitur chat|contoh pertanyaan|cara pakai chat)\??$/u',$t)) return null;
@@ -460,7 +576,8 @@ function humanoidHelpReply(string $message): ?string {
         ."• Budget: “sisa budget makan berapa?”\n"
         ."• Dompet: “saldo BCA yang benar-benar bisa dipakai berapa?”\n"
         ."• Tagihan: “cicilan apa yang belum lunas?”\n"
-        ."• Target: “progress target tabungan saya”.";
+        ."• Target: “progress target tabungan saya”\n"
+        ."• Bantuan akun: “kalau lupa password?”, “cara verifikasi email?”, atau “kalau PIN lupa?”";
 }
 
 function humanoidSmallTalkReply(string $message): ?string {
@@ -488,7 +605,7 @@ function humanoidSmallTalkReply(string $message): ?string {
  */
 function humanoidDirectReply(string $message): ?string {
     foreach([
-        'humanoidHelpReply','humanoidSmallTalkReply','humanoidUtilityReply',
+        'humanoidSupportReply','humanoidHelpReply','humanoidSmallTalkReply','humanoidUtilityReply',
         'humanoidPaydayWhenReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',
         'humanoidMonthlyAnalysisReply','humanoidBudgetReply','humanoidGoalReply','humanoidHypotheticalReply'
     ] as $fn){$reply=$fn($message);if($reply!==null)return $reply;}

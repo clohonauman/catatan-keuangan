@@ -3,7 +3,9 @@ require_once __DIR__ . '/../auth.php';
 authRequireUnlocked();
 authRequirePremiumDownload('Laporan PDF tersedia untuk akun Premium.');
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../finance_features.php';
 require_once __DIR__ . '/../transaction_filter_helper.php';
+require_once __DIR__ . '/../wallet_flow_helper.php';
 require_once __DIR__ . '/../report_pdf_helper.php';
 
 try {
@@ -12,19 +14,13 @@ try {
     $filtered = txFilterTransactions($all, $filters);
     $user = authCurrentUser();
     $username = $user ? (string)$user['username'] : 'user';
-    $initial = (int)(summary()['initial'] ?? 0);
-    $opening = txBalanceBeforeDate($all, $initial, $filters['from']);
-    $closing = txBalanceThroughDate($all, $initial, $filters['to']);
-    $balanceMap = txBalanceMap($all, $initial);
+    $ledger = walletFlowBuildLedger($all, financeWallets(true), $filters['from'], $filters['to']);
 
     $pdf = buildFinancialStatementPdf(
         $username,
         $filtered['transactions'],
         $filtered['meta'],
-        $initial,
-        $opening,
-        $closing,
-        $balanceMap
+        $ledger
     );
 
     $period = 'semua-tanggal';
@@ -32,7 +28,7 @@ try {
     elseif ($filters['from']) $period = 'sejak_'.$filters['from'];
     elseif ($filters['to']) $period = 'sampai_'.$filters['to'];
     $safeUser = preg_replace('/[^A-Za-z0-9_.-]/', '-', $username);
-    $filename = 'laporan-keuangan-'.$safeUser.'-'.$period.'.pdf';
+    $filename = 'laporan-flow-dompet-'.$safeUser.'-'.$period.'.pdf';
 
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="'.$filename.'"');

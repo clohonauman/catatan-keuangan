@@ -2086,8 +2086,79 @@ function ensureSidebarHistoryMenu() {
   else menu.appendChild(button);
 }
 
+
+function sidebarIconSvg(name) {
+  const icons = {
+    dashboard: '<rect x="4" y="4" width="6" height="6" rx="1.4"></rect><rect x="14" y="4" width="6" height="6" rx="1.4"></rect><rect x="4" y="14" width="6" height="6" rx="1.4"></rect><rect x="14" y="14" width="6" height="6" rx="1.4"></rect>',
+    gauge: '<path d="M4 14a8 8 0 1 1 16 0"></path><path d="M12 14l4-4"></path><path d="M7 18h10"></path>',
+    wallet: '<path d="M4 7.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2h12"></path><path d="M16 12h4"></path><path d="M17.5 12h.01"></path>',
+    mail: '<rect x="3.5" y="5" width="17" height="14" rx="2"></rect><path d="m4.5 7 7.5 5.5L19.5 7"></path>',
+    crown: '<path d="M4 8l4 4 4-7 4 7 4-4-2 10H6L4 8Z"></path><path d="M7 21h10"></path>',
+    target: '<circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M17.5 6.5 21 3"></path><path d="M17 3h4v4"></path>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"></path><path d="M9 8h6M9 12h6M9 16h4"></path>',
+    repeat: '<path d="M17 2l3 3-3 3"></path><path d="M20 5H9a5 5 0 0 0-5 5v1"></path><path d="M7 22l-3-3 3-3"></path><path d="M4 19h11a5 5 0 0 0 5-5v-1"></path>',
+    flag: '<path d="M5 21V4"></path><path d="M5 5h10l-1.5 3L15 11H5"></path>',
+    chart: '<path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path>',
+    cloud: '<path d="M7 18h10a4 4 0 0 0 .7-7.94A6 6 0 0 0 6.2 8.8 4.5 4.5 0 0 0 7 18Z"></path><path d="M12 11v6"></path><path d="m9.5 14 2.5-3 2.5 3"></path>',
+    history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l3 2"></path>',
+    bulb: '<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M8.2 14.5A7 7 0 1 1 15.8 14.5C14.7 15.3 14 16.1 14 18h-4c0-1.9-.7-2.7-1.8-3.5Z"></path>',
+    help: '<circle cx="12" cy="12" r="9"></circle><path d="M9.8 9.2a2.4 2.4 0 0 1 4.6.8c0 1.7-2.4 2-2.4 4"></path><path d="M12 17.2h.01"></path>',
+    shield: '<path d="M12 3 5 6v5c0 4.6 2.8 7.8 7 10 4.2-2.2 7-5.4 7-10V6l-7-3Z"></path><path d="M9.5 12.5 11 14l3.5-4"></path>',
+    trash: '<path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="m7 7 1 13h8l1-13"></path><path d="M10 11v5M14 11v5"></path>',
+    settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-5L9.2 6a7 7 0 0 0-1.7 1L5 6 3 9.5 5 11a7 7 0 0 0 0 2l-2 1.5L5 18l2.5-1a7 7 0 0 0 1.7 1l.3 3h5l.3-3a7 7 0 0 0 1.7-1l2.5 1 2-3.5-2-1.5a7 7 0 0 0 .1-1Z"></path>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.dashboard}</svg>`;
+}
+
+function installUnifiedSidebarIcons() {
+  const sidebar = document.getElementById('appSidebar');
+  if (!sidebar) return;
+
+  const keyForItem = (item) => {
+    const id = item.id || '';
+    const target = item.dataset?.financeOpen || '';
+    const href = item.getAttribute('href') || '';
+    const label = (item.querySelector('b')?.textContent || item.textContent || '').toLowerCase();
+    if (id === 'sidebarSummary') return 'dashboard';
+    if (id === 'openBudget' || label.includes('batas')) return 'gauge';
+    if (id === 'openSetting') return 'wallet';
+    if (id === 'openEmailSecurity') return 'mail';
+    if (id === 'openLearning') return 'bulb';
+    if (id === 'openHelpFaq') return 'help';
+    if (target === 'premium') return 'crown';
+    if (target === 'wallets') return 'wallet';
+    if (target === 'budgets') return 'target';
+    if (target === 'bills') return 'receipt';
+    if (target === 'recurring') return 'repeat';
+    if (target === 'goals') return 'flag';
+    if (target === 'analytics') return 'chart';
+    if (target === 'backup') return 'cloud';
+    if (target === 'history') return 'history';
+    if (target === 'admin') return 'settings';
+    if (href.includes('privacy-policy')) return 'shield';
+    if (href.includes('delete-account')) return 'trash';
+    if (label.includes('riwayat')) return 'history';
+    if (label.includes('admin')) return 'settings';
+    return 'dashboard';
+  };
+
+  sidebar.querySelectorAll('.sidebar-menu-item').forEach((item) => {
+    const icon = item.querySelector('.sidebar-menu-icon');
+    if (icon) {
+      icon.innerHTML = sidebarIconSvg(keyForItem(item));
+      icon.classList.add('unified-menu-icon');
+    }
+    const arrow = item.querySelector('.sidebar-arrow');
+    if (arrow) {
+      arrow.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>';
+      arrow.classList.add('unified-menu-arrow');
+    }
+  });
+}
+
 installCompactTransactionPanel();
 ensureSidebarHistoryMenu();
+installUnifiedSidebarIcons();
 
 // ---------------- FILTER & SORT TRANSAKSI ----------------
 document.getElementById("txFilterToggle")?.addEventListener("click", () => {
