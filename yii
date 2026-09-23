@@ -1,0 +1,11 @@
+#!/usr/bin/env php
+<?php
+use Dotenv\Dotenv;
+require __DIR__ . '/vendor/autoload.php';
+if (class_exists(Dotenv::class) && is_file(__DIR__ . '/.env')) Dotenv::createImmutable(__DIR__)->safeLoad();
+defined('YII_DEBUG') or define('YII_DEBUG', filter_var($_ENV['YII_DEBUG'] ?? false, FILTER_VALIDATE_BOOL));
+defined('YII_ENV') or define('YII_ENV', $_ENV['YII_ENV'] ?? 'prod');
+require __DIR__ . '/vendor/yiisoft/yii2/Yii.php';
+$config = require __DIR__ . '/config/console.php';
+$application = new yii\console\Application($config);
+exit($application->run());

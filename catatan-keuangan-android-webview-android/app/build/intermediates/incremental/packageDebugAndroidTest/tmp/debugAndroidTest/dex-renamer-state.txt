@@ -1,0 +1,4 @@
+#Sun Sep 13 16:30:57 WITA 2026
+base.0=/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
+path.0=0/classes.dex
+renamed.0=classes.dex

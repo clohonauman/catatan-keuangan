@@ -1,0 +1,9 @@
+<?php
+use yii\helpers\Html;
+use yii\helpers\Url;
+$warnings=(array)($summary['warnings']??[]);
+?><!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Restore Selesai · Catatan Keuangan</title>
+<style>body{font-family:Inter,system-ui,-apple-system,sans-serif;background:#f5f7fb;color:#182230;margin:0}.wrap{max-width:760px;margin:0 auto;padding:48px 18px}.card{background:#fff;border:1px solid #e6eaf0;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(16,24,40,.06)}h1{margin:0 0 8px}.muted{color:#667085}.notice{background:#ecfdf3;border:1px solid #abefc6;border-radius:12px;padding:12px 14px;margin:16px 0}.warning{background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:12px 14px;margin:16px 0}.btn{display:inline-flex;background:#175cd3;color:#fff;text-decoration:none;border-radius:10px;padding:11px 15px;font-weight:700;margin-top:12px}pre{overflow:auto;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:14px;font-size:12px}</style></head><body><main class="wrap"><section class="card"><h1>Restore ke MySQL selesai</h1><p class="muted">Sesi bootstrap telah ditutup untuk keamanan karena daftar akun/perangkat sudah diganti oleh isi backup.</p>
+<div class="<?= $warnings?'warning':'notice' ?>"><?= $warnings?'Restore selesai dengan catatan. Data legacy yang tidak dapat dipetakan ke akun aktif tetap diarsipkan di MySQL dan tidak dibuang.':'Verifikasi jumlah data utama selesai tanpa selisih.' ?></div>
+<pre><?= Html::encode(json_encode($summary,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)) ?></pre>
+<p>Silakan login kembali menggunakan akun dari data hasil restore.</p><a class="btn" href="<?= Url::to(['site/index']) ?>">Ke Halaman Login</a></section></main></body></html>

@@ -1,0 +1,48 @@
+# =============================================================
+# Catatan Keuangan - Public Web Root
+# Hanya isi folder /web yang memang ditujukan untuk HTTP.
+# =============================================================
+
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Tolak TRACE dan path traversal.
+RewriteCond %{REQUEST_METHOD} ^TRACE$ [NC]
+RewriteRule ^ - [F,L]
+RewriteCond %{THE_REQUEST} "(?:\.\./|%2e%2e|%252e%252e)" [NC]
+RewriteRule ^ - [F,L]
+
+# Hidden file tetap ditolak. .well-known dikecualikan bila dibutuhkan SSL/ACME.
+RewriteRule "(^|/)\.(?!well-known(?:/|$))" - [F,L,NC]
+
+# Semua endpoint kompatibilitas lama dipaksa melalui front controller Yii.
+RewriteRule ^ajax/([A-Za-z0-9_]+)\.php$ index.php?r=legacy-api/bridge&name=$1 [QSA,L,NC]
+
+# Pretty/fallback routing Yii.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . index.php [L]
+</IfModule>
+
+# Jangan pernah layani file konfigurasi/source/backup bila terselip ke /web.
+<FilesMatch "(?i)(^\.|composer\.(?:json|lock)$|^yii$|\.(?:env|ini|log|sql|bak|dist|md|lock|sh|yml|yaml)$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+Header always set Cross-Origin-Opener-Policy "same-origin-allow-popups"
+Header always unset X-Powered-By
+</IfModule>

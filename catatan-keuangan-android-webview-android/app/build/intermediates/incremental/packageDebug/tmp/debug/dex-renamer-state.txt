@@ -1,0 +1,10 @@
+#Sat Sep 19 11:40:12 WITA 2026
+base.0=/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
+base.1=/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
+base.2=/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/dex/debug/mergeProjectDexDebug/4/classes.dex
+path.0=classes.dex
+path.1=0/classes.dex
+path.2=4/classes.dex
+renamed.0=classes.dex
+renamed.1=classes2.dex
+renamed.2=classes3.dex

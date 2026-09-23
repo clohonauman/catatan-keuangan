@@ -1,0 +1,13 @@
+Options -Indexes
+
+# File bridge .php tetap boleh karena dibutuhkan kompatibilitas frontend.
+# File konfigurasi/backup yang mungkin terselip di sini tetap ditolak.
+<FilesMatch "(?i)(^\.|\.(?:env|ini|log|sql|bak|dist|md|lock|json|yml|yaml)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

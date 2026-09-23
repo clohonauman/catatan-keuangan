@@ -1,0 +1,25 @@
+R_DEF: Internal format may change without notice
+local
+color background
+color primary
+color primary_dark
+color white
+drawable bg_splash
+drawable splash_logo_card
+id biometricLockMessage
+id biometricLockOverlay
+id biometricRetryButton
+id biometricUsePinButton
+id progressBar
+id webView
+layout activity_main
+layout activity_splash
+mipmap ic_launcher
+string app_name
+string offline_message
+string offline_title
+string splash_footer
+string splash_subtitle
+style AppTheme
+style SplashTheme
+xml file_paths

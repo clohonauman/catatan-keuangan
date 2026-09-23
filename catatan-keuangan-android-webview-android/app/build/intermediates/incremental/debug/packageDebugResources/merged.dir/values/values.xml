@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#F5F7FB</color>
+    <color name="primary">#175CD3</color>
+    <color name="primary_dark">#0F4BB3</color>
+    <color name="white">#FFFFFF</color>
+    <string name="app_name">Catatan Keuangan</string>
+    <string name="offline_message">Aplikasi akan memakai data yang sudah tersimpan di perangkat. Hubungkan internet untuk sinkronisasi otomatis.</string>
+    <string name="offline_title">Sedang Offline</string>
+    <string name="splash_footer">Charlie Finance</string>
+    <string name="splash_subtitle">Keuangan lebih tertata, keputusan lebih tenang.</string>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">@color/primary</item>
+    </style>
+    <style name="SplashTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:navigationBarColor">@color/primary_dark</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
