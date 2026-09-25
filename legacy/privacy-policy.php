@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['privacy_contact'])) {
         </div>
         <article class="card">
             <h1>Kebijakan Privasi Catatan Keuangan</h1>
-            <p class="muted">Terakhir diperbarui: 11 September 2026</p>
+            <p class="muted">Terakhir diperbarui: 24 September 2026</p>
             <div class="note">Catatan Keuangan adalah aplikasi pencatatan keuangan pribadi. Aplikasi tidak memberikan
                 pinjaman, layanan perbankan, transfer uang nyata, atau jasa investasi. Fitur dompet/rekening di dalam
                 aplikasi digunakan untuk pencatatan pribadi.</div>
@@ -180,13 +180,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['privacy_contact'])) {
                 <li>Data keuangan yang Anda masukkan sendiri, termasuk saldo, pemasukan, pengeluaran, kategori, budget,
                     tagihan, target, dan catatan.</li>
                 <li>Foto nota/lampiran yang secara opsional Anda unggah.</li>
-                <li>Isi chat/asisten dan aturan pembelajaran yang Anda berikan.</li>
+                <li>Isi chat/asisten, aturan pembelajaran yang Anda berikan, serta pola pembelajaran adaptif dari transaksi yang Anda konfirmasi atau koreksi. Pola adaptif disimpan per akun dan tidak digunakan untuk memengaruhi akun pengguna lain.</li>
                 <li>Data pembelian Premium, termasuk paket yang dipilih, nomor invoice, bank tujuan, nama pengirim, nomor rekening pengirim, status pembayaran, dan gambar bukti pembayaran yang Anda unggah.</li>
                 <li>Permintaan dukungan atau privasi yang Anda kirim melalui formulir pada halaman ini.</li>
             </ul>
             <h2>Tujuan penggunaan</h2>
             <p>Data digunakan untuk menyediakan fungsi pencatatan, sinkronisasi online/offline, autentikasi, laporan,
-                OCR nota, analitik pribadi, backup, dukungan pengguna, serta membuat invoice, memverifikasi pembayaran
+                OCR nota, analitik pribadi, pembelajaran adaptif asisten per akun, backup, dukungan pengguna, serta membuat invoice, memverifikasi pembayaran
                 Premium secara manual, mengaktifkan hak akses Premium sesuai pembelian, serta mengirim kode verifikasi dan token pemulihan password/PIN ke email yang terdaftar.</p>
             <h2>Pembayaran Premium</h2>
             <p>Pembayaran Premium dilakukan melalui transfer manual ke rekening yang ditampilkan pada invoice.

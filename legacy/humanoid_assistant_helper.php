@@ -115,7 +115,8 @@ function humanoidResolveContext(string $message): string {
         }
     }
 
-    $explicitFollowup = (bool)preg_match('/^(?:kalau|yang|terus|lalu|kalau yang|untuk|di|dari)\b/u',$t);
+    $exclusionFollowup = (bool)preg_match('/\b(?:selain|kecuali|tanpa|bukan)\b/u',$t);
+    $explicitFollowup = (bool)preg_match('/^(?:kalau|yang|terus|lalu|kalau yang|untuk|di|dari|selain|kecuali|tanpa|bukan)\b/u',$t);
     $entityOnlyFollowup = false;
     if (($wallet || $category) && (!function_exists('looksLikeTransactionStatement') || !looksLikeTransactionStatement($current))) {
         $tokens = preg_split('/[^a-z0-9]+/u',$t,-1,PREG_SPLIT_NO_EMPTY);
@@ -135,6 +136,15 @@ function humanoidResolveContext(string $message): string {
     $previous = humanoidPreviousUserQuestion($current);
     if ($previous === '') return $resolved;
     $base = $previous;
+
+    // Follow-up pengecualian seperti "selain cicilan" harus mempertahankan
+    // pertanyaan sebelumnya, lalu menambahkan filter negatif. Jangan mengubah
+    // kata "cicilan" menjadi filter kategori positif.
+    if ($exclusionFollowup) {
+        $base = rtrim(trim($base), " ?!.,\t\n\r\0\x0B");
+        return humanoidNormalizeMessage($base.' '.$current);
+    }
+
     if ($wallet) $base = humanoidReplaceWalletMention($base,$wallet);
     if ($category && stripos($base,$category)===false) $base .= ' '.$category;
     if (preg_match('/\b(?:pengeluaran|pemasukan|pendapatan)\b/u',$t,$m)) {
@@ -461,7 +471,7 @@ function humanoidHelpReply(string $message): ?string {
         ."• Catat: “makan 25rb tadi siang dari BCA”\n"
         ."• Koreksi sebelum simpan: “eh, ubah jadi 20rb” atau “pakai SeaBank saja”\n"
         ."• Tanya: “berapa uang saya?”, “kemarin habis berapa?”, “kalau bulan lalu?”\n"
-        ."• Analisis: “aman sampai gajian?”, “analisis bulan ini”, “tren 6 bulan”\n"
+        ."• Analisis: “aman sampai gajian?”, “kalau tiap hari BBM 20rb dan makan 15-20rb sampai gajian cukup?”, “analisis bulan ini”, “tren 6 bulan”\n"
         ."• Simulasi: “kalau beli sepatu 500rb masih aman?”\n"
         ."• Budget: “sisa budget makan berapa?”\n"
         ."• Dompet: “saldo BCA yang benar-benar bisa dipakai berapa?”\n"
@@ -495,7 +505,7 @@ function humanoidSmallTalkReply(string $message): ?string {
 function humanoidDirectReply(string $message): ?string {
     foreach([
         'humanoidHelpReply','humanoidSmallTalkReply','humanoidUtilityReply',
-        'humanoidPaydayWhenReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',
+        'humanoidPaydayWhenReply','smartPaydayScenarioReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',
         'humanoidMonthlyAnalysisReply','humanoidBudgetReply','humanoidGoalReply','humanoidHypotheticalReply'
     ] as $fn){$reply=$fn($message);if($reply!==null)return $reply;}
     return null;

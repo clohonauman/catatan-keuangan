@@ -25,6 +25,7 @@ try {
         featureFail('Fitur ini khusus akun Premium. Silakan pilih paket Premium terlebih dahulu.', 403);
     }
     switch($action){
+        case 'transaction_create': $result=financeCreateManualTransaction($input); break;
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;
         case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??'')); break;

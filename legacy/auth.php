@@ -420,6 +420,29 @@ function authVerifyPin($userId, $pin)
     if (!$user || empty($user['pin_hash']) || !password_verify($pin, $user['pin_hash'])) throw new RuntimeException('PIN salah.');
     session_regenerate_id(true);
     $_SESSION['pin_verified'] = true;
+    $_SESSION['unlock_method'] = 'pin';
+}
+
+/**
+ * Menandai sesi web sebagai sudah terbuka setelah gate biometrik native aktif.
+ *
+ * PENTING: fungsi ini tidak memverifikasi sidik jari/wajah. Verifikasi biometrik
+ * tetap dilakukan oleh aplikasi native/OS. Controller hanya boleh memanggil
+ * fungsi ini untuk trusted-device session dengan nonce satu kali dan user-agent
+ * aplikasi resmi. PIN tetap menjadi fallback melalui ?app_lock=1.
+ */
+function authUnlockAfterNativeBiometricGate($userId)
+{
+    $userId = (int)$userId;
+    if ($userId <= 0) throw new RuntimeException('Akun tidak ditemukan.');
+    $current = authCurrentUser();
+    if (!$current || (int)($current['id'] ?? 0) !== $userId) {
+        throw new RuntimeException('Sesi perangkat tidak valid. Silakan login ulang.');
+    }
+    session_regenerate_id(true);
+    $_SESSION['pin_verified'] = true;
+    $_SESSION['unlock_method'] = 'native_biometric';
+    $_SESSION['native_biometric_unlocked_at'] = time();
 }
 
 

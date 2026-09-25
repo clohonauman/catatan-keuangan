@@ -710,6 +710,16 @@ if (!function_exists('ck_icon')) {
                 </div>
                 <button class="btn primary wide">Buka</button>
             </form>
+            <?php if (!empty($nativeBiometricAutoUnlockAllowed) && !empty($nativeBiometricUnlockNonce)): ?>
+            <form method="post" id="nativeBiometricUnlockForm" hidden aria-hidden="true">
+                <?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
+                <input type="hidden" name="action" value="native_biometric_unlock">
+                <input type="hidden" name="biometric_nonce" value="<?= h($nativeBiometricUnlockNonce) ?>">
+            </form>
+            <div class="muted center native-biometric-wait" id="nativeBiometricWait" hidden>
+                Biometrik perangkat aktif. PIN hanya diperlukan jika Anda memilih fallback PIN.
+            </div>
+            <?php endif; ?>
             <form method="post" class="center logout-under"><?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?><input type="hidden" name="action" value="logout"><button
                     class="link-button" type="submit">Login dengan akun lain</button></form>
             <div class="auth-legal-links"><a href="privacy-policy.php">Kebijakan Privasi</a><span>·</span><a
@@ -880,6 +890,11 @@ if (!function_exists('ck_icon')) {
             <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-payments">
                 <span class="sidebar-menu-icon"><?= ck_icon('credit-card') ?></span>
                 <span><b>Pembayaran Premium</b><small>Verifikasi invoice pengguna</small></span>
+                <span class="sidebar-arrow">›</span>
+            </button>
+            <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-plans">
+                <span class="sidebar-menu-icon"><?= ck_icon('crown') ?></span>
+                <span><b>Paket Langganan</b><small>Harga & durasi Premium</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
             <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-coupons">
@@ -1066,7 +1081,13 @@ if (!function_exists('ck_icon')) {
             <article class="panel transactions-panel mobile-view" id="txPanel">
                 <div class="panel-head">
                     <div><b>Transaksi</b><small class="panel-subtitle">Filter tanggal dan urutkan nominal</small></div>
-                    <span class="badge" id="txCount">0</span>
+                    <div class="tx-head-actions">
+                        <button type="button" class="tx-add-button" id="addTransactionBtn" aria-label="Tambah transaksi manual" title="Tambah transaksi manual">
+                            <span class="tx-add-icon" aria-hidden="true">+</span>
+                            <span class="tx-add-label">Tambah</span>
+                        </button>
+                        <span class="badge" id="txCount">0</span>
+                    </div>
                 </div>
 
                 <div class="tx-filter-wrap">
@@ -1717,6 +1738,15 @@ if (!function_exists('ck_icon')) {
                         <div class="feature-list" id="adminSubscriptionList"></div>
                     </div>
                 </section>
+                <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-plans" hidden>
+<div class="admin-premium-section">
+                        <div class="feature-toolbar">
+                            <div><b>Paket Langganan</b><small>Atur harga, nama, durasi, dan deskripsi paket Premium yang tampil pada halaman pembelian.</small></div>
+                        </div>
+                        <div class="admin-plan-note">Perubahan harga hanya berlaku untuk invoice baru. Invoice lama tetap memakai harga saat invoice tersebut dibuat.</div>
+                        <div class="feature-list" id="adminPlanList"></div>
+                    </div>
+                </section>
                 <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-coupons" hidden>
 <div class="admin-premium-section">
                         <div class="feature-toolbar">
@@ -1747,6 +1777,73 @@ if (!function_exists('ck_icon')) {
                     </div>
                 </section>
                 <?php endif; ?>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="transactionCreateModal" class="transaction-edit-dialog transaction-create-dialog">
+        <div class="modal-card transaction-edit-card">
+            <div class="modal-head">
+                <div>
+                    <h3>Tambah Transaksi</h3>
+                    <p class="modal-subtitle">Catat pemasukan, pengeluaran, atau transfer antar dompet secara manual.</p>
+                </div>
+                <button class="icon-btn" type="button" id="closeTransactionCreate" aria-label="Tutup">×</button>
+            </div>
+
+            <div class="feature-form-grid">
+                <label>Jenis
+                    <select id="createTxType">
+                        <option value="expense">Pengeluaran</option>
+                        <option value="income">Pemasukan</option>
+                        <option value="transfer">Transfer antar dompet</option>
+                    </select>
+                </label>
+                <label>Nominal
+                    <input type="number" id="createTxAmount" min="1" step="1000" inputmode="numeric" placeholder="Contoh: 50000">
+                </label>
+                <label>Tanggal
+                    <input type="date" id="createTxDate">
+                </label>
+
+                <label class="create-standard-field">Kategori
+                    <select id="createTxCategory"></select>
+                </label>
+                <label class="create-standard-field">Dompet
+                    <select id="createTxWallet"></select>
+                </label>
+                <label class="create-expense-field">Pola
+                    <select id="createTxSpendingKind">
+                        <option value="daily">Harian</option>
+                        <option value="once" selected>Sekali bayar</option>
+                        <option value="recurring">Berulang</option>
+                    </select>
+                </label>
+                <label class="create-expense-field">Hubungkan tagihan
+                    <select id="createTxBill">
+                        <option value="0">Tidak dihubungkan</option>
+                    </select>
+                </label>
+
+                <label class="create-transfer-field" hidden>Dari dompet
+                    <select id="createTxFromWallet"></select>
+                </label>
+                <label class="create-transfer-field" hidden>Ke dompet
+                    <select id="createTxToWallet"></select>
+                </label>
+
+                <label class="full">Keterangan
+                    <input id="createTxNote" maxlength="255" placeholder="Opsional, misalnya: Isi Pertamax">
+                </label>
+            </div>
+
+            <div class="manual-tx-hint" id="createTxHint">
+                Saldo dan laporan akan diperbarui setelah transaksi berhasil disimpan.
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn secondary" id="cancelTransactionCreate" type="button">Batal</button>
+                <button class="btn primary" id="saveTransactionCreate" type="button">Simpan Transaksi</button>
             </div>
         </div>
     </dialog>
@@ -1879,10 +1976,12 @@ if (!function_exists('ck_icon')) {
                     <details class="help-faq-item" data-faq-category="saldo"
                         data-faq-keywords="saldo minimum bank rekening tidak bisa dipakai mengendap minimum balance">
                         <summary><span>Apa itu Saldo Minimum Dompet?</span><i>+</i></summary>
-                        <div class="help-faq-answer"><b>Saldo Minimum Dompet</b> adalah nominal yang wajib tetap tersisa
-                            pada dompet/rekening dan tidak dapat digunakan untuk transaksi atau transfer, misalnya saldo
-                            mengendap minimum dari bank. Saldo tersedia dihitung setelah mengurangi dana disisihkan dan
-                            saldo minimum.</div>
+                        <div class="help-faq-answer"><b>Saldo Minimum Dompet</b> adalah batas saldo yang tidak dihitung
+                            sebagai uang belanja, misalnya saldo mengendap rekening bank. Saldo tersedia dihitung
+                            <b>per dompet</b>: saldo aktual dikurangi dana disisihkan dan saldo minimum, lalu minimum
+                            hasilnya Rp0. Jika saldo suatu dompet berada di bawah batas minimum, dompet tersebut
+                            berkontribusi Rp0 ke total saldo tersedia dan tidak mengurangi saldo dompet lain. Saldo
+                            aktual tetap tercatat untuk mencerminkan biaya bank atau autodebit.</div>
                     </details>
                     <details class="help-faq-item" data-faq-category="saldo"
                         data-faq-keywords="saldo awal ubah dompet rekening atur saldo">
@@ -1985,11 +2084,11 @@ if (!function_exists('ck_icon')) {
                     <details class="help-faq-item" data-faq-category="akun"
                         data-faq-keywords="biometrik biometrics fingerprint sidik jari face wajah face id finger id android keamanan kunci">
                         <summary><span>Bagaimana mengaktifkan kunci biometrik?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Pada aplikasi Android, buka <b>Email & Keamanan</b> lalu aktifkan
-                            <b>Kunci Biometrik Perangkat</b>. Android akan memakai metode yang tersedia pada perangkat,
-                            misalnya sidik jari, pengenalan wajah yang didukung, atau kredensial kunci layar. Aplikasi
-                            tidak menyimpan data sidik jari/wajah; proses verifikasi dilakukan oleh sistem perangkat.
-                            PIN aplikasi tetap tersedia sebagai fallback.</div>
+                        <div class="help-faq-answer">Pada aplikasi Android/iOS, buka <b>Email & Keamanan</b> lalu aktifkan
+                            <b>Kunci Biometrik Perangkat</b>. Sistem akan memakai biometrik atau kredensial perangkat yang
+                            didukung. Setelah gate biometrik native berhasil, halaman web langsung dibuka tanpa meminta
+                            PIN aplikasi untuk kedua kalinya. Aplikasi tidak menyimpan data sidik jari/wajah; PIN tetap
+                            tersedia sebagai fallback melalui tombol <b>Gunakan PIN aplikasi</b>.</div>
                     </details>
                     <details class="help-faq-item" data-faq-category="akun"
                         data-faq-keywords="email notifikasi broadcast pembaruan android tagihan saldo batas harian">
@@ -2086,7 +2185,7 @@ if (!function_exists('ck_icon')) {
                 </span>
                 <div class="wallet-balance-title">
                     <h3>Rincian Saldo</h3>
-                    <p>Saldo tersedia setelah dana yang disisihkan dikeluarkan dari uang belanja.</p>
+                    <p>Saldo tersedia dihitung per dompet. Saldo di bawah batas minimum dihitung Rp0, bukan minus.</p>
                 </div>
                 <button class="icon-btn" type="button" id="closeWalletBalanceModal" aria-label="Tutup">×</button>
             </div>
@@ -2110,8 +2209,8 @@ if (!function_exists('ck_icon')) {
                         <circle cx="12" cy="12" r="9" />
                         <path d="M12 10v6M12 7h.01" />
                     </svg>
-                    <span>Saldo total tetap mengikuti transaksi; dana disisihkan tidak dihitung sebagai uang belanja
-                        pada prediksi sampai gajian.</span>
+                    <span>Saldo aktual tetap mengikuti transaksi. Dompet yang berada di bawah saldo minimum tidak
+                        mengurangi saldo tersedia dompet lain; kontribusinya ke total tersedia dihitung Rp0.</span>
                 </div>
             </div>
         </div>
@@ -2201,8 +2300,7 @@ if (!function_exists('ck_icon')) {
                         </div>
                         <small id="biometricSecurityText">Mendeteksi dukungan sidik jari atau pengenalan wajah pada
                             perangkat ini.</small>
-                        <span class="biometric-security-note" id="biometricSecurityNote">Fitur ini melindungi aplikasi
-                            saat dibuka kembali. PIN aplikasi tetap tersedia sebagai cadangan.</span>
+                        <span class="biometric-security-note" id="biometricSecurityNote">Fitur ini melindungi aplikasi saat dibuka kembali. Setelah biometrik berhasil, web langsung dibuka tanpa meminta PIN lagi; PIN tetap tersedia sebagai fallback.</span>
                     </div>
                     <button type="button" class="btn secondary biometric-security-toggle" id="biometricSecurityToggle"
                         disabled>Aktifkan</button>
@@ -2738,7 +2836,7 @@ if (!function_exists('ck_icon')) {
                     'Perangkat mendukung ' + label.toLowerCase() +
                     '. Aktifkan untuk mengunci aplikasi secara lokal.';
                 note.textContent =
-                    'Verifikasi diproses oleh sistem perangkat. Aplikasi tidak menerima atau menyimpan data sidik jari/wajah.';
+                    'Verifikasi diproses oleh sistem perangkat. Setelah biometrik berhasil, sesi web dilewati dari PIN; PIN tetap tersedia sebagai fallback. Aplikasi tidak menerima atau menyimpan data sidik jari/wajah.';
             } else {
                 text.textContent = status.message || 'Biometrik atau kunci layar perangkat belum tersedia.';
                 note.textContent =
@@ -2827,6 +2925,40 @@ if (!function_exists('ck_icon')) {
         }
     })();
     </script>
+
+    <?php if ($user && !$unlocked && !empty($nativeBiometricAutoUnlockAllowed) && !empty($nativeBiometricUnlockNonce)): ?>
+    <script>
+    (function() {
+        var form = document.getElementById('nativeBiometricUnlockForm');
+        var wait = document.getElementById('nativeBiometricWait');
+        if (!form) return;
+        var submitted = false;
+
+        function parseStatus(raw) {
+            try { return typeof raw === 'string' ? JSON.parse(raw) : (raw || {}); }
+            catch (_) { return {}; }
+        }
+
+        function tryNativeBiometricUnlock(status) {
+            if (submitted || !status || !status.supported || !status.enabled) return;
+            submitted = true;
+            if (wait) wait.hidden = false;
+            // Aplikasi native tetap menjadi gate yang menutup UI sampai Face ID /
+            // sidik jari / credential perangkat berhasil. Web hanya menghilangkan
+            // verifikasi PIN kedua pada trusted-device session yang sama.
+            window.setTimeout(function() { form.submit(); }, 60);
+        }
+
+        window.addEventListener('finance-biometric-status', function(event) {
+            tryNativeBiometricUnlock((event && event.detail) || {});
+        });
+
+        if (window.AndroidBiometric && typeof window.AndroidBiometric.getStatus === 'function') {
+            try { tryNativeBiometricUnlock(parseStatus(window.AndroidBiometric.getStatus())); } catch (_) {}
+        }
+    })();
+    </script>
+    <?php endif; ?>
 
     <script>
     (function() {

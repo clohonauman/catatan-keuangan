@@ -2691,3 +2691,73 @@ body.app-data-loading .app-main,body.app-data-loading .app-sidebar,body.app-data
 .premium-trial-card[hidden]{display:none!important}.premium-trial-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#dce9ff;color:#175cd3}.premium-trial-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.premium-trial-copy{min-width:0}.premium-trial-kicker{display:block;margin-bottom:3px;color:#175cd3;font-size:8px;font-weight:900;letter-spacing:.09em}.premium-trial-copy b{display:block;color:#172235;font-size:13px}.premium-trial-copy p{margin:4px 0 3px;color:#5f6f82;font-size:10px;line-height:1.45}.premium-trial-copy small{display:block;color:#8b95a5;font-size:9px}.premium-trial-action{min-width:155px;white-space:nowrap}.premium-trial-card.is-active{border-color:#98dfb2;background:linear-gradient(135deg,#f4fff8,#eafaf0)}.premium-trial-card.is-active .premium-trial-icon{background:#dcfae6;color:#087443}.premium-trial-card.is-active .premium-trial-kicker{color:#087443}.premium-trial-card.is-expired{border-color:#e4e7ec;background:#f8fafc;box-shadow:none}.premium-trial-card.is-expired .premium-trial-icon{background:#eef1f5;color:#667085}.premium-trial-card.is-expired .premium-trial-kicker{color:#667085}.premium-trial-card.is-expired .premium-trial-action{display:none}
 @media(max-width:640px){.premium-trial-card{grid-template-columns:40px minmax(0,1fr);padding:12px}.premium-trial-icon{width:40px;height:40px;border-radius:12px}.premium-trial-action{grid-column:1/-1;width:100%;min-width:0}.premium-trial-copy b{font-size:12px}.premium-trial-copy p{font-size:9px}}
 .sidebar-premium-badge.trial{background:#175cd3!important;color:#fff!important}.premium-account-status.trial{background:#dce9ff!important;color:#175cd3!important;border-color:#b9d3ff!important}
+
+/* V23 — tambah transaksi manual */
+.transactions-panel .panel-head .tx-head-actions{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:8px!important;
+  min-width:auto!important;
+}
+.transactions-panel .panel-head #txCount{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  line-height:1!important;
+  padding:0!important;
+  width:34px!important;
+  min-width:34px!important;
+  height:34px!important;
+  border-radius:999px!important;
+  flex:0 0 34px!important;
+}
+.tx-add-button{
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid rgba(37,99,235,.18);
+  border-radius:11px;
+  background:#edf4ff;
+  color:#175cd3;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  font:inherit;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  transition:background .16s ease,border-color .16s ease,transform .16s ease;
+}
+.tx-add-button:hover{background:#e3eeff;border-color:rgba(37,99,235,.3)}
+.tx-add-button:active{transform:translateY(1px)}
+.tx-add-icon{font-size:20px;line-height:1;font-weight:500;margin-top:-1px}
+.transaction-create-dialog{width:min(620px,calc(100% - 30px))!important;max-width:none!important}
+.create-transfer-field[hidden],.create-standard-field[hidden],.create-expense-field[hidden]{display:none!important}
+.manual-tx-hint{margin-top:12px;padding:10px 12px;border-radius:12px;background:#f7f9fc;border:1px solid #e6ebf2;color:#667085;font-size:11px;line-height:1.5}
+
+@media(max-width:720px){
+  .tx-add-button{width:34px;height:34px;min-height:34px;padding:0;border-radius:10px}
+  .tx-add-label{display:none}
+  .tx-add-icon{font-size:22px}
+  .transaction-create-dialog{width:100%!important;max-width:none!important;border-radius:20px 20px 0 0!important;margin:auto 0 0!important}
+}
+
+/* ===== V25 - Super Admin: Paket Langganan ===== */
+.admin-plan-note{margin:0 0 12px;padding:10px 12px;border:1px solid #dbe7fb;border-radius:12px;background:#f6f9ff;color:#516078;font-size:10px;line-height:1.55}
+.admin-plan-row{display:grid;gap:12px;padding:14px;background:#fff;border:1px solid #e3e8ef;border-radius:15px}
+.admin-plan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid #edf1f5}
+.admin-plan-head>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:3px 8px;min-width:0}
+.admin-plan-head b{font-size:14px;color:#172033}.admin-plan-head small{grid-column:2;font-size:9px;color:#8a96a8}.admin-plan-head strong{font-size:16px;color:#175cd3;white-space:nowrap}
+.admin-plan-key{grid-row:1/3;display:inline-flex;align-items:center;padding:5px 7px;border-radius:8px;background:#eef4ff;color:#175cd3;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}
+.admin-plan-fields{display:grid;grid-template-columns:.8fr 1fr 1fr 1fr .75fr .85fr;gap:8px;align-items:end}
+.admin-plan-fields label{margin:0;font-size:9px;font-weight:800;color:#667085}
+.admin-plan-fields input{width:100%;margin-top:4px;border:1px solid #dce2eb;border-radius:8px;padding:8px;font-size:10px;background:#fff;outline:none}
+.admin-plan-fields input:focus{border-color:#78a3e9;box-shadow:0 0 0 3px rgba(23,92,211,.08)}
+.admin-plan-fields input[readonly]{background:#f5f7fa;color:#7a8798}
+.admin-plan-permanent{display:flex!important;align-items:center;gap:6px;min-height:34px;padding:0 4px}.admin-plan-permanent input{width:auto!important;margin:0!important}
+.admin-plan-description{grid-column:1/-1}.admin-plan-row .row-actions{justify-content:flex-end}
+@media(max-width:1000px){.admin-plan-fields{grid-template-columns:1fr 1fr 1fr}.admin-plan-description{grid-column:1/-1}}
+@media(max-width:650px){.admin-plan-head{align-items:flex-start;flex-direction:column}.admin-plan-fields{grid-template-columns:1fr}.admin-plan-description{grid-column:auto}.admin-plan-row .row-actions{width:100%}.admin-plan-row .row-actions button{width:100%}}

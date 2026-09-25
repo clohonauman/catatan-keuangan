@@ -78,6 +78,49 @@ function smartQueryCategory(string $message, string $type): ?string {
     return null;
 }
 
+/**
+ * Kategori yang secara eksplisit dikecualikan dari pertanyaan.
+ * Contoh: "pengeluaran terbesar selain cicilan" => ["Cicilan"].
+ */
+function smartExcludedCategories(string $message,string $type='expense'): array {
+    $t=norm($message);
+    if(!preg_match('/\b(?:selain|kecuali|tanpa|bukan)\b/u',$t,$marker,PREG_OFFSET_CAPTURE))return [];
+    $offset=(int)($marker[0][1]??0);
+    $tail=substr($t,$offset);
+    $found=[];
+
+    $candidates=[];
+    if(function_exists('financeCategories')){
+        foreach(financeCategories() as $cat){
+            if(!in_array($cat['type']??'both',[$type,'both'],true))continue;
+            $name=trim((string)($cat['name']??''));if($name==='')continue;
+            $aliases=array_merge([$name],(array)($cat['keywords']??[]));
+            $candidates[$name]=array_values(array_unique(array_filter(array_map('norm',$aliases))));
+        }
+    }
+    $fallback=$type==='income'
+        ? ['Gaji'=>['gaji'],'Bonus'=>['bonus','thr','insentif'],'Penjualan'=>['penjualan','hasil jual']]
+        : ['Makan'=>['makan','makanan','kopi','jajan'],'Bensin'=>['bensin','bbm','pertamax','pertalite'],'Cicilan'=>['cicilan','angsuran'],'Belanja'=>['belanja','sembako'],'Transportasi'=>['transportasi','parkir','gojek','grab'],'Tagihan'=>['tagihan','listrik','pulsa','internet','wifi'],'Kesehatan'=>['kesehatan','obat','dokter'],'Hiburan'=>['hiburan','nonton','bioskop']];
+    foreach($fallback as $name=>$aliases){
+        if(!isset($candidates[$name]))$candidates[$name]=[];
+        $candidates[$name]=array_values(array_unique(array_merge($candidates[$name],array_map('norm',$aliases))));
+    }
+    foreach($candidates as $name=>$aliases){
+        foreach(array_merge([norm($name)],$aliases) as $word){
+            if($word!==''&&preg_match('/(?<!\w)'.preg_quote($word,'/').'(?!\w)/u',$tail)){$found[$name]=true;break;}
+        }
+    }
+    return array_keys($found);
+}
+
+function smartFilterExcludedCategories(array $rows,array $excluded): array {
+    if(!$excluded)return $rows;
+    $lookup=[];foreach($excluded as $cat)$lookup[strtolower(trim((string)$cat))]=true;
+    return array_values(array_filter($rows,function($r)use($lookup){
+        return empty($lookup[strtolower(trim((string)($r['category']??'')))]);
+    }));
+}
+
 function smartQueryRows(?string $type, ?string $category, ?string $from, ?string $to, ?int $walletId): array {
     return array_values(array_filter(allTransactions(),function($r)use($type,$category,$from,$to,$walletId){
         // Internal transfers are not income or expenditure.
@@ -95,6 +138,163 @@ function smartPaydayIntent(string $message): bool {
     if (preg_match('/^(?:ajarkan|pelajari|belajar|balas|jawab)\b/u',$t)) return false;
     return (bool)(preg_match('/\b(?:aman|cukup|bertahan|kurang|habis|solusi|hemat|prediksi|perkiraan)\b/u',$t)
         && preg_match('/\b(?:gajian|gaji berikutnya|terima gaji|tanggal gaji)\b/u',$t));
+}
+
+
+/**
+ * Detect and calculate a user-supplied daily spending scenario until payday.
+ *
+ * Example:
+ * "kalau tiap hari bbm 20rb dan makan 15-20rb sampai gajian, cukup gak?"
+ *
+ * The scenario intentionally overrides the historical daily average, while
+ * unpaid bills and scheduled recurring expenses are still respected. Expected
+ * future income is shown separately and is not used to claim the money is
+ * already available.
+ */
+function smartScenarioMoneyUnit(string $raw): string {
+    $raw=norm($raw);
+    if(preg_match('/(?:juta|jt)\b/u',$raw))return 'jt';
+    if(preg_match('/(?:ribu|rb|k)\b/u',$raw))return 'rb';
+    return '';
+}
+
+function smartScenarioMoneyValue(string $raw,string $inheritUnit=''): int {
+    $raw=trim($raw);
+    if($raw==='')return 0;
+    if($inheritUnit!=='' && smartScenarioMoneyUnit($raw)==='' && !preg_match('/\brp\b|rp\s*\d/iu',$raw)){
+        $raw.=$inheritUnit;
+    }
+    return function_exists('parseAmount')?parseAmount($raw):0;
+}
+
+function smartScenarioItemLabel(string $prefix,int $number): string {
+    $label=norm($prefix);
+    $label=preg_replace('/[^\pL\pN\s-]+/u',' ',$label);
+    $phrases=[
+        'kira kira dengan sisa uang saya','kira kira dengan sisa uang aku','dengan sisa uang saya','dengan sisa uang aku',
+        'dengan uang saya','dengan uang aku','uang saya cukup gak kalau','uang saya cukup ga kalau','uang saya cukup nggak kalau','uang aku cukup gak kalau','uang aku cukup ga kalau','uang aku cukup nggak kalau','kalau saya','kalau aku','jika saya','jika aku','misalnya saya','misalnya aku',
+        'setiap hari','tiap hari','per hari','sehari','harian','perhari','dalam sehari','saya beli','aku beli','saya bayar','aku bayar'
+    ];
+    foreach($phrases as $phrase)$label=str_replace($phrase,' ',$label);
+    $label=preg_replace('/\b(?:kira|kalau|jika|misal|misalnya|terus|lalu|kemudian|dan|serta|plus|ditambah|saya|aku|gue|gua|uang|duit|cukup|aman|gak|ga|nggak|ngga|enggak|ya|beli|bayar|pakai|gunakan|untuk|buat|biaya|budget|anggaran|pengeluaran|keluar|habis|sekitar|kurang lebih|rp)\b/u',' ',$label);
+    $label=trim(preg_replace('/\s+/u',' ',$label));
+    if($label==='')return 'Kebutuhan harian '.$number;
+    $parts=preg_split('/\s+/u',$label,-1,PREG_SPLIT_NO_EMPTY);
+    if(count($parts)>4)$parts=array_slice($parts,-4);
+    $label=implode(' ',$parts);
+    $pretty=function_exists('mb_convert_case')?mb_convert_case($label,MB_CASE_TITLE,'UTF-8'):ucwords($label);
+    $pretty=preg_replace('/\bBbm\b/u','BBM',$pretty);
+    return $pretty;
+}
+
+function smartPaydayScenarioItems(string $message): array {
+    $text=norm($message);
+    // Clauses keep nearby words (BBM, makan, kopi, parkir, etc.) attached to
+    // their money value, but avoid swallowing the entire sentence as a label.
+    $clauses=preg_split('/\s*(?:,|;|\+|\b(?:dan|serta|plus|ditambah)\b)\s*/u',$text,-1,PREG_SPLIT_NO_EMPTY);
+    $money='(?:rp\.?\s*)?\d+(?:[\.,]\d+)*(?:\s*(?:rb|ribu|k|jt|juta))?';
+    $range='/('.$money.')(?:\s*(?:-|–|—|hingga|sampai|s\/d|sd)\s*('.$money.'))?/iu';
+    $items=[];$number=1;
+    foreach($clauses as $clause){
+        if(!preg_match($range,$clause,$m,PREG_OFFSET_CAPTURE))continue;
+        $raw1=trim((string)$m[1][0]);$raw2=isset($m[2][0])?trim((string)$m[2][0]):'';
+        // At least one side must clearly look monetary. This excludes dates,
+        // quantities, plate numbers, and random plain integers.
+        $monetary=(bool)preg_match('/(?:\brp\.?\s*\d|\d\s*(?:rb|ribu|k|jt|juta)\b|\d{1,3}(?:[\.,]\d{3})+)/iu',$raw1.' '.$raw2);
+        if(!$monetary)continue;
+        $u1=smartScenarioMoneyUnit($raw1);$u2=smartScenarioMoneyUnit($raw2);
+        $low=smartScenarioMoneyValue($raw1,$u1!==''?$u1:$u2);
+        $high=$raw2!==''?smartScenarioMoneyValue($raw2,$u2!==''?$u2:$u1):$low;
+        if($low<=0||$high<=0)continue;
+        if($high<$low){$tmp=$low;$low=$high;$high=$tmp;}
+        $prefix=substr($clause,0,(int)$m[1][1]);
+        $label=smartScenarioItemLabel($prefix,$number++);
+        $items[]=['label'=>$label,'low'=>$low,'high'=>$high];
+    }
+    return $items;
+}
+
+function smartPaydayScenarioIntent(string $message): bool {
+    $t=norm($message);
+    if(!preg_match('/\b(?:gajian|gaji berikutnya|terima gaji|tanggal gaji)\b/u',$t))return false;
+    if(!preg_match('/\b(?:per hari|tiap hari|setiap hari|sehari|harian|perhari|\/hari)\b/u',$t))return false;
+    if(!preg_match('/\b(?:cukup|aman|bertahan|nyampe|sampai|kuat|bisa|gak|ga|nggak|tidak)\b|\?/u',$t))return false;
+    return count(smartPaydayScenarioItems($message))>0;
+}
+
+function smartMoneyRangeText(int $low,int $high): string {
+    return $low===$high?rupiah($low):rupiah($low).'–'.rupiah($high);
+}
+
+function smartPaydayScenarioReply(string $message): ?string {
+    if(!smartPaydayScenarioIntent($message))return null;
+    if(function_exists('authHasPremiumAccess')&&!authHasPremiumAccess(authCurrentUser())){
+        return '🔒 Simulasi pengeluaran sampai gajian tersedia untuk akun Premium. Buka menu Premium untuk melihat paket dan status akun.';
+    }
+    if(!function_exists('financePrediction'))return 'Simulasi sampai gajian belum tersedia. Pastikan modul Analitik sudah aktif.';
+    $items=smartPaydayScenarioItems($message);
+    if(!$items)return null;
+    $p=financePrediction();
+    $days=max(0,(int)($p['days_left']??0));
+    $date=(string)($p['payday_date']??'');
+    $dateLabel=$date!==''?date('d/m/Y',strtotime($date)):'tanggal gajian';
+    if($days<=0)return 'Hari ini sudah masuk tanggal gajian berdasarkan pengaturan aplikasi. Kalau tanggal gajianmu berbeda, ubah dulu di menu Analitik lalu coba simulasikan lagi.';
+
+    $dailyLow=0;$dailyHigh=0;
+    foreach($items as $item){$dailyLow+=(int)$item['low'];$dailyHigh+=(int)$item['high'];}
+    $dailyNeedLow=$dailyLow*$days;$dailyNeedHigh=$dailyHigh*$days;
+    $balance=max(0,(int)($p['current_balance']??0));
+    $bills=max(0,(int)($p['upcoming_bills_total']??0));
+    $recExpense=max(0,(int)($p['recurring_expense']??0));
+    $futureIncome=max(0,(int)($p['recurring_income']??0));
+    $fixed=$bills+$recExpense;
+    $needLow=$fixed+$dailyNeedLow;$needHigh=$fixed+$dailyNeedHigh;
+    $remainLow=$balance-$needLow;   // spending at the lower end
+    $remainHigh=$balance-$needHigh; // spending at the upper end
+    $maxDaily=(int)floor(max(0,$balance-$fixed)/$days);
+    $reserve=100000;
+    $safeDaily=(int)floor(max(0,$balance-$fixed-$reserve)/$days);
+
+    $lines=[];
+    if($remainHigh>=0){
+        $lines[]='Iya, dengan angka yang kamu kasih, uangmu masih cukup sampai gajian '.$dateLabel.'.';
+        if($remainHigh<$reserve)$lines[]='Tapi kalau pengeluaranmu sering berada di batas atas, sisanya cukup tipis, jadi sebaiknya tetap jaga ruang untuk kebutuhan mendadak.';
+    }elseif($remainLow>=0){
+        $lines[]='Bisa cukup, tapi posisinya mepet sampai gajian '.$dateLabel.'.';
+        $lines[]='Kalau pengeluaran harian mendekati batas bawah masih aman secara hitungan, tetapi kalau sering ke batas atas uangmu bisa kurang sebelum gajian.';
+    }else{
+        $lines[]='Kalau memakai skenario itu setiap hari, uangmu belum cukup sampai gajian '.$dateLabel.'.';
+        $lines[]='Bahkan pada skenario pengeluaran paling rendah, masih ada kekurangan yang perlu ditutup.';
+    }
+
+    $lines[]='';
+    $lines[]='Hitungannya begini:';
+    $lines[]='• Saldo tersedia sekarang: '.rupiah($balance);
+    $lines[]='• Waktu yang perlu dibiayai: '.$days.' hari sebelum gajian';
+    foreach($items as $item)$lines[]='• '.$item['label'].': '.smartMoneyRangeText((int)$item['low'],(int)$item['high']).'/hari';
+    $lines[]='• Total kebutuhan harian: '.smartMoneyRangeText($dailyLow,$dailyHigh).'/hari';
+    $lines[]='• Total kebutuhan harian sampai gajian: '.smartMoneyRangeText($dailyNeedLow,$dailyNeedHigh);
+    if($fixed>0){
+        $lines[]='• Tagihan + pengeluaran berulang sebelum gajian: '.rupiah($fixed).($bills>0?' (tagihan '.rupiah($bills):'').($bills>0&&$recExpense>0?' + berulang '.rupiah($recExpense):'').($bills>0?')':($recExpense>0?' (berulang '.rupiah($recExpense).')':''));
+    }
+    $lines[]='• Total kebutuhan skenario: '.smartMoneyRangeText($needLow,$needHigh);
+
+    if($remainLow>=0&&$remainHigh>=0){
+        $lines[]='• Perkiraan sisa saat gajian: '.smartMoneyRangeText($remainHigh,$remainLow).'.';
+    }elseif($remainLow>=0){
+        $lines[]='• Skenario hemat: masih sisa '.rupiah($remainLow).'.';
+        $lines[]='• Skenario batas atas: kurang '.rupiah(-$remainHigh).'.';
+    }else{
+        $lines[]='• Kekurangan minimal: '.rupiah(-$remainLow).($remainHigh<$remainLow?' hingga '.rupiah(-$remainHigh):'').'.';
+    }
+
+    $lines[]='';
+    if($maxDaily>0)$lines[]='Supaya pas sampai gajian setelah kewajiban yang sudah tercatat, batas matematis pengeluaranmu sekitar '.rupiah($maxDaily).'/hari.';
+    if($safeDaily>0&&$safeDaily<$maxDaily)$lines[]='Kalau mau menyisakan cadangan Rp100.000, lebih aman jaga pengeluaran sekitar '.rupiah($safeDaily).'/hari atau kurang.';
+    if($futureIncome>0)$lines[]='Ada pemasukan berulang '.rupiah($futureIncome).' yang dijadwalkan sebelum gajian, tetapi saya tidak memasukkannya sebagai uang yang sudah tersedia. Kalau benar-benar masuk, posisi kamu akan lebih longgar.';
+    $lines[]='Perhitungan ini memakai saldo tersedia (setelah dana disisihkan/saldo minimum), plus tagihan dan transaksi berulang yang sudah tercatat. Ini simulasi, jadi tidak membuat transaksi baru.';
+    return implode("\n",$lines);
 }
 
 /** Format the existing prediction without writing data or advancing recurring transactions. */
@@ -203,6 +403,8 @@ function smartPaydayReply(string $message): ?string {
 function smartFinanceReply(string $message): ?string {
     $t=norm($message);
     if (!smartIsQuestion($t)) return null;
+    $scenarioReply=smartPaydayScenarioReply($message);
+    if($scenarioReply!==null)return $scenarioReply;
     $paydayReply=smartPaydayReply($t);
     if($paydayReply!==null)return $paydayReply;
     if (preg_match('/\b(?:batas|limit|budget|anggaran harian)\b/u',$t)) return null;
@@ -233,20 +435,27 @@ function smartFinanceReply(string $message): ?string {
         if(!containsText($t,'bulan ini')||!preg_match('/\bbulan (?:lalu|kemarin)\b/u',$t)||preg_match('/\b(?:tahun|minggu|tanggal|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/u',$t))return 'Untuk perbandingan, coba “bandingkan pengeluaran bulan ini dengan bulan lalu”.';
         $now=new DateTimeImmutable('today');$prev=$now->modify('first day of last month');
         $end=$prev->setDate((int)$prev->format('Y'),(int)$prev->format('n'),min((int)$now->format('j'),(int)$prev->format('t')));
-        $type=$income&&!$expense?'income':'expense';$category=smartQueryCategory($t,$type);
-        $current=array_sum(array_column(smartQueryRows($type,$category,$now->format('Y-m-01'),$now->format('Y-m-d'),$wid),'amount'));
-        $previous=array_sum(array_column(smartQueryRows($type,$category,$prev->format('Y-m-d'),$end->format('Y-m-d'),$wid),'amount'));
+        $type=$income&&!$expense?'income':'expense';$excluded=smartExcludedCategories($t,$type);$category=smartQueryCategory($t,$type);
+        if($category&&in_array($category,$excluded,true))$category=null;
+        $currentRows=smartFilterExcludedCategories(smartQueryRows($type,$category,$now->format('Y-m-01'),$now->format('Y-m-d'),$wid),$excluded);
+        $previousRows=smartFilterExcludedCategories(smartQueryRows($type,$category,$prev->format('Y-m-d'),$end->format('Y-m-d'),$wid),$excluded);
+        $current=array_sum(array_column($currentRows,'amount'));
+        $previous=array_sum(array_column($previousRows,'amount'));
         $diff=$current-$previous;$label=$type==='income'?'Pemasukan':'Pengeluaran';
         $change=$diff===0?'Tidak berubah.':($diff>0?'Naik ':'Turun ').rupiah(abs($diff)).($previous>0?' ('.number_format(abs($diff)/$previous*100,1,',','.').'%)':'').'.';
         return $label.($category?' '.$category:'').$walletLabel.":\nBulan ini (1–".$now->format('j/m/Y').'): '.rupiah($current)."\nBulan lalu (1–".$end->format('j/m/Y').'): '.rupiah($previous)."\n".$change.($previous===0?" Persentase perubahan tidak dihitung karena nilai bulan lalu Rp0.":'');
     }
     $type=$income&&!$expense?'income':'expense';
     if(!$expense&&!$income&&!$overview&&!preg_match('/\b(?:transaksi|kategori)\b/u',$t))return 'Saya bisa menjawab dari catatanmu. Coba “berapa uang saya?”, “pengeluaran terbesar bulan ini”, atau “ringkasan keuangan bulan ini”.';
+    $excluded=$overview?[]:smartExcludedCategories($t,$type);
     $category=$overview?null:smartQueryCategory($t,$type);
+    if($category&&in_array($category,$excluded,true))$category=null;
     $allTypes=$overview||(!$expense&&!$income&&containsText($t,'transaksi'));
     $rows=smartQueryRows($allTypes?null:$type,$category,$from,$to,$wid);
+    $rows=smartFilterExcludedCategories($rows,$excluded);
     $label=$allTypes?'transaksi':($type==='income'?'pemasukan':'pengeluaran');
-    $context=$label.($category?' '.$category:'').$walletLabel.' '.$period;
+    $excludeText=$excluded?' selain '.implode(' dan ',$excluded):'';
+    $context=$label.($category?' '.$category:'').$excludeText.$walletLabel.' '.$period;
     if (!$rows) return 'Belum ada catatan '.$context.'.';
     // Avoid silently ignoring unsupported numeric filters or multiple independent periods.
     if(preg_match('/\b(?:di atas|di bawah|lebih dari|kurang dari|minimal|maksimal)\b/u',$t))return 'Filter nominal belum didukung lewat chat. Gunakan filter di menu Transaksi, atau tanyakan “pengeluaran terbesar bulan ini”.';
@@ -266,7 +475,7 @@ function smartFinanceReply(string $message): ?string {
             $end=min($to,date('Y-m-d'));
             if($from>$end)return 'Periode tersebut belum dimulai.';
             $days=(new DateTimeImmutable($from))->diff(new DateTimeImmutable($end))->days+1;
-            $elapsed=smartQueryRows($type,$category,$from,$end,$wid);$amount=(int)array_sum(array_column($elapsed,'amount'));
+            $elapsed=smartFilterExcludedCategories(smartQueryRows($type,$category,$from,$end,$wid),$excluded);$amount=(int)array_sum(array_column($elapsed,'amount'));
             return 'Rata-rata '.$context.': '.rupiah(round($amount/$days)).' per hari. Total '.rupiah($amount).' dibagi '.$days.' hari kalender (termasuk hari tanpa transaksi), sampai '.date('d/m/Y',strtotime($end)).'.';
         }
         return 'Rata-rata '.$context.': '.rupiah(round($total/count($rows))).' per transaksi, dari '.count($rows).' transaksi dengan total '.rupiah($total).'.';

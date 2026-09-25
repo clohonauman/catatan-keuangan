@@ -26,18 +26,41 @@ function financeConfirmationReply(array $pending): string {
             $lines[]=$prefix.$label.' · Nominal '.rupiah((int)($t['amount']??0)).' · '.(string)($t['category']??'Lainnya').' · '.$date.' · '.($wallet['name']??'Utama').($kind!==''?' · '.$kind:'').'.';
             if($type==='expense'&&!empty($t['bill_candidates'][0])) $lines[]='   Kemungkinan terkait tagihan: '.(string)$t['bill_candidates'][0]['name'].' ('.rupiah((int)$t['bill_candidates'][0]['amount']).').';
         }
+        $adaptive=(array)($t['adaptive_meta']??[]);
+        if(!empty($adaptive['applied'])){
+            $pct=(int)round(max(0,min(1,(float)($adaptive['confidence']??0)))*100);
+            $lines[]='   🧠 Disesuaikan dari pola transaksi pribadi'.($pct>0?' · keyakinan '.$pct.'%':'').'.';
+        }
     }
     if(!empty($pending['warning']))$lines[]='⚠️ '.$pending['warning'];
     $lines[]='Jenis transaksi, nominal, dan dompet masih bisa diubah pada kartu konfirmasi sebelum disimpan.';
     return implode("\n",$lines);
 }
+function financeAdaptiveLearningAck(): string {
+    if(!function_exists('adaptiveLearningLastResult')) return '';
+    $r=adaptiveLearningLastResult();
+    $corrected=(int)($r['corrected']??0);
+    if($corrected<=0) return '';
+    $fields=array_values(array_filter(array_map('strval',(array)($r['fields']??[]))));
+    $labels=['type'=>'jenis transaksi','category'=>'kategori','wallet_id'=>'dompet','from_wallet_id'=>'dompet asal','to_wallet_id'=>'dompet tujuan','spending_kind'=>'pola pengeluaran'];
+    $names=[];foreach($fields as $f)if(isset($labels[$f]))$names[]=$labels[$f];
+    $detail=$names?' ('.implode(', ',array_values(array_unique($names))).')':'';
+    return "
+
+🧠 Koreksi ini sudah saya pelajari".$detail.'. Pola serupa berikutnya akan diprioritaskan mengikuti koreksi ini.';
+}
+
 function financeResponse($reply,$saved=[],$receipt=[],$extra=[]){
     return array_merge([
         'ok'=>true,'reply'=>$reply,'transactions'=>$saved,'summary'=>summary(),
         'receipt'=>array_merge(['used'=>false,'amount'=>0,'score'=>0,'line'=>''],$receipt),
         'daily_budget'=>dailyBudgetStatus(),
         'pending_confirmation'=>financePendingChatConfirmation(),
-        'learning'=>authIsSuperAdmin(authCurrentUser()) ? ['pending'=>learningPending(),'can_manage'=>true] : ['pending'=>null,'can_manage'=>false]
+        'learning'=>[
+            'pending'=>authIsSuperAdmin(authCurrentUser()) ? learningPending() : null,
+            'can_manage'=>authIsSuperAdmin(authCurrentUser()),
+            'adaptive'=>adaptiveLearningStatus()
+        ]
     ],$extra);
 }
 
@@ -62,7 +85,7 @@ try {
         $overrides=$input['overrides']??[];if(is_string($overrides)){$decoded=json_decode($overrides,true);$overrides=is_array($decoded)?$decoded:[];}if(!is_array($overrides))$overrides=[];
         addChat('user','Simpan transaksi');
         $saved=financeConfirmPendingChat($id,$overrides);
-        $reply=nativeReply((string)($pending['message']??'konfirmasi transaksi'),$saved);addChat('assistant',$reply);
+        $reply=nativeReply((string)($pending['message']??'konfirmasi transaksi'),$saved).financeAdaptiveLearningAck();addChat('assistant',$reply);
         $response=financeResponse($reply,$saved);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
     }
 
@@ -90,7 +113,7 @@ try {
         }
     }
     if(!$attachment && $pendingBefore && preg_match('/^(?:ya|iya|iyo|ok|oke|simpan|catat|lanjut|konfirmasi)(?:\s+transaksi)?[.!]?$/u',norm($message))){
-        $saved=financeConfirmPendingChat((int)$pendingBefore['id']);$reply=nativeReply((string)($pendingBefore['message']??'konfirmasi transaksi'),$saved);addChat('assistant',$reply);
+        $saved=financeConfirmPendingChat((int)$pendingBefore['id']);$reply=nativeReply((string)($pendingBefore['message']??'konfirmasi transaksi'),$saved).financeAdaptiveLearningAck();addChat('assistant',$reply);
         $response=financeResponse($reply,$saved,[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
     }
     if(!$attachment && $pendingBefore && preg_match('/^(?:batal|batalkan|jangan|tidak jadi|gak jadi|nda jadi|nyanda jadi)[.!]?$/u',norm($message))){

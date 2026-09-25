@@ -250,7 +250,24 @@ const DAILY_BUDGET_MINIMIZED_KEY = "finance_daily_budget_minimized";
 const DAILY_BUDGET_DISMISSED_KEY = "finance_daily_budget_dismissed";
 
 function balanceIsHidden() { return localStorage.getItem(BALANCE_VISIBILITY_KEY) === "1"; }
+function totalAvailableFromWallets() {
+  const wallets = ((state.features || {}).wallets || []).filter(w => !w.archived);
+  if (!wallets.length) return null;
+  return wallets.reduce((sum, w) => {
+    const gross = Number(w.balance || 0);
+    const reserved = Math.max(0, Number(w.reserved_balance || 0));
+    const minimum = Math.max(0, Number(w.minimum_balance || 0));
+    const available = Number.isFinite(Number(w.available_balance))
+      ? Math.max(0, Number(w.available_balance))
+      : Math.max(0, gross - reserved - minimum);
+    return sum + available;
+  }, 0);
+}
 function summaryDisplayValue(key) {
+  if (key === "balance") {
+    const walletTotal = totalAvailableFromWallets();
+    if (walletTotal !== null) return walletTotal;
+  }
   if ((key === "income" || key === "expense") && state.period_summary && Number.isFinite(Number(state.period_summary[key]))) {
     return Number(state.period_summary[key] || 0);
   }
@@ -303,7 +320,8 @@ function renderWalletBalanceDetails() {
   if (!modal || !list || !total) return;
 
   const wallets = ((state.features || {}).wallets || []).filter((w) => !w.archived);
-  total.textContent = rupiah(state.summary?.balance || 0);
+  const walletTotal = totalAvailableFromWallets();
+  total.textContent = rupiah(walletTotal !== null ? walletTotal : (state.summary?.balance || 0));
 
   if (!wallets.length) {
     list.innerHTML = '<div class="empty">Belum ada dompet atau rekening.</div>';
@@ -315,7 +333,7 @@ function renderWalletBalanceDetails() {
       <div class="wallet-balance-icon">${walletBalanceIcon(w.type)}</div>
       <div class="wallet-balance-name">
         <b>${esc(w.name || "Dompet")}</b>
-        <small>${esc(w.type === "bank" ? "Bank" : w.type === "ewallet" ? "E-Wallet" : w.type === "savings" ? "Tabungan" : "Cash")} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}</small>
+        <small>${esc(w.type === "bank" ? "Bank" : w.type === "ewallet" ? "E-Wallet" : w.type === "savings" ? "Tabungan" : "Cash")} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}${Number(w.minimum_balance||0)>0 && Number(w.balance||0)<Number(w.minimum_balance||0)?` · di bawah minimum`:""}</small>
       </div>
       <strong>${rupiah(w.available_balance ?? w.balance ?? 0)}</strong>
     </div>
@@ -3243,10 +3261,11 @@ function renderFeatureSelectOptions() {
   const bills = f.bills || [];
   fillSelect("txFilterWallet", wallets, x => x.id, x => `${x.name} (${rupiah(x.available_balance ?? x.balance ?? 0)} tersedia)`, { value: "0", label: "Semua dompet" });
   fillSelect("txFilterCategory", categories, x => x.name, x => `${x.icon || ""} ${x.name}`.trim(), { value: "", label: "Semua kategori" });
-  ["transferFrom","transferTo","billWallet","recurringWallet","editTxWallet","editTxFromWallet","editTxToWallet"].forEach(id => fillSelect(id, wallets, x => x.id, x => `${x.name} · tersedia ${rupiah(x.available_balance ?? x.balance ?? 0)}`));
+  ["transferFrom","transferTo","billWallet","recurringWallet","editTxWallet","editTxFromWallet","editTxToWallet","createTxWallet","createTxFromWallet","createTxToWallet"].forEach(id => fillSelect(id, wallets, x => x.id, x => `${x.name} · tersedia ${rupiah(x.available_balance ?? x.balance ?? 0)}`));
   fillSelect("monthlyBudgetCategory", categories.filter(x => x.type === "expense" || x.type === "both"), x => x.id, x => `${x.icon || ""} ${x.name}`.trim());
   ["billCategory","recurringCategory","editTxCategory"].forEach(id => fillSelect(id, categories, x => x.name, x => `${x.icon || ""} ${x.name}`.trim()));
   fillSelect("editTxBill", bills, x => x.id, x => `${x.name} · ${rupiah(x.amount)}${x.paid ? " · lunas" : ""}`, {value:"0",label:"Tidak dihubungkan"});
+  fillSelect("createTxBill", bills, x => x.id, x => `${x.name} · ${rupiah(x.amount)}${x.paid ? " · lunas" : ""}`, {value:"0",label:"Tidak dihubungkan"});
   const currentMonth = new Date().toISOString().slice(0,7);
   if (el("monthlyBudgetMonth") && !el("monthlyBudgetMonth").value) el("monthlyBudgetMonth").value = currentMonth;
   if (el("recurringNextRun") && !el("recurringNextRun").value) el("recurringNextRun").value = new Date().toISOString().slice(0,10);
@@ -3292,6 +3311,7 @@ function updateFinanceCenterHeading(tab = "") {
     "admin-broadcast": ["Broadcast Email", "Kirim pengumuman dan informasi penting ke pengguna terverifikasi."],
     "admin-notifications": ["Notifikasi Admin", "Pantau invoice Premium baru dan bukti pembayaran pengguna."],
     "admin-payments": ["Pembayaran Premium", "Verifikasi invoice dan bukti pembayaran pengguna."],
+    "admin-plans": ["Paket Langganan", "Atur harga, nama, durasi, dan deskripsi paket Premium."],
     "admin-coupons": ["Kupon Premium", "Kelola kode diskon, nilai potongan, dan masa berlaku kupon."],
     "admin-banks": ["Rekening Pembayaran", "Kelola rekening tujuan pembayaran Premium."],
     "admin-users": ["Akun Pengguna", "Kelola paket dan akses pengguna secara manual."],
@@ -3430,6 +3450,150 @@ async function emailNotificationOnce(key,title,body){const n=featureState()?.not
 function notifyOnce(key,title,body){const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
 function checkFinanceNotifications(){const f=featureState(),n=f.notifications||{};if(!n.enabled)return;const b=state.daily_budget||{};if(n.daily_budget&&["warning","reached","exceeded"].includes(b.status))notifyOnce("budget_"+b.status,"Peringatan batas harian",b.message||"Pengeluaran mendekati batas.");if(n.bills){(f.bills||[]).filter(x=>["due_soon","overdue"].includes(x.status)).forEach(x=>notifyOnce("bill_"+x.id,"Tagihan "+x.name,x.status==="overdue"?"Tagihan sudah melewati jatuh tempo.":"Jatuh tempo "+formatBillDate(x.due_date)+" · "+rupiah(x.amount)));}if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0));}
 
+// Tambah transaksi manual
+const txCreateModal=el("transactionCreateModal");
+
+function localTodayValue() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fillCreateTxCategories() {
+  const select = el("createTxCategory");
+  if (!select) return;
+  const type = el("createTxType")?.value || "expense";
+  const categories = (featureState()?.categories || []).filter(c => {
+    const catType = String(c.type || "both").toLowerCase();
+    return catType === "both" || catType === type;
+  });
+  const prev = select.value;
+  select.innerHTML = categories.map(c => optionHtml(c.name, `${c.icon || ""} ${c.name}`.trim())).join("");
+  if ([...select.options].some(o => o.value === prev)) select.value = prev;
+  else if ([...select.options].some(o => o.value === "Lainnya")) select.value = "Lainnya";
+}
+
+function syncCreateTxType() {
+  const type = el("createTxType")?.value || "expense";
+  const transfer = type === "transfer";
+  const expense = type === "expense";
+
+  document.querySelectorAll(".create-transfer-field").forEach(x => x.hidden = !transfer);
+  document.querySelectorAll(".create-standard-field").forEach(x => x.hidden = transfer);
+  document.querySelectorAll(".create-expense-field").forEach(x => x.hidden = !expense);
+
+  if (!transfer) fillCreateTxCategories();
+
+  const hint = el("createTxHint");
+  if (hint) {
+    hint.textContent = transfer
+      ? "Transfer memindahkan saldo antar dompet dan tidak mengubah total saldo keseluruhan."
+      : expense
+        ? "Pengeluaran akan mengurangi saldo tersedia pada dompet yang dipilih."
+        : "Pemasukan akan menambah saldo pada dompet yang dipilih.";
+  }
+}
+
+function resetCreateTransactionForm() {
+  if (el("createTxType")) el("createTxType").value = "expense";
+  if (el("createTxAmount")) el("createTxAmount").value = "";
+  if (el("createTxDate")) el("createTxDate").value = localTodayValue();
+  if (el("createTxNote")) el("createTxNote").value = "";
+  if (el("createTxSpendingKind")) el("createTxSpendingKind").value = "once";
+  if (el("createTxBill")) el("createTxBill").value = "0";
+
+  renderFeatureSelectOptions();
+  fillCreateTxCategories();
+
+  const wallets = featureState()?.wallets || [];
+  const defaultWallet = wallets.find(w => w.is_default) || wallets[0];
+  if (defaultWallet && el("createTxWallet")) el("createTxWallet").value = String(defaultWallet.id);
+  if (defaultWallet && el("createTxFromWallet")) el("createTxFromWallet").value = String(defaultWallet.id);
+  if (wallets.length > 1 && el("createTxToWallet")) {
+    const other = wallets.find(w => Number(w.id) !== Number(defaultWallet?.id));
+    if (other) el("createTxToWallet").value = String(other.id);
+  }
+
+  syncCreateTxType();
+}
+
+el("addTransactionBtn")?.addEventListener("click", async () => {
+  try {
+    if (!state.features?.wallets?.length) await refreshFeatures();
+    resetCreateTransactionForm();
+    if (!txCreateModal?.open) txCreateModal?.showModal();
+    setTimeout(() => el("createTxAmount")?.focus(), 80);
+  } catch (e) {
+    alert(e.message || "Form transaksi tidak dapat dibuka.");
+  }
+});
+
+el("createTxType")?.addEventListener("change", syncCreateTxType);
+el("closeTransactionCreate")?.addEventListener("click", () => txCreateModal?.close());
+el("cancelTransactionCreate")?.addEventListener("click", () => txCreateModal?.close());
+
+el("saveTransactionCreate")?.addEventListener("click", async () => {
+  const saveBtn = el("saveTransactionCreate");
+  const type = el("createTxType")?.value || "expense";
+  const amount = Number(el("createTxAmount")?.value || 0);
+  const transactionDate = el("createTxDate")?.value || "";
+
+  if (amount <= 0) return alert("Nominal harus lebih dari nol.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) return alert("Tanggal transaksi belum valid.");
+
+  const payload = {
+    action: "transaction_create",
+    type,
+    amount,
+    transaction_date: transactionDate,
+    note: el("createTxNote")?.value.trim() || ""
+  };
+
+  if (type === "transfer") {
+    payload.from_wallet_id = Number(el("createTxFromWallet")?.value || 0);
+    payload.to_wallet_id = Number(el("createTxToWallet")?.value || 0);
+    if (!payload.from_wallet_id || !payload.to_wallet_id) return alert("Pilih dompet asal dan tujuan.");
+    if (payload.from_wallet_id === payload.to_wallet_id) return alert("Dompet asal dan tujuan harus berbeda.");
+  } else {
+    payload.wallet_id = Number(el("createTxWallet")?.value || 0);
+    payload.category = el("createTxCategory")?.value || "Lainnya";
+    if (!payload.wallet_id) return alert("Pilih dompet transaksi.");
+
+    if (type === "expense") {
+      payload.spending_kind = el("createTxSpendingKind")?.value || "once";
+      payload.bill_id = Number(el("createTxBill")?.value || 0);
+    }
+  }
+
+  const oldText = saveBtn?.textContent || "Simpan Transaksi";
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Menyimpan...";
+  }
+
+  try {
+    await featureAction(payload);
+    txCreateModal?.close();
+    await load();
+    showFeatureToast(
+      type === "transfer"
+        ? "Transfer berhasil dicatat"
+        : type === "income"
+          ? "Pemasukan berhasil ditambahkan"
+          : "Pengeluaran berhasil ditambahkan"
+    );
+  } catch (e) {
+    alert(e.message || "Transaksi gagal ditambahkan.");
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = oldText;
+    }
+  }
+});
+
 // Edit transaksi
 const txEditModal=el("transactionEditModal");
 function syncEditTxType(){const transfer=el("editTxType")?.value==="transfer";document.querySelectorAll(".edit-transfer-field").forEach(x=>x.hidden=!transfer);document.querySelectorAll(".edit-standard-field").forEach(x=>x.hidden=transfer);}
@@ -3542,7 +3706,7 @@ el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())r
 // PWA install
 let deferredInstallPrompt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;el("installPwaBtn")?.classList.add("ready");});
 el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;}else alert("Jika tombol install tidak tersedia, gunakan menu browser → Tambahkan ke layar utama / Install app.");});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=53",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=58",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
 
 // Admin
 async function adminPost(payload) {
@@ -3664,6 +3828,64 @@ if (window.FINANCE_APP?.isSuperAdmin) {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshAdminNotifications(false); });
 }
 
+
+function adminPlanEditorHtml(plan = {}) {
+  const key = String(plan.key || "");
+  const permanent = !!plan.permanent;
+  const months = Number(plan.months || 0);
+  const amount = Number(plan.amount || 0);
+  const monthlyEquivalent = Number(plan.monthly_equivalent || 0);
+  const durationText = permanent ? "Permanen" : `${months} bulan`;
+  return `<div class="admin-plan-row" data-admin-plan-row="${esc(key)}" data-plan-original-amount="${amount}">
+    <div class="admin-plan-head">
+      <div><span class="admin-plan-key">${esc(key)}</span><b>${esc(plan.label || key)}</b><small>${esc(durationText)}</small></div>
+      <strong>${rupiah(amount)}</strong>
+    </div>
+    <div class="admin-plan-fields">
+      <label>Kode Paket<input data-plan-key value="${esc(key)}" readonly aria-readonly="true"></label>
+      <label>Nama Paket<input data-plan-label maxlength="80" value="${esc(plan.label || "")}" placeholder="Contoh: Bulanan"></label>
+      <label>Harga (Rp)<input data-plan-amount type="number" min="1" max="2000000000" step="1000" inputmode="numeric" value="${amount}"></label>
+      <label>Ekuivalen / Bulan<input data-plan-monthly type="number" min="0" max="2000000000" step="1000" inputmode="numeric" value="${monthlyEquivalent}"></label>
+      <label>Durasi Bulan<input data-plan-months type="number" min="1" max="1200" value="${permanent ? 0 : Math.max(1, months)}" ${permanent ? "disabled" : ""}></label>
+      <label class="admin-plan-permanent"><input data-plan-permanent type="checkbox" ${permanent ? "checked" : ""}> Paket permanen</label>
+      <label class="admin-plan-description">Deskripsi<input data-plan-description maxlength="255" value="${esc(plan.description || "")}" placeholder="Teks yang tampil pada halaman pembelian"></label>
+    </div>
+    <div class="row-actions"><button type="button" data-plan-save="${esc(key)}">Simpan Perubahan</button></div>
+  </div>`;
+}
+function bindAdminPlanRows(container) {
+  container?.querySelectorAll("[data-admin-plan-row]").forEach(row => {
+    const permanent = row.querySelector("[data-plan-permanent]");
+    const months = row.querySelector("[data-plan-months]");
+    if (permanent && months) permanent.addEventListener("change", () => {
+      months.disabled = permanent.checked;
+      if (permanent.checked) months.value = "0";
+      else if (Number(months.value || 0) < 1) months.value = "1";
+    });
+  });
+  container?.querySelectorAll("[data-plan-save]").forEach(btn => btn.onclick = async () => {
+    const row = btn.closest("[data-admin-plan-row]");
+    const key = String(btn.dataset.planSave || "");
+    const plan = {
+      key,
+      label:row.querySelector("[data-plan-label]")?.value.trim() || "",
+      amount:Number(row.querySelector("[data-plan-amount]")?.value || 0),
+      monthly_equivalent:Number(row.querySelector("[data-plan-monthly]")?.value || 0),
+      months:Number(row.querySelector("[data-plan-months]")?.value || 0),
+      permanent:!!row.querySelector("[data-plan-permanent]")?.checked,
+      description:row.querySelector("[data-plan-description]")?.value.trim() || "",
+    };
+    const oldAmount = Number(row.dataset.planOriginalAmount || 0);
+    const priceText = oldAmount !== plan.amount ? ` Harga berubah dari ${rupiah(oldAmount)} menjadi ${rupiah(plan.amount)}.` : "";
+    if (!confirm(`Simpan perubahan paket ${plan.label || key}?${priceText} Perubahan hanya berlaku untuk invoice baru.`)) return;
+    try {
+      await adminPost({action:"plan_save",plan});
+      showFeatureToast("Paket langganan diperbarui");
+      await loadAdminPanel();
+    } catch(e) { alert(e.message); }
+  });
+}
+
 function adminBankEditorHtml(bank = {}, isNew = false) {
   const id = String(bank.id || "");
   return `<div class="admin-bank-row" data-admin-bank-row="${esc(id || "new")}">
@@ -3767,6 +3989,9 @@ async function loadAdminPanel(){
       payBox.querySelectorAll("[data-order-approve]").forEach(b=>b.onclick=async()=>{if(!confirm("Verifikasi pembayaran ini dan aktifkan Premium sesuai paket yang dibeli?"))return;try{await adminPost({action:"subscription_approve",order_id:Number(b.dataset.orderApprove)});showFeatureToast("Pembayaran disetujui & Premium diaktifkan");loadAdminPanel();}catch(e){alert(e.message)}});
       payBox.querySelectorAll("[data-order-reject]").forEach(b=>b.onclick=async()=>{const reason=prompt("Alasan penolakan (opsional):","Bukti bayar tidak valid.");if(reason===null)return;try{await adminPost({action:"subscription_reject",order_id:Number(b.dataset.orderReject),reason});showFeatureToast("Pembelian ditolak");loadAdminPanel();}catch(e){alert(e.message)}});
     }
+
+    const planBox=el("adminPlanList");
+    if(planBox){planBox.innerHTML=(subs.plans||[]).map(p=>adminPlanEditorHtml(p)).join("")||'<div class="empty">Belum ada paket langganan.</div>';bindAdminPlanRows(planBox);}
 
     const couponBox=el("adminCouponList");
     if(couponBox){couponBox.innerHTML=(subs.coupons||[]).map(c=>adminCouponEditorHtml(c,false)).join("")||'<div class="empty">Belum ada kupon Premium.</div>';bindAdminCouponRows(couponBox);}

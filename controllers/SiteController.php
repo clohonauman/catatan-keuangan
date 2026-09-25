@@ -40,6 +40,20 @@ class SiteController extends Controller
                 }
                 if ($action === 'set_pin') { $user=authCurrentUser();if(!$user)throw new \RuntimeException('Sesi login tidak ditemukan.');if(Yii::$app->request->post('pin','')!==Yii::$app->request->post('pin_confirm',''))throw new \RuntimeException('Konfirmasi PIN tidak sama.');authSetPin($user['id'],Yii::$app->request->post('pin',''));return $this->redirect(['site/index']); }
                 if ($action === 'unlock') { $user=authCurrentUser();if(!$user)throw new \RuntimeException('Perangkat tidak dikenali. Silakan login ulang.');authVerifyPin($user['id'],Yii::$app->request->post('pin',''));return $this->redirect(['site/index']); }
+                if ($action === 'native_biometric_unlock') {
+                    $user=authCurrentUser();
+                    if(!$user)throw new \RuntimeException('Perangkat tidak dikenali. Silakan login ulang.');
+                    if(empty($user['pin_hash']))return $this->redirect(['site/index']);
+                    $ua=(string)Yii::$app->request->userAgent;
+                    if(!preg_match('/CatatanKeuangan(?:Android|IOS)\/[0-9.]+/i',$ua))throw new \RuntimeException('Buka kunci biometrik hanya tersedia di aplikasi resmi.');
+                    $nonce=(string)Yii::$app->request->post('biometric_nonce','');
+                    $expected=(string)($_SESSION['native_biometric_unlock_nonce']??'');
+                    $issuedAt=(int)($_SESSION['native_biometric_unlock_issued_at']??0);
+                    unset($_SESSION['native_biometric_unlock_nonce'],$_SESSION['native_biometric_unlock_issued_at']);
+                    if($nonce===''||$expected===''||!hash_equals($expected,$nonce)||$issuedAt<=0||(time()-$issuedAt)>90)throw new \RuntimeException('Permintaan biometrik kedaluwarsa. Silakan buka aplikasi kembali.');
+                    authUnlockAfterNativeBiometricGate((int)$user['id']);
+                    return $this->redirect(['site/index']);
+                }
                 if (in_array($action,['change_password','change_pin'],true)) {
                     $user=authCurrentUser();if(!$user||empty($_SESSION['pin_verified']))throw new \RuntimeException('Buka kunci akun terlebih dahulu.');$uid=(int)$user['id'];
                     if($action==='change_password'){if(Yii::$app->request->post('new_password','')!==Yii::$app->request->post('new_password_confirm',''))throw new \RuntimeException('Konfirmasi password baru tidak sama.');authChangePassword($uid,Yii::$app->request->post('current_password',''),Yii::$app->request->post('new_password',''));$_SESSION['flash_notice']='Password berhasil diubah. Anda tetap login di perangkat ini; perangkat terpercaya lain harus login kembali.';}
@@ -63,13 +77,26 @@ class SiteController extends Controller
             } catch (\Throwable $e) { $error=$e->getMessage(); }
         }
 
-        if (Yii::$app->request->isGet && Yii::$app->request->get('app_lock')==='1') { $lockUser=authCurrentUser();if($lockUser&&!empty($lockUser['pin_hash']))$_SESSION['pin_verified']=false; }
+        $forcePinFallback=Yii::$app->request->isGet && Yii::$app->request->get('app_lock')==='1';
+        if ($forcePinFallback) {
+            $lockUser=authCurrentUser();
+            if($lockUser&&!empty($lockUser['pin_hash']))$_SESSION['pin_verified']=false;
+            unset($_SESSION['native_biometric_unlock_nonce'],$_SESSION['native_biometric_unlock_issued_at']);
+        }
         $user=authCurrentUser();$unlocked=$user&&!empty($_SESSION['pin_verified']);
+        $nativeBiometricUnlockNonce='';
+        $nativeBiometricAutoUnlockAllowed=false;
+        if($user&&!$unlocked&&!empty($user['pin_hash'])&&!$forcePinFallback){
+            $nativeBiometricUnlockNonce=bin2hex(random_bytes(24));
+            $_SESSION['native_biometric_unlock_nonce']=$nativeBiometricUnlockNonce;
+            $_SESSION['native_biometric_unlock_issued_at']=time();
+            $nativeBiometricAutoUnlockAllowed=true;
+        }
         $emailStatus=$user?authEmailStatus($user):['email'=>'','has_email'=>false,'verified'=>false,'verified_at'=>'','masked'=>''];
         $loginDevices=$user?authListDevices((int)$user['id']):[];
         $emailSecurityRequested=Yii::$app->request->get('email_security')!==null || (Yii::$app->request->isPost && in_array(Yii::$app->request->post('action',''),['save_email','resend_email_verification','verify_email','change_password','change_pin','revoke_device','revoke_other_devices'],true));
         $assetVersion=max(@filemtime(Yii::getAlias('@webroot/assets/style.css'))?:1,@filemtime(Yii::getAlias('@webroot/assets/app.js'))?:1,@filemtime(Yii::getAlias('@webroot/assets/offline-store.js'))?:1);
-        return $this->render('index',compact('error','notice','mode','user','unlocked','emailStatus','loginDevices','emailSecurityRequested','assetVersion'));
+        return $this->render('index',compact('error','notice','mode','user','unlocked','emailStatus','loginDevices','emailSecurityRequested','assetVersion','nativeBiometricUnlockNonce','nativeBiometricAutoUnlockAllowed','forcePinFallback'));
     }
 
     public function actionError(){ $e=Yii::$app->errorHandler->exception; return $this->asJson(['ok'=>false,'error'=>YII_DEBUG?$e->getMessage():'Terjadi kesalahan pada server.']); }

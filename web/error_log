@@ -200,3 +200,81 @@ Stack trace:
 #2 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
 #3 /home/catk5343/public_html/web/delete-account.php(3): require('/home/catk5343/...')
 #4 {main}
+[23-Sep-2026 13:54:05 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/report.php:37) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[23-Sep-2026 13:54:05 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
+#3 {main}
+[23-Sep-2026 13:54:17 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/report.php:37) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[23-Sep-2026 13:54:17 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
+#3 {main}
+[23-Sep-2026 13:55:25 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/report.php:37) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[23-Sep-2026 13:55:25 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
+#3 {main}
+[23-Sep-2026 13:59:37 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/report.php:37) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[23-Sep-2026 13:59:37 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
+#3 {main}
+[25-Sep-2026 14:03:42 Asia/Makassar] [CatatanKeuangan] Legacy endpoint realtime gagal: Error: Call to undefined function authRequireUnlocked() in /home/catk5343/public_html/legacy/ajax/realtime.php:3
+Stack trace:
+#0 /home/catk5343/public_html/controllers/LegacyApiController.php(133): require()
+#1 /home/catk5343/public_html/controllers/LegacyApiController.php(134): app\controllers\LegacyApiController::app\controllers\{closure}()
+#2 /home/catk5343/public_html/controllers/LegacyApiController.php(280): app\controllers\LegacyApiController::includeLegacyIsolated()
+#3 /home/catk5343/public_html/controllers/LegacyApiController.php(362): app\controllers\LegacyApiController->runLegacy()
+#4 [internal function]: app\controllers\LegacyApiController->actionBridge()
+#5 /home/catk5343/public_html/vendor/yiisoft/yii2/base/InlineAction.php(60): call_user_func_array()
+#6 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Controller.php(182): yii\base\InlineAction->runWithParams()
+#7 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Module.php(547): yii\base\Controller->runAction()
+#8 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Application.php(105): yii\base\Module->runAction()
+#9 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(382): yii\web\Application->handleRequest()
+#10 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
+#11 {main}

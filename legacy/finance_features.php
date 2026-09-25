@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/db.php';
+require_once __DIR__.'/adaptive_learning_helper.php';
 
 /**
  * Fitur keuangan lanjutan tetap memakai file JSON per user.
@@ -676,7 +677,84 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
         if($billId>0)$tx=financeLinkTransactionToBill((int)$tx['id'],$billId);
         $saved[]=$tx;
     }
+    // Pembelajaran adaptif bersifat best-effort. Transaksi yang sudah tersimpan
+    // tidak boleh dianggap gagal hanya karena modul learning sedang bermasalah.
+    try { adaptiveLearnFromConfirmation($pending,$prepared); }
+    catch(Throwable $e){ if(class_exists('Yii')) Yii::warning('Adaptive learning gagal: '.$e->getMessage(),'adaptive-learning'); }
     financeClearPendingChatConfirmation();return $saved;
+}
+
+
+function financeCreateManualTransaction(array $input): array {
+    $type=strtolower(trim((string)($input['type']??'expense')));
+    if(!in_array($type,['expense','income','transfer'],true)) throw new InvalidArgumentException('Jenis transaksi tidak valid.');
+
+    $amount=max(0,(int)($input['amount']??0));
+    if($amount<=0) throw new InvalidArgumentException('Nominal harus lebih dari nol.');
+
+    $date=trim((string)($input['transaction_date']??''));
+    if(!financeIsValidDate($date)) throw new InvalidArgumentException('Tanggal transaksi tidak valid.');
+
+    $note=substr(trim((string)($input['note']??'')),0,255);
+    $tx=[
+        'type'=>$type,
+        'amount'=>$amount,
+        'transaction_date'=>$date,
+        'note'=>$note,
+        'source'=>'manual'
+    ];
+
+    if($type==='transfer'){
+        $from=(int)($input['from_wallet_id']??0);
+        $to=(int)($input['to_wallet_id']??0);
+        if($from<1||$to<1) throw new InvalidArgumentException('Pilih dompet asal dan tujuan.');
+        if($from===$to) throw new InvalidArgumentException('Dompet asal dan tujuan harus berbeda.');
+        if(!financeWalletById($from)||!financeWalletById($to)) throw new InvalidArgumentException('Dompet transfer tidak ditemukan.');
+        $tx['category']='Transfer Antar Dompet';
+        $tx['from_wallet_id']=$from;
+        $tx['to_wallet_id']=$to;
+        $tx['spending_kind']='once';
+        return addTransaction($tx);
+    }
+
+    $walletId=(int)($input['wallet_id']??financeDefaultWalletId());
+    if($walletId<1||!financeWalletById($walletId)) throw new InvalidArgumentException('Dompet transaksi tidak ditemukan.');
+
+    $category=substr(trim((string)($input['category']??'Lainnya')),0,80);
+    if($category==='') $category='Lainnya';
+
+    // Category must exist and match the selected transaction type (or be shared/both).
+    $categoryValid=false;
+    foreach(financeCategories() as $cat){
+        if(strcasecmp((string)($cat['name']??''),$category)!==0) continue;
+        $catType=strtolower((string)($cat['type']??'both'));
+        if($catType==='both'||$catType===$type){$categoryValid=true;break;}
+    }
+    if(!$categoryValid && strcasecmp($category,'Lainnya')!==0) throw new InvalidArgumentException('Kategori tidak sesuai dengan jenis transaksi.');
+
+    $tx['category']=$category;
+    $tx['wallet_id']=$walletId;
+
+    if($type==='expense'){
+        $kind=strtolower(trim((string)($input['spending_kind']??'once')));
+        if(!in_array($kind,['daily','once','recurring'],true)) $kind='once';
+        $tx['spending_kind']=$kind;
+
+        $billId=max(0,(int)($input['bill_id']??0));
+        if($billId>0){
+            $bill=financeBillById($billId);
+            if(!$bill) throw new InvalidArgumentException('Tagihan yang dipilih tidak ditemukan.');
+            $key=financeBillPaymentKey($bill,$date);
+            if(isset($bill['payments'][$key])) throw new InvalidArgumentException('Tagihan ini sudah memiliki pembayaran untuk periode tersebut.');
+            $tx['bill_id']=$billId;
+        }
+    } else {
+        $tx['spending_kind']='once';
+    }
+
+    $saved=addTransaction($tx);
+    if($type==='expense'&&!empty($tx['bill_id'])) $saved=financeLinkTransactionToBill((int)$saved['id'],(int)$tx['bill_id']);
+    return $saved;
 }
 
 function financeAuditHistory($limit=30){$d=financeReadData();$rows=array_reverse((array)$d['audit_log']);return array_slice($rows,0,max(1,min(100,(int)$limit)));}

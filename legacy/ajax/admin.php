@@ -52,6 +52,9 @@ try {
             case 'subscription_reject':
                 subscriptionRejectOrder((int)($in['order_id'] ?? 0), $admin, (string)($in['reason'] ?? ''));
                 break;
+            case 'plan_save':
+                $actionResult = subscriptionAdminSavePlan((array)($in['plan'] ?? []));
+                break;
             case 'coupon_save':
                 subscriptionAdminSaveCoupon((array)($in['coupon'] ?? []));
                 break;

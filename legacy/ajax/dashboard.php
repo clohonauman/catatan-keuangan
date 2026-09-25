@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../db.php';
 require_once __DIR__.'/../native_assistant.php';
 require_once __DIR__.'/../learning_helper.php';
+require_once __DIR__.'/../adaptive_learning_helper.php';
 require_once __DIR__.'/../finance_features.php';
 $featureSnapshot = financeFeatureSnapshot();
 $rawRealtime = readData();
@@ -32,7 +33,7 @@ echo json_encode([
     'categories'=>$categories,
     'daily_budget'=>dailyBudgetStatus(),
     'daily_budget_settings'=>dailyBudgetSettings(),
-    'learning'=>['pending'=>learningPending(),'rule_count'=>count(learningListRules())],
+    'learning'=>['pending'=>learningPending(),'rule_count'=>count(learningListRules()),'adaptive'=>adaptiveLearningStatus()],
     'features'=>$featureSnapshot,
     'account'=>$realtimeAccount
 ],JSON_UNESCAPED_UNICODE);

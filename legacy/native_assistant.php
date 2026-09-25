@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/db.php';
 require_once __DIR__.'/learning_helper.php';
+require_once __DIR__.'/adaptive_learning_helper.php';
 require_once __DIR__.'/finance_features.php';
 require_once __DIR__.'/smart_finance_helper.php';
 
@@ -223,7 +224,7 @@ function assistantResolveFollowup(string $message): string {
     $current=normalizeChatMessage($message);
     $t=norm($current);
     if($t==='' || strlen($t)>120) return $current;
-    $looksFollowup=(bool)preg_match('/^(?:kalau|kalo|terus|lalu|yang|bagaimana dengan|gimana dengan)\b/u',$t)
+    $looksFollowup=(bool)preg_match('/^(?:kalau|kalo|terus|lalu|yang|bagaimana dengan|gimana dengan|selain|kecuali|tanpa|bukan)\b/u',$t)
         || (bool)preg_match('/^(?:bulan|minggu|tahun) (?:ini|lalu|kemarin)\??$/u',$t)
         || (bool)preg_match('/^(?:hari ini|kemarin)\??$/u',$t);
     if(!$looksFollowup) return $current;
@@ -246,6 +247,10 @@ function assistantResolveFollowup(string $message): string {
     }
     if(preg_match('/\b(?:pemasukan|pendapatan)\b/u',$t))$base=preg_replace('/\b(?:pengeluaran|pemasukan|pendapatan)\b/u','pemasukan',$base,1);
     elseif(preg_match('/\bpengeluaran\b/u',$t))$base=preg_replace('/\b(?:pengeluaran|pemasukan|pendapatan)\b/u','pengeluaran',$base,1);
+    if(preg_match('/\b(?:selain|kecuali|tanpa|bukan)\b/u',$t)) {
+        $base=rtrim(trim($base)," ?!.,\t\n\r\0\x0B");
+        return normalizeChatMessage($base.' '.$current);
+    }
     $wallet=walletMentionForText($current);
     if($wallet && !walletMentionForText($base))$base.=' '.trim((string)($wallet['name']??''));
     return normalizeChatMessage($base);
@@ -953,7 +958,7 @@ function extractTransactions(string $message): array {
         ];
     }
 
-    return $out;
+    return adaptiveApplyToDrafts($message,$out);
 }
 
 function dateRangeFor(string $message): array {

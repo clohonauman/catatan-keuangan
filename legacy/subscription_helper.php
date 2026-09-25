@@ -660,6 +660,57 @@ function subscriptionAdminSnapshot(): array {
     ];
 }
 
+
+function subscriptionAdminSavePlan(array $input): array {
+    if (!authIsSuperAdmin()) throw new RuntimeException('Akses Super Admin diperlukan.');
+
+    $key = strtolower(trim((string)($input['key'] ?? $input['plan_key'] ?? '')));
+    $label = trim((string)($input['label'] ?? ''));
+    $amount = (int)($input['amount'] ?? 0);
+    $monthlyEquivalent = (int)($input['monthly_equivalent'] ?? 0);
+    $months = (int)($input['months'] ?? 0);
+    $permanent = !empty($input['permanent']);
+    $description = trim((string)($input['description'] ?? ''));
+
+    if ($key === '' || !preg_match('/^[a-z0-9][a-z0-9_-]{1,39}$/', $key)) {
+        throw new InvalidArgumentException('Kode paket tidak valid.');
+    }
+    if ($label === '' || subscriptionTextLength($label) > 80) {
+        throw new InvalidArgumentException('Nama paket wajib diisi dan maksimal 80 karakter.');
+    }
+    if ($amount < 1 || $amount > 2000000000) {
+        throw new InvalidArgumentException('Harga paket harus lebih dari Rp0.');
+    }
+    if ($monthlyEquivalent < 0 || $monthlyEquivalent > 2000000000) {
+        throw new InvalidArgumentException('Harga ekuivalen bulanan tidak valid.');
+    }
+    if ($permanent) {
+        $months = 0;
+    } elseif ($months < 1 || $months > 1200) {
+        throw new InvalidArgumentException('Durasi paket harus minimal 1 bulan.');
+    }
+    if (subscriptionTextLength($description) > 255) {
+        throw new InvalidArgumentException('Deskripsi paket maksimal 255 karakter.');
+    }
+
+    return subscriptionMutateData(function (&$data) use ($key, $label, $amount, $monthlyEquivalent, $months, $permanent, $description) {
+        if (!isset($data['plans'][$key])) {
+            throw new InvalidArgumentException('Paket langganan tidak ditemukan.');
+        }
+
+        $plan = $data['plans'][$key];
+        $plan['key'] = $key;
+        $plan['label'] = $label;
+        $plan['amount'] = $amount;
+        $plan['monthly_equivalent'] = $monthlyEquivalent;
+        $plan['months'] = $months;
+        $plan['permanent'] = $permanent;
+        $plan['description'] = $description;
+        $data['plans'][$key] = $plan;
+        return $plan;
+    });
+}
+
 function subscriptionAdminSaveCoupon(array $input): array {
     if (!authIsSuperAdmin()) throw new RuntimeException('Akses Super Admin diperlukan.');
 

@@ -228,17 +228,34 @@ function summary() {
         if(($t['type']??'')==='income')$income+=(int)$t['amount'];
         elseif(($t['type']??'')==='expense')$expense+=(int)$t['amount'];
     }
-    $initial=0;$reserved=0;$minimum=0;
+
+    $initial=0;$reserved=0;$minimum=0;$available=0;$gross=0;
     if (isset($d['wallets']) && is_array($d['wallets']) && count($d['wallets'])) {
+        // Saldo tersedia harus dihitung per dompet terlebih dahulu.
+        // Dengan begitu, dompet yang saldonya berada di bawah saldo minimum
+        // berkontribusi Rp0 ke total tersedia, bukan nilai negatif yang
+        // mengurangi saldo tersedia dari dompet lain.
+        $balances=walletBalancesFromData($d);
         foreach($d['wallets'] as $w) if(empty($w['archived'])) {
+            $wid=(int)($w['id']??0);
+            $walletGross=(int)($balances[$wid]??0);
+            $walletReserved=max(0,(int)($w['reserved_balance']??0));
+            $walletMinimum=max(0,(int)($w['minimum_balance']??0));
+            $walletProtected=$walletReserved+$walletMinimum;
+
             $initial+=(int)($w['initial_balance']??0);
-            $reserved+=max(0,(int)($w['reserved_balance']??0));
-            $minimum+=max(0,(int)($w['minimum_balance']??0));
+            $reserved+=$walletReserved;
+            $minimum+=$walletMinimum;
+            $gross+=$walletGross;
+            $available+=max(0,$walletGross-$walletProtected);
         }
-    } else $initial=(int)($d['settings']['initial_balance']??0);
-    $gross=$initial+$income-$expense;
+    } else {
+        $initial=(int)($d['settings']['initial_balance']??0);
+        $gross=$initial+$income-$expense;
+        $available=max(0,$gross);
+    }
+
     $protected=$reserved+$minimum;
-    $available=max(0,$gross-$protected);
     return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'minimum_balance'=>$minimum,'protected_balance'=>$protected,'available_balance'=>$available,'balance'=>$available];
 }
 function addChat($role,$message,$attachment=null) {

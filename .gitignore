@@ -1,4 +1,6 @@
 /vendor/
+/catatan-keuangan-android-webview-android/
+/catatan-keuangan-android-webview/
 /.env
 /runtime/*
 !/runtime/.gitignore
