@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__.'/../../legacy/faq_helper.php';
+$faqCategories = faqCategoryLabels();
+$faqEntries = faqKnowledgeBase();
 $publicBase=rtrim((string)(Yii::$app->params['appUrl'] ?: Yii::$app->request->hostInfo),'/');
 if (!function_exists('ck_icon')) {
     function ck_icon(string $name): string {
@@ -1907,11 +1910,9 @@ if (!function_exists('ck_icon')) {
 
             <div class="help-faq-categories" id="helpFaqCategories" role="tablist" aria-label="Kategori bantuan">
                 <button type="button" class="active" data-faq-category="all">Semua</button>
-                <button type="button" data-faq-category="transaksi">Transaksi</button>
-                <button type="button" data-faq-category="saldo">Saldo</button>
-                <button type="button" data-faq-category="tagihan">Tagihan</button>
-                <button type="button" data-faq-category="sinkronisasi">Offline & Sinkronisasi</button>
-                <button type="button" data-faq-category="akun">Akun & Keamanan</button>
+                <?php foreach ($faqCategories as $faqCategoryKey => $faqCategoryLabel): ?>
+                <button type="button" data-faq-category="<?= h($faqCategoryKey) ?>"><?= h($faqCategoryLabel) ?></button>
+                <?php endforeach; ?>
             </div>
 
             <div class="help-faq-body">
@@ -1921,197 +1922,13 @@ if (!function_exists('ck_icon')) {
                 </div>
 
                 <div class="help-faq-list" id="helpFaqList">
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="chat catat transaksi asisten konfirmasi simpan draft">
-                        <summary><span>Bagaimana mencatat transaksi melalui chat?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Ketik transaksi dengan bahasa biasa, misalnya <b>“makan siang 25
-                                ribu cash”</b>. Asisten akan membuat draft berisi nominal, kategori, tanggal, dompet,
-                            pola transaksi, dan tagihan terkait. Periksa terlebih dahulu lalu pilih <b>Simpan
-                                transaksi</b>.</div>
+                    <?php foreach ($faqEntries as $faqEntry): ?>
+                    <details class="help-faq-item" data-faq-category="<?= h((string)$faqEntry['category']) ?>"
+                        data-faq-keywords="<?= h((string)$faqEntry['keywords']) ?>">
+                        <summary><span><?= h((string)$faqEntry['question']) ?></span><i>+</i></summary>
+                        <div class="help-faq-answer"><?= (string)$faqEntry['answer_html'] ?></div>
                     </details>
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="konfirmasi draft saldo belum berubah transaksi chat scan nota">
-                        <summary><span>Mengapa transaksi dari chat harus dikonfirmasi?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Konfirmasi mencegah transaksi salah akibat kalimat ambigu atau
-                            hasil scan nota yang kurang jelas. Selama masih berupa draft, transaksi belum memengaruhi
-                            saldo maupun analitik.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="harian sekali bayar berulang recurring pola analitik proyeksi">
-                        <summary><span>Apa bedanya Harian, Sekali Bayar, dan Berulang?</span><i>+</i></summary>
-                        <div class="help-faq-answer"><b>Harian</b> dipakai untuk pengeluaran rutin sehari-hari dan dapat
-                            masuk ke estimasi kebutuhan harian. <b>Sekali Bayar</b> untuk pembelian yang tidak berulang,
-                            sedangkan <b>Berulang</b> untuk transaksi dengan jadwal rutin seperti mingguan atau bulanan.
-                        </div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="edit hapus undo riwayat perubahan batalkan salah nominal">
-                        <summary><span>Bagaimana membatalkan transaksi yang salah?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan fitur <b>Riwayat</b> untuk melihat perubahan yang
-                            dilakukan. Jika tersedia tombol <b>Undo</b>, Anda dapat mengembalikan transaksi atau
-                            perubahan saldo ke kondisi sebelumnya.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="nota foto scan struk receipt lampiran">
-                        <summary><span>Apakah nota atau struk bisa dicatat dari foto?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Bisa. Pilih sumber foto pada area chat lalu kirim foto nota/struk.
-                            Hasil pembacaan tetap dibuat sebagai draft agar nominal dan informasi lain dapat diperiksa
-                            sebelum disimpan.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="transaksi"
-                        data-faq-keywords="foto gambar kompres ukuran storage penyimpanan kamera galeri bukti bayar">
-                        <summary><span>Apakah foto dari kamera atau galeri dikompres?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Ya. Foto nota, lampiran chat, dan bukti pembayaran dikompres
-                            otomatis sebelum diunggah. Resolusi tetap dijaga agar tulisan dapat dibaca, tetapi ukuran
-                            file diperkecil untuk menghemat storage dan kuota data.</div>
-                    </details>
-
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="saldo tersedia dana disisihkan tabungan khusus aman gajian">
-                        <summary><span>Apa beda Saldo Tersedia dan Dana Disisihkan?</span><i>+</i></summary>
-                        <div class="help-faq-answer"><b>Saldo Tersedia</b> adalah uang yang dianggap dapat digunakan
-                            untuk kebutuhan sehari-hari. <b>Dana Disisihkan</b> tetap bagian dari total uang Anda,
-                            tetapi tidak dianggap sebagai uang belanja pada prediksi <b>aman sampai gajian</b>.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="saldo minimum bank rekening tidak bisa dipakai mengendap minimum balance">
-                        <summary><span>Apa itu Saldo Minimum Dompet?</span><i>+</i></summary>
-                        <div class="help-faq-answer"><b>Saldo Minimum Dompet</b> adalah batas saldo yang tidak dihitung
-                            sebagai uang belanja, misalnya saldo mengendap rekening bank. Saldo tersedia dihitung
-                            <b>per dompet</b>: saldo aktual dikurangi dana disisihkan dan saldo minimum, lalu minimum
-                            hasilnya Rp0. Jika saldo suatu dompet berada di bawah batas minimum, dompet tersebut
-                            berkontribusi Rp0 ke total saldo tersedia dan tidak mengurangi saldo dompet lain. Saldo
-                            aktual tetap tercatat untuk mencerminkan biaya bank atau autodebit.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="saldo awal ubah dompet rekening atur saldo">
-                        <summary><span>Bagaimana mengubah saldo awal?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Buka menu <b>Atur saldo awal</b>. Semua dompet aktif akan
-                            ditampilkan sehingga saldo awal, dana yang disisihkan, dan saldo minimum dapat diperbarui
-                            per dompet.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="dompet rekening cash ewallet bank tambah wallet">
-                        <summary><span>Bagaimana menambah dompet atau rekening?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Buka <b>Dompet & Rekening</b>, kemudian tambahkan sumber dana
-                            seperti cash, rekening bank, atau e-wallet. Saat mencatat transaksi, pilih dompet yang benar
-                            agar saldo tiap sumber dana tetap akurat.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="sembunyikan saldo privasi pemasukan pengeluaran mata">
-                        <summary><span>Bagaimana menyembunyikan nominal saldo?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan tombol ikon mata di kartu saldo. Saat nominal
-                            disembunyikan, tampilan saldo, pemasukan, pengeluaran, dan saldo awal ikut disamarkan.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="saldo"
-                        data-faq-keywords="aman sampai gajian prediksi analitik cukup tidak cukup">
-                        <summary><span>Bagaimana prediksi “aman sampai gajian” dihitung?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Prediksi mempertimbangkan saldo yang benar-benar tersedia untuk
-                            dibelanjakan, pola pengeluaran harian, serta kewajiban yang relevan. Dana yang disisihkan
-                            tidak dihitung sebagai uang belanja dan transaksi sekali bayar tidak diperlakukan sebagai
-                            pengeluaran harian berulang.</div>
-                    </details>
-
-                    <details class="help-faq-item" data-faq-category="tagihan"
-                        data-faq-keywords="cicilan tagihan transaksi hubungkan lunas bayar link bill">
-                        <summary><span>Bagaimana menghubungkan pembayaran ke cicilan atau tagihan?</span><i>+</i>
-                        </summary>
-                        <div class="help-faq-answer">Saat mengonfirmasi transaksi pengeluaran, pilih tagihan yang sesuai
-                            pada bagian keterkaitan tagihan. Setelah transaksi tersimpan, tagihan terkait dapat otomatis
-                            diperbarui menjadi lunas sehingga pembayaran tidak tercatat dua kali.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="tagihan"
-                        data-faq-keywords="hapus pembayaran cicilan status belum lunas undo">
-                        <summary><span>Apa yang terjadi jika transaksi pembayaran tagihan dihapus?</span><i>+</i>
-                        </summary>
-                        <div class="help-faq-answer">Jika transaksi tersebut memang terhubung ke tagihan, penghapusan
-                            akan mengoreksi status tagihan. Tagihan dapat kembali menjadi belum lunas. Jika penghapusan
-                            dibatalkan melalui Undo, hubungan dan status tagihan ikut dipulihkan.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="tagihan"
-                        data-faq-keywords="recurring transaksi berulang otomatis jadwal bulanan mingguan">
-                        <summary><span>Kapan sebaiknya memakai Transaksi Berulang?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan untuk transaksi yang memang terjadi menurut jadwal,
-                            misalnya cicilan bulanan, langganan, atau pemasukan rutin. Hindari menandai pembelian satu
-                            kali sebagai berulang karena dapat membuat proyeksi menjadi tidak akurat.</div>
-                    </details>
-
-                    <details class="help-faq-item" data-faq-category="sinkronisasi"
-                        data-faq-keywords="offline internet tanpa koneksi pwa transaksi antre">
-                        <summary><span>Apakah aplikasi bisa dipakai saat offline?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Bisa, setelah aplikasi/PWA pernah dimuat pada perangkat. Perubahan
-                            yang didukung mode offline akan masuk antrean lokal dan dicoba dikirim kembali ketika
-                            koneksi internet tersedia.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="sinkronisasi"
-                        data-faq-keywords="antre gagal konflik status sinkronisasi 409 perangkat lain">
-                        <summary><span>Apa arti status Antre, Gagal, dan Konflik?</span><i>+</i></summary>
-                        <div class="help-faq-answer"><b>Antre</b> berarti data menunggu dikirim ke server. <b>Gagal</b>
-                            berarti proses sinkronisasi mengalami error dan perlu dicoba kembali. <b>Konflik</b> berarti
-                            data yang sama telah berubah di perangkat/server lain sehingga aplikasi tidak langsung
-                            menimpa versi yang lebih baru.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="sinkronisasi"
-                        data-faq-keywords="sinkronkan sekarang refresh reload koneksi online">
-                        <summary><span>Bagaimana memaksa sinkronisasi ulang?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Saat ada data offline yang masih mengantre, gunakan tombol
-                            <b>Sinkronkan</b> pada status koneksi jika tersedia. Pastikan perangkat sudah terhubung
-                            internet. Tombol refresh di samping ikon sembunyikan saldo juga dapat digunakan untuk memuat
-                            ulang data aplikasi.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="sinkronisasi"
-                        data-faq-keywords="backup restore ekspor data pindah perangkat">
-                        <summary><span>Bagaimana menjaga cadangan data?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan menu <b>Backup & Aplikasi</b> untuk fitur backup/restore
-                            yang tersedia. Untuk pencatatan penting, lakukan backup berkala terutama sebelum mengganti
-                            perangkat atau melakukan perubahan besar.</div>
-                    </details>
-
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="lupa password pin email token pemulihan reset">
-                        <summary><span>Saya lupa password atau PIN, apa yang harus dilakukan?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan fitur pemulihan pada halaman login. Token pemulihan akan
-                            dikirim ke email yang telah tersimpan. Karena itu, pastikan email pada menu <b>Email &
-                                Keamanan</b> sudah benar dan terverifikasi.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="email verifikasi keamanan perangkat logout device">
-                        <summary><span>Mengapa email perlu diverifikasi?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Email terverifikasi digunakan untuk membantu pemulihan password/PIN
-                            dan meningkatkan keamanan akun. Pada menu <b>Email & Keamanan</b> Anda juga dapat meninjau
-                            perangkat yang masuk dan mengeluarkan perangkat lain bila diperlukan.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="biometrik biometrics fingerprint sidik jari face wajah face id finger id android keamanan kunci">
-                        <summary><span>Bagaimana mengaktifkan kunci biometrik?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Pada aplikasi Android/iOS, buka <b>Email & Keamanan</b> lalu aktifkan
-                            <b>Kunci Biometrik Perangkat</b>. Sistem akan memakai biometrik atau kredensial perangkat yang
-                            didukung. Setelah gate biometrik native berhasil, halaman web langsung dibuka tanpa meminta
-                            PIN aplikasi untuk kedua kalinya. Aplikasi tidak menyimpan data sidik jari/wajah; PIN tetap
-                            tersedia sebagai fallback melalui tombol <b>Gunakan PIN aplikasi</b>.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="email notifikasi broadcast pembaruan android tagihan saldo batas harian">
-                        <summary>Apakah notifikasi aplikasi bisa dikirim ke email?</summary>
-                        <div class="help-faq-answer">Bisa. Aktifkan <b>Kirim notifikasi juga ke email terverifikasi</b>
-                            pada menu <b>Backup &amp; Aplikasi → Notifikasi</b>. Peringatan batas harian, tagihan jatuh
-                            tempo, saldo rendah, serta pemberitahuan penting dari admin dapat dikirim ke email. Sistem
-                            melakukan deduplikasi agar peringatan yang sama tidak dikirim berulang kali pada hari yang
-                            sama.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="hapus akun permanen data privasi">
-                        <summary><span>Bagaimana menghapus akun?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Gunakan menu <b>Hapus Akun</b>. Ikuti konfirmasi yang ditampilkan
-                            karena penghapusan akun dan data bersifat permanen sesuai proses yang dijelaskan pada
-                            halaman tersebut.</div>
-                    </details>
-                    <details class="help-faq-item" data-faq-category="akun"
-                        data-faq-keywords="premium free fitur terkunci paket">
-                        <summary><span>Mengapa beberapa fitur terlihat terkunci?</span><i>+</i></summary>
-                        <div class="help-faq-answer">Sebagian fitur lanjutan tersedia sesuai status paket akun. Buka
-                            menu <b>Premium</b> untuk melihat status akun dan fitur yang tersedia pada paket Anda.</div>
-                    </details>
+                    <?php endforeach; ?>
                 </div>
 
                 <div class="help-faq-empty" id="helpFaqEmpty" hidden>

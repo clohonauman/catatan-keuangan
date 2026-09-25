@@ -95,6 +95,10 @@ function humanoidResolveContext(string $message): string {
     $current = humanoidNormalizeMessage($message);
     if ($current === '') return '';
 
+    // Pertanyaan bantuan/FAQ adalah intent mandiri. Jangan mewarisi konteks
+    // analitik sebelumnya, misalnya "kalau free trial?" setelah pertanyaan saldo.
+    if (function_exists('faqLooksLikeFeatureQuestion') && faqLooksLikeFeatureQuestion($current)) return $current;
+
     // Pesan pencatatan baru tidak boleh diwarisi konteks pertanyaan sebelumnya.
     // Sebelumnya semua pesan pendek yang menyebut dompet (mis. SeaBank) dapat
     // salah dianggap follow-up analitik.
@@ -503,6 +507,10 @@ function humanoidSmallTalkReply(string $message): ?string {
  * transaction extractor, especially hypothetical purchase questions.
  */
 function humanoidDirectReply(string $message): ?string {
+    if (function_exists('faqAssistantReply')) {
+        $faqReply = faqAssistantReply($message);
+        if ($faqReply !== null) return $faqReply;
+    }
     foreach([
         'humanoidHelpReply','humanoidSmallTalkReply','humanoidUtilityReply',
         'humanoidPaydayWhenReply','smartPaydayScenarioReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',

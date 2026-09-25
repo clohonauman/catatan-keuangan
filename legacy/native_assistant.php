@@ -4,6 +4,7 @@ require_once __DIR__.'/learning_helper.php';
 require_once __DIR__.'/adaptive_learning_helper.php';
 require_once __DIR__.'/finance_features.php';
 require_once __DIR__.'/smart_finance_helper.php';
+require_once __DIR__.'/faq_helper.php';
 
 function rupiah($n): string { return 'Rp'.number_format((int)$n,0,',','.'); }
 
@@ -1176,6 +1177,8 @@ function nativeReply(string $message, array $saved=[]): string {
         if ($smartReply !== null) return $smartReply;
         $calculator = calculatorReply($message);
         if ($calculator !== null) return $calculator;
+        $faqReply = faqAssistantReply($message);
+        if ($faqReply !== null) return $faqReply;
     }
 
     if($saved){

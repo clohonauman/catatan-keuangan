@@ -2043,8 +2043,13 @@ let helpFaqCategory = "all";
 const helpFaqCategoryMeta = {
   transaksi: {
     label: "Transaksi",
-    short: "Catat, edit, nota & pola transaksi",
+    short: "Chat, manual, edit, nota & pola transaksi",
     icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10M7 12h7M7 17h4"/><path d="M18 15v6m-3-3h6"/></svg>`
+  },
+  asisten: {
+    label: "Asisten AI",
+    short: "Adaptive Learning, konteks & simulasi keuangan",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="M7.5 7.5 5.5 5.5M18.5 18.5l-2-2M16.5 7.5l2-2M5.5 18.5l2-2"/><circle cx="12" cy="12" r="4"/></svg>`
   },
   saldo: {
     label: "Saldo",
@@ -2056,6 +2061,11 @@ const helpFaqCategoryMeta = {
     short: "Cicilan, pembayaran & transaksi berulang",
     icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></svg>`
   },
+  premium: {
+    label: "Premium",
+    short: "Free Trial, paket, invoice & pembayaran",
+    icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 8 4 4 4-7 4 7 4-4-2 11H6L4 8Z"/><path d="M7 19h10"/></svg>`
+  },
   sinkronisasi: {
     label: "Offline & Sinkronisasi",
     short: "Antrean, konflik & penggunaan offline",
@@ -2063,7 +2073,7 @@ const helpFaqCategoryMeta = {
   },
   akun: {
     label: "Akun & Keamanan",
-    short: "Login, email, perangkat & privasi",
+    short: "Login, biometrik, email, perangkat & privasi",
     icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>`
   }
 };
