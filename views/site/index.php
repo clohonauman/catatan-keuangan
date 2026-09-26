@@ -915,6 +915,11 @@ if (!function_exists('ck_icon')) {
                 <span><b>Rekening Pembayaran</b><small>Kelola rekening tujuan</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
+            <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-maintenance">
+                <span class="sidebar-menu-icon"><?= ck_icon('settings') ?></span>
+                <span><b>Mode Maintenance</b><small>Atur akses saat pemeliharaan</small></span>
+                <span class="sidebar-arrow">›</span>
+            </button>
             <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-users">
                 <span class="sidebar-menu-icon"><?= ck_icon('users') ?></span>
                 <span><b>Akun Pengguna</b><small>Paket & akses pengguna</small></span>
@@ -1809,6 +1814,54 @@ if (!function_exists('ck_icon')) {
                                 id="adminAddBank">+ Tambah Bank</button>
                         </div>
                         <div class="feature-list" id="adminBankList"></div>
+                    </div>
+                </section>
+                <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-maintenance" hidden>
+<div class="admin-premium-section maintenance-admin-section">
+                        <div class="feature-toolbar">
+                            <div><b>Mode Maintenance</b><small>Super Admin selalu dapat mengakses aplikasi. Anda dapat mengizinkan semua Premium, semua Free, atau pengguna tertentu satu per satu.</small></div>
+                        </div>
+                        <div class="maintenance-admin-card">
+                            <label class="maintenance-master-toggle"><span><b>Aktifkan Mode Maintenance</b><small>Pengguna yang tidak dikecualikan akan melihat halaman maintenance.</small></span><input type="checkbox" id="maintenanceActive"></label>
+                            <div class="maintenance-access-grid">
+                                <label><input type="checkbox" id="maintenanceAllowPremium"><span><b>Izinkan semua Premium</b><small>Termasuk Premium aktif/trial aktif.</small></span></label>
+                                <label><input type="checkbox" id="maintenanceAllowFree"><span><b>Izinkan semua Free</b><small>Semua akun Free tetap dapat mengakses.</small></span></label>
+                            </div>
+                            <div class="maintenance-copy-grid">
+                                <label>Judul<input id="maintenanceTitle" maxlength="150" value="Mode Maintenance"></label>
+                                <label>Pesan<textarea id="maintenanceMessage" rows="4" maxlength="2000" placeholder="Pesan yang dilihat pengguna"></textarea></label>
+                            </div>
+                            <div class="maintenance-user-head"><div><b>Pengecualian Pengguna</b><small>Centang user yang tetap boleh masuk, terlepas dari paket Free/Premium.</small></div><input id="maintenanceUserSearch" type="search" placeholder="Cari username / email"></div>
+                            <div class="maintenance-user-list" id="maintenanceUserList"></div>
+                            <div class="maintenance-save-row"><span id="maintenanceSummary">Maintenance belum dimuat.</span><button type="button" class="btn primary" id="maintenanceSave">Simpan Pengaturan</button></div>
+
+                            <div class="maintenance-backup-zone">
+                                <div class="maintenance-backup-head">
+                                    <div><b>Backup & Restore</b><small>Backup data file aplikasi dan database SQL secara terpisah. Simpan keduanya sebelum maintenance besar atau update versi.</small></div>
+                                </div>
+                                <div class="maintenance-backup-grid">
+                                    <div class="maintenance-backup-card">
+                                        <div><b>Data Aplikasi</b><small>ZIP untuk file privat aplikasi seperti bukti pembayaran, nota, foto, dan lampiran yang tersimpan di storage/private.</small></div>
+                                        <a class="btn secondary" href="<?= \yii\helpers\Url::to(['admin/backup-app-data']) ?>">Unduh Backup Data (.zip)</a>
+                                        <form method="post" action="<?= \yii\helpers\Url::to(['admin/restore-app-data']) ?>" enctype="multipart/form-data" data-backup-restore-form data-confirm="Restore data aplikasi akan mengganti isi data file saat ini dengan isi backup. Lanjutkan?">
+                                            <input type="hidden" name="<?= Yii::$app->request->csrfParam ?>" value="<?= Yii::$app->request->csrfToken ?>">
+                                            <input type="file" name="app_data_backup" accept=".zip,application/zip" required>
+                                            <button type="submit" class="btn danger-outline">Restore Data ZIP</button>
+                                        </form>
+                                    </div>
+                                    <div class="maintenance-backup-card">
+                                        <div><b>Database SQL</b><small>SQL lengkap seluruh tabel database. File hasil backup panel ini dapat direstore kembali tanpa terminal.</small></div>
+                                        <a class="btn secondary" href="<?= \yii\helpers\Url::to(['admin/backup-database']) ?>">Unduh Backup SQL (.sql)</a>
+                                        <form method="post" action="<?= \yii\helpers\Url::to(['admin/restore-database']) ?>" enctype="multipart/form-data" data-backup-restore-form data-confirm="PERINGATAN: Restore SQL akan mengganti struktur dan isi database saat ini dengan backup. Anda akan logout setelah selesai. Lanjutkan?">
+                                            <input type="hidden" name="<?= Yii::$app->request->csrfParam ?>" value="<?= Yii::$app->request->csrfToken ?>">
+                                            <input type="file" name="sql_backup" accept=".sql,text/plain,application/sql" required>
+                                            <button type="submit" class="btn danger-outline">Restore SQL</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="maintenance-backup-note"><b>Disarankan:</b> aktifkan Mode Maintenance terlebih dahulu sebelum restore agar tidak ada user yang menulis data saat proses pemulihan berlangsung.</div>
+                            </div>
+                        </div>
                     </div>
                 </section>
                 <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-users" hidden>

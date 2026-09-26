@@ -11,6 +11,7 @@ if (!authIsSuperAdmin($admin)) {
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../subscription_helper.php';
 require_once __DIR__ . '/../user_email_notification_helper.php';
+require_once __DIR__ . '/../maintenance_helper.php';
 use app\repositories\FinanceRepository;
 
 function adminUsersSnapshot(): array
@@ -79,6 +80,9 @@ try {
             case 'email_broadcast_test':
                 $actionResult = emailBroadcastSendTest($admin, (array)($in['broadcast'] ?? []));
                 break;
+            case 'maintenance_save':
+                $actionResult = maintenanceSaveSettings((array)($in['maintenance'] ?? []), $admin);
+                break;
             default:
                 throw new InvalidArgumentException('Aksi admin tidak dikenal.');
         }
@@ -91,6 +95,7 @@ try {
         'stats' => $users['stats'],
         'subscriptions' => subscriptionAdminSnapshot(),
         'email_broadcasts' => emailBroadcastSnapshot(),
+        'maintenance' => maintenanceSnapshot(),
         'action_result' => $actionResult ?? null,
     ], JSON_UNESCAPED_UNICODE);
 } catch (InvalidArgumentException $e) {

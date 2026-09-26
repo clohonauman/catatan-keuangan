@@ -7,19 +7,21 @@ require_once __DIR__.'/../native_assistant.php';
 require_once __DIR__.'/../learning_helper.php';
 require_once __DIR__.'/../adaptive_learning_helper.php';
 require_once __DIR__.'/../finance_features.php';
+require_once __DIR__.'/../user_notification_helper.php';
 $featureSnapshot = financeFeatureSnapshot();
-$rawRealtime = readData();
-$realtimeRevision = (int)($rawRealtime['meta']['revision'] ?? 0);
-$realtimeChatSignature = sha1(json_encode($rawRealtime['chats'] ?? [], JSON_UNESCAPED_UNICODE));
-$realtimeTransactionSignature = sha1(json_encode($rawRealtime['transactions'] ?? [], JSON_UNESCAPED_UNICODE));
-$realtimeAccount = ['role'=>authUserRole(authCurrentUser()),'plan'=>authPlan(authCurrentUser())];
-$realtimeAccountSignature = sha1(json_encode($realtimeAccount, JSON_UNESCAPED_UNICODE));
-$realtimeDraftSignature = transactionInboxRealtimeSignatureForUser(transactionInboxUserId());
-$transactions=recentTransactions(10); $chats=recentChats(10);
-$chatTotal=count((array)($rawRealtime['chats'] ?? []));
-$month=date('Y-m'); $cats=[];
-foreach(allTransactions() as $t){if(($t['type']??'')==='expense' && strpos((string)($t['transaction_date']??''), $month) === 0){$c=$t['category']??'Lainnya';$cats[$c]=($cats[$c]??0)+(int)$t['amount'];}}
-arsort($cats);$categories=[];foreach($cats as $c=>$total)$categories[]=['category'=>$c,'total'=>$total];
+$userId=(int)(authCurrentUser()['id']??0);
+$rt=\app\repositories\FinanceRepository::realtimeState($userId);
+$realtimeRevision=(int)$rt['revision'];
+$realtimeChatSignature=(string)$rt['chat_signature'];
+$realtimeTransactionSignature=(string)$rt['transaction_signature'];
+$realtimeAccount=['role'=>authUserRole(authCurrentUser()),'plan'=>authPlan(authCurrentUser())];
+$realtimeAccountSignature=sha1(json_encode($realtimeAccount,JSON_UNESCAPED_UNICODE));
+$realtimeDraftSignature=transactionInboxRealtimeSignatureForUser($userId);
+$realtimeNotificationSignature=userNotificationRealtimeSignature($userId);
+$chatPage=\app\repositories\FinanceRepository::readChatsPage($userId,1,10);
+$txPage=\app\repositories\FinanceRepository::readTransactionsPage($userId,['type'=>'all','from'=>'','to'=>'','sort'=>'date_desc','search'=>'','wallet_id'=>0,'category'=>''],1,10);
+$transactions=$txPage['transactions'];$chats=$chatPage['items'];$chatTotal=(int)$chatPage['meta']['total'];
+$categories=\app\repositories\FinanceRepository::monthlyExpenseCategories($userId,date('Y-m'));
 echo json_encode([
     'ok'=>true,
     'revision'=>$realtimeRevision,
@@ -28,15 +30,13 @@ echo json_encode([
         'chat_signature'=>$realtimeChatSignature,
         'transaction_signature'=>$realtimeTransactionSignature,
         'account_signature'=>$realtimeAccountSignature,
-        'draft_signature'=>$realtimeDraftSignature
+        'draft_signature'=>$realtimeDraftSignature,
+        'notification_signature'=>$realtimeNotificationSignature
     ],
     'summary'=>summary(),
     'transactions'=>$transactions,
     'chats'=>$chats,
-    'chat_meta'=>[
-        'page'=>1,'limit'=>10,'total'=>$chatTotal,'loaded'=>count($chats),
-        'has_more'=>$chatTotal>count($chats),'next_page'=>$chatTotal>count($chats)?2:null
-    ],
+    'chat_meta'=>$chatPage['meta'],
     'categories'=>$categories,
     'daily_budget'=>dailyBudgetStatus(),
     'daily_budget_settings'=>dailyBudgetSettings(),

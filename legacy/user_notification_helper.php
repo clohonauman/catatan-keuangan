@@ -146,10 +146,7 @@ function userNotificationMarkRead(int $userId, array $ids = []): int
 
 function userNotificationSnapshot(int $userId, int $limit = 80): array
 {
-    return [
-        'unread_count' => userNotificationUnreadCount($userId),
-        'notifications' => userNotificationList($userId, $limit),
-    ];
+    return userNotificationSnapshotFromData(userNotificationReadData($userId), $limit);
 }
 
 function userNotificationSnapshotFromData(array $data, int $limit = 80): array
@@ -183,6 +180,7 @@ function userNotificationRealtimeSignatureFromData(array $data): string
 
 function userNotificationRealtimeSignature(int $userId): string
 {
-    return userNotificationRealtimeSignatureFromData(userNotificationReadData($userId));
+    if ($userId <= 0) return '0';
+    return 'r'.DocumentRepository::revision('user_notifications', userNotificationDocumentKey($userId));
 }
 

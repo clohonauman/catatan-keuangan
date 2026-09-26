@@ -25,12 +25,7 @@ function readData(){ $u=authCurrentUser(); if(!$u) throw new RuntimeException('U
 function mutateData($fn){ $u=authCurrentUser(); if(!$u) throw new RuntimeException('User belum login.'); return FinanceRepository::mutate((int)$u['id'],$fn); }
 function mutateUserDataById($userId,$fn){ return FinanceRepository::mutate((int)$userId,$fn); }
 function addChatForUser($userId,$role,$message,$attachment=null){
-    $r=FinanceRepository::mutate((int)$userId,function(&$d)use($role,$message,$attachment){
-        if(!isset($d['meta']['next_chat_id'])){$max=0;foreach(($d['chats']??[]) as $c)$max=max($max,(int)($c['id']??0));$d['meta']['next_chat_id']=$max+1;}
-        $id=(int)$d['meta']['next_chat_id']++;$x=['id'=>$id,'role'=>$role,'message'=>$message,'created_at'=>date('Y-m-d H:i:s')];
-        if(is_array($attachment)&&!empty($attachment['file']))$x['attachment']=$attachment;
-        if(!isset($d['chats'])||!is_array($d['chats']))$d['chats']=[];$d['chats'][]=$x;return $x;
-    }); return $r['result'];
+    return FinanceRepository::appendChat((int)$userId,(string)$role,(string)$message,$attachment);
 }
 function db(){ensureData();return true;}
 function setting($key,$default=null){$d=readData();return array_key_exists($key,$d['settings'])?$d['settings'][$key]:$default;}
@@ -259,48 +254,15 @@ function summary() {
     return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'minimum_balance'=>$minimum,'protected_balance'=>$protected,'available_balance'=>$available,'balance'=>$available];
 }
 function addChat($role,$message,$attachment=null) {
-    $r=mutateData(function(&$d)use($role,$message,$attachment){
-        $id=(int)$d['meta']['next_chat_id']++;
-        $x=['id'=>$id,'role'=>$role,'message'=>$message,'created_at'=>date('Y-m-d H:i:s')];
-        if (is_array($attachment) && !empty($attachment['file'])) $x['attachment']=$attachment;
-        $d['chats'][]=$x;
-        return $x;
-    });
-    return $r['result'];
+    $u=authCurrentUser();if(!$u)throw new RuntimeException('User belum login.');
+    return FinanceRepository::appendChat((int)$u['id'],(string)$role,(string)$message,$attachment);
 }
 function addTransaction($t) {
-    $r=mutateData(function(&$d)use($t){
-        $type=(string)($t['type']??'expense');
-        $amount=max(0,(int)($t['amount']??0));
-        if($type==='expense')assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
-        elseif($type==='transfer')assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
-        $id=(int)$d['meta']['next_transaction_id']++;
-        $x=[
-            'id'=>$id,
-            'type'=>$type,
-            'category'=>$t['category']??'Lainnya',
-            'amount'=>$amount,
-            'note'=>$t['note']??'',
-            'transaction_date'=>$t['transaction_date']??date('Y-m-d'),
-            'created_at'=>date('Y-m-d H:i:s')
-        ];
-        if ($type === 'transfer') {
-            $x['from_wallet_id']=(int)($t['from_wallet_id']??0);
-            $x['to_wallet_id']=(int)($t['to_wallet_id']??0);
-        } else {
-            $x['wallet_id']=(int)($t['wallet_id']??1);
-            $x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));
-        }
-        foreach(['source','bill_id'] as $key) if(isset($t[$key]) && $t[$key]!=='' && $t[$key]!==null) $x[$key]=$key==='bill_id'?(int)$t[$key]:$t[$key];
-        if (isset($t['attachment']) && is_array($t['attachment']) && !empty($t['attachment']['file'])) $x['attachment']=$t['attachment'];
-        if (isset($t['ocr']) && is_array($t['ocr'])) $x['ocr']=$t['ocr'];
-        $d['transactions'][]=$x;
-        auditAdd($d,'create','transaction',$id,null,$x,false,'Transaksi dibuat');
-        return $x;
-    });
-    return $r['result'];
+    $u=authCurrentUser();if(!$u)throw new RuntimeException('User belum login.');
+    $type=(string)($t['type']??'expense');
+    if($type!=='transfer')$t['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));
+    return FinanceRepository::appendTransaction((int)$u['id'],(array)$t);
 }
-
 
 function updateTransaction($id, $patch) {
     $id=(int)$id;
@@ -364,10 +326,8 @@ function deleteTransaction($id,$expectedVersion='') {
     return $r['result'];
 }
 function allTransactions(){ return readData()['transactions']; }
-function recentTransactions($limit=50) {
-    $a=allTransactions(); usort($a,function($x,$y){return strcmp(($y['transaction_date']??'').sprintf('%010d',(int)$y['id']),($x['transaction_date']??'').sprintf('%010d',(int)$x['id']));}); return array_slice($a,0,$limit);
-}
-function recentChats($limit=40){ $a=readData()['chats']; return array_slice($a,max(0,count($a)-$limit)); }
+function recentTransactions($limit=50) { $u=authCurrentUser();if(!$u)return []; $r=FinanceRepository::readTransactionsPage((int)$u['id'],['type'=>'all','from'=>'','to'=>'','sort'=>'date_desc','search'=>'','wallet_id'=>0,'category'=>''],1,max(1,(int)$limit)); return $r['transactions']; }
+function recentChats($limit=40){ $u=authCurrentUser();if(!$u)return []; $r=FinanceRepository::readChatsPage((int)$u['id'],1,max(1,(int)$limit)); return $r['items']; }
 
 /** Hapus satu pesan chat tanpa menyentuh transaksi keuangan. */
 function deleteChatMessage($id) {

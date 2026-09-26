@@ -13,6 +13,24 @@ class SiteController extends Controller
     {
         require_once Yii::getAlias('@app/legacy/auth.php');
         require_once Yii::getAlias('@app/legacy/db.php');
+        require_once Yii::getAlias('@app/legacy/maintenance_helper.php');
+
+        $maintenance = maintenanceSnapshot();
+        $maintenanceUser = authCurrentUser();
+        // V44: halaman login/registrasi tetap selalu dapat diakses saat maintenance.
+        // Maintenance baru mengunci aplikasi setelah sebuah akun benar-benar login.
+        $incomingAction = Yii::$app->request->isPost ? (string)Yii::$app->request->post('action','') : '';
+        $maintenanceAuthPost = in_array($incomingAction, ['login','logout','register','request_recovery','reset_with_email_token'], true);
+        if (
+            !empty($maintenance['is_active'])
+            && $maintenanceUser
+            && !maintenanceCanAccess($maintenanceUser, $maintenance)
+            && !$maintenanceAuthPost
+        ) {
+            Yii::$app->response->statusCode = 503;
+            Yii::$app->response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            return $this->render('maintenance', ['maintenance'=>$maintenance, 'user'=>$maintenanceUser]);
+        }
 
         $error = '';
         $notice = (Yii::$app->request->get('reset') === 'success')

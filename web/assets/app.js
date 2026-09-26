@@ -240,7 +240,9 @@ let subscriptionCouponPreview = null;
 let realtimeTimer = null;
 let realtimeRequestRunning = false;
 const REALTIME_ACTIVE_MS = 2000;
-const REALTIME_HIDDEN_MS = 8000;
+const REALTIME_IDLE_MS = 5000;
+const REALTIME_HIDDEN_MS = 15000;
+let realtimeQuietRounds = 0;
 const realtimeChannel = ("BroadcastChannel" in window && window.FINANCE_APP?.userId)
   ? new BroadcastChannel("finance-realtime-user-" + String(window.FINANCE_APP.userId))
   : null;
@@ -581,6 +583,16 @@ async function fetchJson(url, options = {}, offlineExtra = {}) {
   try { j = parseApiJsonPayload(raw); }
   catch (_) {
     throw new Error("Endpoint " + String(url) + " tidak mengembalikan JSON valid. HTTP " + r.status + (raw ? " — " + raw.substring(0, 180) : ""));
+  }
+  // V44: maintenance dapat dinyalakan saat user sedang memakai aplikasi.
+  // Semua endpoint terlindungi mengembalikan HTTP 503 + maintenance=true;
+  // arahkan akun yang tidak dikecualikan ke halaman maintenance seketika.
+  if (r.status === 503 && j && j.maintenance === true) {
+    try {
+      sessionStorage.setItem("finance_maintenance_redirect", String(Date.now()));
+    } catch (_) {}
+    window.location.replace(legacyApiUrl("index.php?r=site%2Findex&_maintenance=1"));
+    throw new Error(j.error || "Mode maintenance sedang aktif.");
   }
   if (!r.ok || j.ok === false) throw new Error(j.error || "Request gagal.");
   if (isMutationRequest(options) && !j.offline_queued) announceRealtimeMutation();
@@ -2982,7 +2994,7 @@ runInitialDataLoad();
 // ===== REALTIME CHAT + DATA TANPA REFRESH =====
 function scheduleRealtimePoll(delay = null) {
   clearTimeout(realtimeTimer);
-  const ms = delay ?? (document.hidden ? REALTIME_HIDDEN_MS : REALTIME_ACTIVE_MS);
+  const ms = delay ?? (document.hidden ? REALTIME_HIDDEN_MS : (realtimeQuietRounds >= 10 ? REALTIME_IDLE_MS : REALTIME_ACTIVE_MS));
   realtimeTimer = setTimeout(runRealtimePoll, ms);
 }
 
@@ -3022,6 +3034,7 @@ async function runRealtimePoll() {
     realtimeDraftSignature = String(j.draft_signature || realtimeDraftSignature || "");
 
     if (j.changed) {
+      realtimeQuietRounds = 0;
       if (j.summary) state.summary = j.summary;
       if (j.daily_budget) state.daily_budget = j.daily_budget;
       if (j.account) state.account = j.account;
@@ -3079,6 +3092,8 @@ async function runRealtimePoll() {
           showFeatureToast(title, tone);
         }
       }
+    } else {
+      realtimeQuietRounds = Math.min(60, realtimeQuietRounds + 1);
     }
   } catch (err) {
     // Poll realtime tidak boleh mengganggu penggunaan aplikasi.
@@ -3098,8 +3113,8 @@ realtimeChannel?.addEventListener("message", (event) => {
 document.addEventListener("visibilitychange", () => {
   scheduleRealtimePoll(document.hidden ? REALTIME_HIDDEN_MS : 120);
 });
-window.addEventListener("focus", () => scheduleRealtimePoll(120));
-window.addEventListener("online", () => scheduleRealtimePoll(150));
+window.addEventListener("focus", () => { realtimeQuietRounds=0; scheduleRealtimePoll(120); });
+window.addEventListener("online", () => { realtimeQuietRounds=0; scheduleRealtimePoll(150); });
 window.addEventListener("beforeunload", () => {
   clearTimeout(realtimeTimer);
   try { realtimeChannel?.close(); } catch (_) {}
@@ -3690,6 +3705,7 @@ function updateFinanceCenterHeading(tab = "") {
     "admin-coupons": ["Kupon Premium", "Kelola kode diskon, nilai potongan, dan masa berlaku kupon."],
     "admin-banks": ["Rekening Pembayaran", "Kelola rekening tujuan pembayaran Premium."],
     "admin-users": ["Akun Pengguna", "Kelola paket dan akses pengguna secara manual."],
+    "admin-maintenance": ["Mode Maintenance", "Atur siapa yang tetap dapat mengakses aplikasi selama pemeliharaan."],
   };
   const title = el("financeCenterTitle");
   const subtitle = el("financeCenterSubtitle");
@@ -4748,7 +4764,7 @@ el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())r
 // PWA install
 let deferredInstallPrompt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;el("installPwaBtn")?.classList.add("ready");});
 el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;}else alert("Jika tombol install tidak tersedia, gunakan menu browser → Tambahkan ke layar utama / Install app.");});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=58",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=59",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
 
 // Admin
 async function adminPost(payload) {
@@ -5003,12 +5019,26 @@ function bindAdminCouponRows(container) {
   });
   container?.querySelectorAll("[data-coupon-cancel]").forEach(btn => btn.onclick = () => btn.closest("[data-admin-coupon-row]")?.remove());
 }
+function renderMaintenanceUsers(){
+  const box=el("maintenanceUserList"); if(!box)return;
+  const q=(el("maintenanceUserSearch")?.value||"").trim().toLowerCase();
+  const selected=new Set((box.dataset.selectedIds||"").split(",").filter(Boolean).map(Number));
+  const rows=adminPanelUsers.filter(u=>u.role!=="super_admin"&&(!q||String(u.username||"").toLowerCase().includes(q)||String(u.email||"").toLowerCase().includes(q)));
+  box.innerHTML=rows.length?rows.map(u=>{const premium=!!u.plan?.active;return `<label class="maintenance-user-item"><input type="checkbox" data-maintenance-user="${Number(u.id)}" ${selected.has(Number(u.id))?"checked":""}><span><b>${esc(u.username||`User ${u.id}`)}</b><small>${esc(u.email||"Email belum diatur")} · ${premium?"Premium":"Free"}</small></span><em>${premium?"Premium":"Free"}</em></label>`}).join(""):'<div class="empty">User tidak ditemukan.</div>';
+  box.querySelectorAll("[data-maintenance-user]").forEach(ch=>ch.addEventListener("change",()=>{const ids=new Set((box.dataset.selectedIds||"").split(",").filter(Boolean).map(Number));const id=Number(ch.dataset.maintenanceUser);ch.checked?ids.add(id):ids.delete(id);box.dataset.selectedIds=Array.from(ids).join(",");updateMaintenanceSummary();}));
+}
+function updateMaintenanceSummary(){const box=el("maintenanceUserList"),sum=el("maintenanceSummary");if(!sum)return;const count=(box?.dataset.selectedIds||"").split(",").filter(Boolean).length,active=!!el("maintenanceActive")?.checked;sum.textContent=active?`Maintenance aktif · ${count} user dikecualikan${el("maintenanceAllowPremium")?.checked?" · semua Premium diizinkan":""}${el("maintenanceAllowFree")?.checked?" · semua Free diizinkan":""}`:"Maintenance nonaktif · semua pengguna dapat mengakses.";}
+function renderMaintenancePanel(m={}){const box=el("maintenanceUserList");if(!box)return;el("maintenanceActive").checked=!!m.is_active;el("maintenanceAllowPremium").checked=!!m.allow_premium;el("maintenanceAllowFree").checked=!!m.allow_free;el("maintenanceTitle").value=m.title||"Mode Maintenance";el("maintenanceMessage").value=m.message||"";box.dataset.selectedIds=(Array.isArray(m.exception_user_ids)?m.exception_user_ids:[]).map(Number).join(",");renderMaintenanceUsers();updateMaintenanceSummary();}
+async function saveMaintenanceSettings(){const box=el("maintenanceUserList");const payload={is_active:!!el("maintenanceActive")?.checked,allow_premium:!!el("maintenanceAllowPremium")?.checked,allow_free:!!el("maintenanceAllowFree")?.checked,title:el("maintenanceTitle")?.value.trim()||"Mode Maintenance",message:el("maintenanceMessage")?.value.trim()||"",exception_user_ids:(box?.dataset.selectedIds||"").split(",").filter(Boolean).map(Number)};const warning=payload.is_active?"Aktifkan maintenance sekarang? Pengguna yang tidak dikecualikan akan langsung diblokir dari aplikasi.":"Nonaktifkan maintenance dan buka akses normal untuk semua pengguna?";if(!confirm(warning))return;const btn=el("maintenanceSave");try{if(btn){btn.disabled=true;btn.textContent="Menyimpan…";}const j=await adminPost({action:"maintenance_save",maintenance:payload});renderMaintenancePanel(j.maintenance||j.action_result||payload);showFeatureToast(payload.is_active?"Mode maintenance diaktifkan":"Mode maintenance dinonaktifkan");}catch(e){alert(e.message||"Pengaturan maintenance gagal disimpan.");}finally{if(btn){btn.disabled=false;btn.textContent="Simpan Pengaturan";}}}
+el("maintenanceUserSearch")?.addEventListener("input",renderMaintenanceUsers);["maintenanceActive","maintenanceAllowPremium","maintenanceAllowFree"].forEach(id=>el(id)?.addEventListener("change",updateMaintenanceSummary));el("maintenanceSave")?.addEventListener("click",saveMaintenanceSettings);
+
 async function loadAdminPanel(){
   const userBox=el("adminUserList");
   if(!userBox)return;
   try{
     const j=await fetchJson("ajax/admin.php?_="+Date.now());
     adminPanelUsers=Array.isArray(j.users)?j.users:[];
+    renderMaintenancePanel(j.maintenance||{});
     renderAdminBroadcastHistory(j.email_broadcasts||[]);
     applyAdminBroadcastPreset(false);
     updateAdminBroadcastTargetHint();
@@ -5053,3 +5083,14 @@ const originalRenderForFeatures = render;
 // render sudah didefinisikan sebagai function declaration; panggil pengecekan melalui event ringan setelah load/update.
 window.addEventListener("focus",()=>{if(state.features)checkFinanceNotifications();});
 setInterval(()=>{if(state.features)checkFinanceNotifications();},60000);
+
+
+// V45 - konfirmasi restore backup dari panel Maintenance.
+document.querySelectorAll("[data-backup-restore-form]").forEach(form=>{
+  form.addEventListener("submit",event=>{
+    const input=form.querySelector('input[type="file"]');
+    if(!input||!input.files||!input.files.length){event.preventDefault();alert("Pilih file backup terlebih dahulu.");return;}
+    const message=form.dataset.confirm||"Restore backup sekarang?";
+    if(!confirm(message))event.preventDefault();
+  });
+});

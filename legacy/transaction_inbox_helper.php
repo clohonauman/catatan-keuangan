@@ -336,7 +336,10 @@ function transactionInboxRealtimeSignatureFromData(array $data): string {
 }
 
 function transactionInboxRealtimeSignatureForUser(int $uid): string {
-    return transactionInboxRealtimeSignatureFromData(transactionInboxReadForUser($uid));
+    if($uid<=0)return sha1('');
+    $sql="SELECT SHA1(COALESCE(value_json,'')) FROM {{%user_setting}} WHERE user_id=:u AND setting_key=:k";
+    $value=\Yii::$app->db->createCommand($sql,[':u'=>$uid,':k'=>transactionInboxSettingKey()])->queryScalar();
+    return is_string($value)&&$value!==''?$value:sha1('');
 }
 
 function transactionInboxExportCurrentUser(): array {

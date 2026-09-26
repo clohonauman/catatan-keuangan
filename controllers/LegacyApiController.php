@@ -243,6 +243,19 @@ class LegacyApiController extends Controller
 
     private function runLegacy(string $name)
     {
+        require_once Yii::getAlias('@app/legacy/auth.php');
+        require_once Yii::getAlias('@app/legacy/maintenance_helper.php');
+        $maintenance = maintenanceSnapshot();
+        if (!empty($maintenance['is_active']) && !maintenanceCanAccess(authCurrentUser(), $maintenance)) {
+            $response = Yii::$app->getResponse();
+            $response->setStatusCode(503);
+            if (in_array($name, self::JSON_ENDPOINTS, true)) {
+                $response->format = Response::FORMAT_JSON;
+                $response->data = ['ok'=>false,'maintenance'=>true,'error'=>(string)$maintenance['message']];
+                return $response;
+            }
+            throw new \yii\web\ServiceUnavailableHttpException((string)$maintenance['message']);
+        }
         $allowed = array_merge(self::JSON_ENDPOINTS, self::RAW_ENDPOINTS);
         if (!in_array($name, $allowed, true)) {
             throw new \yii\web\NotFoundHttpException();
