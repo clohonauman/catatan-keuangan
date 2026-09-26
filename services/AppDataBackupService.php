@@ -84,8 +84,7 @@ final class AppDataBackupService
     public static function restore(string $zipPath, string $targetDir): array
     {
         $manifest=self::validate($zipPath);
-        $tmp=rtrim(sys_get_temp_dir(),'/\\').'/ck-appdata-'.bin2hex(random_bytes(8));
-        if (!@mkdir($tmp,0700,true) && !is_dir($tmp)) throw new RuntimeException('Folder restore sementara tidak dapat dibuat.');
+        $tmp=self::createRestoreTempDirectory($zipPath,$targetDir);
         try {
             self::extractValidated($zipPath,$tmp,$manifest);
             $incoming=$tmp.'/app-data';
@@ -97,6 +96,42 @@ final class AppDataBackupService
         } finally {
             self::removeDirectory($tmp);
         }
+    }
+
+
+    private static function createRestoreTempDirectory(string $zipPath, string $targetDir): string
+    {
+        $suffix='ck-appdata-'.bin2hex(random_bytes(8));
+        $candidates=[];
+
+        // Lokasi ZIP berasal dari Yii @runtime pada alur normal restore.
+        // Karena upload berhasil disimpan di sana, direktori ini adalah kandidat paling aman/writable.
+        $zipDir=dirname($zipPath);
+        if($zipDir!=='' && $zipDir!=='.') $candidates[]=$zipDir;
+
+        // Fallback: folder runtime di root project bila struktur standar Yii tersedia.
+        $projectRoot=dirname(__DIR__);
+        $candidates[]=$projectRoot.'/runtime';
+
+        // Fallback terakhir di sibling storage tujuan agar tidak bergantung pada OS temp directory.
+        $targetParent=dirname(rtrim($targetDir,'/\\'));
+        if($targetParent!=='' && $targetParent!=='.') $candidates[]=$targetParent;
+
+        // sys_get_temp_dir hanya fallback, karena pada beberapa XAMPP/shared hosting tidak writable.
+        $systemTemp=sys_get_temp_dir();
+        if(is_string($systemTemp) && trim($systemTemp)!=='') $candidates[]=$systemTemp;
+
+        foreach(array_unique($candidates) as $base){
+            $base=rtrim((string)$base,'/\\');
+            if($base==='') continue;
+            if(!is_dir($base)) @mkdir($base,0750,true);
+            if(!is_dir($base) || !is_writable($base)) continue;
+
+            $tmp=$base.'/'.$suffix;
+            if(@mkdir($tmp,0700,true) || is_dir($tmp)) return $tmp;
+        }
+
+        throw new RuntimeException('Folder restore sementara tidak dapat dibuat. Pastikan folder runtime/ dapat ditulis oleh PHP.');
     }
 
     private static function validate(string $zipPath): array
