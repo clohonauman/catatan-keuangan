@@ -4,6 +4,7 @@ authRequireUnlocked();
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../finance_features.php';
 require_once __DIR__.'/../offline_sync_helper.php';
+require_once __DIR__.'/../receipt_helper.php';
 
 function featureFail($msg,$code=400){http_response_code($code);echo json_encode(['ok'=>false,'error'=>$msg],JSON_UNESCAPED_UNICODE);exit;}
 
@@ -11,7 +12,9 @@ try {
     if ($_SERVER['REQUEST_METHOD']==='GET') {
         echo json_encode(['ok'=>true,'features'=>financeFeatureSnapshot(),'summary'=>summary(),'account'=>['role'=>authUserRole(authCurrentUser()),'plan'=>authPlan(authCurrentUser())]],JSON_UNESCAPED_UNICODE); exit;
     }
-    $input=json_decode(file_get_contents('php://input'),true); if(!is_array($input))$input=[];
+    $contentType=strtolower((string)($_SERVER['CONTENT_TYPE']??''));
+    $multipart=strpos($contentType,'multipart/form-data')!==false;
+    $input=$multipart?$_POST:json_decode(file_get_contents('php://input'),true); if(!is_array($input))$input=[];
     $cached=offlineOpCachedResponse($input); if($cached){echo json_encode($cached,JSON_UNESCAPED_UNICODE);exit;}
     $action=(string)($input['action']??''); $result=null;
     $premiumActions = [
@@ -26,6 +29,32 @@ try {
     }
     switch($action){
         case 'transaction_create': $result=financeCreateManualTransaction($input); break;
+        case 'quick_capture':
+            $attachment=null;$ocr=[];
+            try{
+                if($multipart&&isset($_FILES['photo']))$attachment=saveReceiptUpload($_FILES['photo']);
+                if($attachment){
+                    $ocrText=trim((string)($input['ocr_text']??''));if(strlen($ocrText)>12000)$ocrText=substr($ocrText,0,12000);
+                    $ocrAmount=max(0,(int)($input['ocr_amount']??0));$ocrScore=max(0,(int)($input['ocr_score']??0));$ocrConfidence=max(0,min(100,(float)($input['ocr_confidence']??0)));
+                    $serverDetection=detectReceiptAmountFromText($ocrText);
+                    if($ocrAmount<=0&&$serverDetection['amount']>0){$ocrAmount=(int)$serverDetection['amount'];$ocrScore=(int)$serverDetection['score'];}
+                    if((int)($input['amount']??0)<=0&&$ocrAmount>0)$input['amount']=$ocrAmount;
+                    if(trim((string)($input['note']??''))===''){
+                        $merchant=detectReceiptMerchant($ocrText);
+                        $input['note']=$merchant!==''?'Nota '.$merchant:'Nota foto';
+                    }
+                    $ocr=['amount'=>$ocrAmount,'score'=>$ocrScore,'line'=>substr((string)($input['ocr_line']??($serverDetection['line']??'')),0,250),'confidence'=>$ocrConfidence,'text'=>substr($ocrText,0,4000)];
+                }
+                $result=transactionInboxAddQuick($input,$attachment,$ocr);
+            }catch(Throwable $e){
+                if($attachment&&!empty($attachment['file']))deleteReceiptFileIfUnused((string)$attachment['file']);
+                throw $e;
+            }
+            break;
+        case 'inbox_confirm': $result=transactionInboxConfirm((int)($input['id']??0),$input); break;
+        case 'inbox_confirm_all': $result=transactionInboxConfirmAll((array)($input['ids']??[])); break;
+        case 'inbox_dismiss': $result=transactionInboxDismiss((int)($input['id']??0)); break;
+        case 'reconciliation_complete': $result=transactionInboxMarkReconciled((string)($input['date']??'')); break;
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;
         case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??'')); break;

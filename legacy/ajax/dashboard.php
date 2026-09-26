@@ -14,7 +14,9 @@ $realtimeChatSignature = sha1(json_encode($rawRealtime['chats'] ?? [], JSON_UNES
 $realtimeTransactionSignature = sha1(json_encode($rawRealtime['transactions'] ?? [], JSON_UNESCAPED_UNICODE));
 $realtimeAccount = ['role'=>authUserRole(authCurrentUser()),'plan'=>authPlan(authCurrentUser())];
 $realtimeAccountSignature = sha1(json_encode($realtimeAccount, JSON_UNESCAPED_UNICODE));
-$transactions=recentTransactions(50); $chats=recentChats(40);
+$realtimeDraftSignature = transactionInboxRealtimeSignatureForUser(transactionInboxUserId());
+$transactions=recentTransactions(10); $chats=recentChats(10);
+$chatTotal=count((array)($rawRealtime['chats'] ?? []));
 $month=date('Y-m'); $cats=[];
 foreach(allTransactions() as $t){if(($t['type']??'')==='expense' && strpos((string)($t['transaction_date']??''), $month) === 0){$c=$t['category']??'Lainnya';$cats[$c]=($cats[$c]??0)+(int)$t['amount'];}}
 arsort($cats);$categories=[];foreach($cats as $c=>$total)$categories[]=['category'=>$c,'total'=>$total];
@@ -25,11 +27,16 @@ echo json_encode([
         'revision'=>$realtimeRevision,
         'chat_signature'=>$realtimeChatSignature,
         'transaction_signature'=>$realtimeTransactionSignature,
-        'account_signature'=>$realtimeAccountSignature
+        'account_signature'=>$realtimeAccountSignature,
+        'draft_signature'=>$realtimeDraftSignature
     ],
     'summary'=>summary(),
     'transactions'=>$transactions,
     'chats'=>$chats,
+    'chat_meta'=>[
+        'page'=>1,'limit'=>10,'total'=>$chatTotal,'loaded'=>count($chats),
+        'has_more'=>$chatTotal>count($chats),'next_page'=>$chatTotal>count($chats)?2:null
+    ],
     'categories'=>$categories,
     'daily_budget'=>dailyBudgetStatus(),
     'daily_budget_settings'=>dailyBudgetSettings(),

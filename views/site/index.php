@@ -767,6 +767,11 @@ if (!function_exists('ck_icon')) {
                 <span><b>Ringkasan</b><small>Saldo dan aktivitas terbaru</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
+            <button type="button" class="sidebar-menu-item" id="openNotifications">
+                <span class="sidebar-menu-icon"><?= ck_icon('bell') ?></span>
+                <span><b>Pemberitahuan</b><small>Login, pengumuman & peringatan aplikasi</small></span>
+                <span class="user-notification-badge" id="sidebarNotificationBadge" hidden>0</span>
+            </button>
             <button type="button" class="sidebar-menu-item" id="openBudget">
                 <span class="sidebar-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 3a9 9 0 1 0 9 9" />
@@ -1013,6 +1018,22 @@ if (!function_exists('ck_icon')) {
                 </div>
             </div>
         </section>
+        <section class="reconciliation-card" id="dailyReconciliationCard" hidden aria-live="polite">
+            <div class="reconciliation-icon" aria-hidden="true"><?= ck_icon('check') ?></div>
+            <div class="reconciliation-copy">
+                <div class="reconciliation-title-row">
+                    <b>Sudah lengkap transaksi hari ini?</b>
+                    <span id="reconciliationPendingBadge" hidden>0 draf</span>
+                </div>
+                <p id="reconciliationSummary">Periksa transaksi hari ini sebelum menutup hari.</p>
+                <small>Catat yang terlupa sekarang, atau tandai selesai jika semuanya sudah masuk.</small>
+            </div>
+            <div class="reconciliation-actions">
+                <button type="button" class="btn secondary" id="reconciliationQuickAdd">+ Yang terlupa</button>
+                <button type="button" class="btn secondary" id="reconciliationOpenInbox">Rapikan Draf Transaksi</button>
+                <button type="button" class="btn primary" id="reconciliationDone">Sudah lengkap</button>
+            </div>
+        </section>
         <section class="grid">
             <article class="panel chat-card mobile-view active" id="chatPanel">
                 <div class="panel-head chat-panel-head">
@@ -1085,6 +1106,11 @@ if (!function_exists('ck_icon')) {
                 <div class="panel-head">
                     <div><b>Transaksi</b><small class="panel-subtitle">Filter tanggal dan urutkan nominal</small></div>
                     <div class="tx-head-actions">
+                        <button type="button" class="tx-inbox-button" id="transactionInboxBtn" aria-label="Buka Draf Transaksi" title="Draf Transaksi">
+                            <span class="tx-inbox-icon" aria-hidden="true"><?= ck_icon('receipt') ?></span>
+                            <span class="tx-inbox-label">Draf Transaksi</span>
+                            <b id="transactionInboxCount" hidden>0</b>
+                        </button>
                         <button type="button" class="tx-add-button" id="addTransactionBtn" aria-label="Tambah transaksi manual" title="Tambah transaksi manual">
                             <span class="tx-add-icon" aria-hidden="true">+</span>
                             <span class="tx-add-label">Tambah</span>
@@ -1216,14 +1242,9 @@ if (!function_exists('ck_icon')) {
                 </svg></span>
             <span>Transaksi</span><span class="nav-count" id="mobileTxCount">0</span>
         </button>
-        <button type="button" class="mobile-nav-item" id="mobileOpenBudget" aria-label="Batas harian">
-            <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 3a9 9 0 1 0 9 9" />
-                    <path d="M12 7v5l3 2" />
-                    <path d="M17 3h4v4" />
-                    <path d="m21 3-5 5" />
-                </svg></span>
-            <span>Batas</span><span class="budget-nav-alert" id="budgetNavAlert" hidden>!</span>
+        <button type="button" class="mobile-nav-item" id="mobileOpenNotifications" aria-label="Pemberitahuan">
+            <span class="nav-icon"><?= ck_icon('bell') ?></span>
+            <span>Pemberitahuan</span><span class="user-notification-badge mobile" id="mobileNotificationBadge" hidden>0</span>
         </button>
         <button type="button" class="mobile-nav-item" id="mobileOpenMore" aria-label="Lainnya, buka menu"
             aria-controls="appSidebar" aria-expanded="false">
@@ -1319,6 +1340,25 @@ if (!function_exists('ck_icon')) {
             <div class="modal-actions"><button class="btn secondary" value="cancel">Batal</button><button
                     class="btn primary" id="saveDailyBudget" type="button">Simpan Batas</button></div>
         </form>
+    </dialog>
+
+    <dialog id="notificationCenterModal" class="notification-center-dialog">
+        <div class="notification-center-card">
+            <div class="modal-head notification-center-head">
+                <div>
+                    <h3>Pemberitahuan</h3>
+                    <p class="modal-subtitle">Aktivitas login, broadcast admin, dan peringatan penting aplikasi.</p>
+                </div>
+                <button class="icon-btn" type="button" id="closeNotificationCenter" aria-label="Tutup">×</button>
+            </div>
+            <div class="notification-center-toolbar">
+                <div><span class="notification-unread-dot"></span><b id="notificationUnreadText">Tidak ada yang belum dibaca</b></div>
+                <button type="button" class="btn secondary" id="markAllNotificationsRead">Tandai Semua Dibaca</button>
+            </div>
+            <div class="user-notification-list" id="userNotificationList">
+                <div class="empty compact">Memuat pemberitahuan...</div>
+            </div>
+        </div>
     </dialog>
 
     <dialog id="financeCenter" class="finance-center-dialog">
@@ -1631,6 +1671,7 @@ if (!function_exists('ck_icon')) {
                             <label class="toggle-line"><input type="checkbox" id="notifyBills"> Tagihan jatuh
                                 tempo</label>
                             <label class="toggle-line"><input type="checkbox" id="notifyLow"> Saldo rendah</label>
+                            <label class="toggle-line"><input type="checkbox" id="notifyReconciliation"> Rekonsiliasi transaksi harian</label>
                             <label class="toggle-line"><input type="checkbox" id="notifyEmailEnabled"> Kirim notifikasi
                                 juga ke email terverifikasi</label>
                             <label>Ambang saldo rendah<input type="number" id="notifyLowThreshold" min="0"
@@ -1781,6 +1822,98 @@ if (!function_exists('ck_icon')) {
                 </section>
                 <?php endif; ?>
             </div>
+        </div>
+    </dialog>
+
+    <button type="button" class="quick-capture-fab" id="quickCaptureFab" aria-label="Catat cepat. Seret untuk memindahkan posisi." title="Catat cepat · seret untuk pindahkan">
+        <span class="quick-capture-plus">+</span>
+        <span class="quick-capture-label">Catat cepat</span>
+        <b class="quick-capture-count" id="quickCaptureCount" hidden>0</b>
+    </button>
+
+    <dialog id="quickCaptureModal" class="quick-capture-dialog">
+        <div class="modal-card quick-capture-card">
+            <div class="modal-head">
+                <div>
+                    <h3>Catat Cepat</h3>
+                    <p class="modal-subtitle">Tangkap transaksinya dulu. Kategori dan dompet bisa dirapikan nanti di Draf Transaksi.</p>
+                </div>
+                <button class="icon-btn" type="button" id="closeQuickCapture" aria-label="Tutup">×</button>
+            </div>
+            <div class="quick-type-switch" role="group" aria-label="Jenis transaksi cepat">
+                <button type="button" class="active" data-quick-type="expense">Pengeluaran</button>
+                <button type="button" data-quick-type="income">Pemasukan</button>
+                <button type="button" data-quick-type="transfer">Transfer</button>
+            </div>
+            <div class="quick-capture-form">
+                <label>Nominal
+                    <div class="quick-money-input"><span>Rp</span><input type="number" id="quickCaptureAmount" min="1" step="1000" inputmode="numeric" placeholder="50000"></div>
+                </label>
+                <label>Keterangan singkat
+                    <input id="quickCaptureNote" maxlength="255" placeholder="Contoh: Pertamax motor, makan siang, cashback Seabank">
+                </label>
+                <label>Tanggal
+                    <input type="date" id="quickCaptureDate">
+                </label>
+                <div class="quick-photo-field">
+                    <div class="quick-photo-label-row">
+                        <span>Foto nota <small>opsional</small></span>
+                        <span id="quickPhotoStatus">Belum ada foto</span>
+                    </div>
+                    <div class="quick-photo-actions">
+                        <button type="button" class="quick-photo-source" id="quickPhotoCameraBtn">
+                            <?= ck_icon('camera') ?><span>Ambil Foto</span>
+                        </button>
+                        <button type="button" class="quick-photo-source" id="quickPhotoGalleryBtn">
+                            <?= ck_icon('image') ?><span>Dari Galeri</span>
+                        </button>
+                    </div>
+                    <input type="file" id="quickCameraPhoto" accept="image/*" capture="environment" hidden>
+                    <input type="file" id="quickGalleryPhoto" accept="image/jpeg,image/png,image/webp" hidden>
+                    <div class="quick-photo-preview" id="quickPhotoPreviewWrap" hidden>
+                        <button type="button" class="quick-photo-thumb" id="quickPhotoOpenPreview" aria-label="Lihat foto nota">
+                            <img id="quickPhotoPreview" alt="Preview nota">
+                        </button>
+                        <div>
+                            <b id="quickPhotoPreviewName">Foto nota</b>
+                            <small id="quickPhotoMeta">Foto akan dikompres otomatis.</small>
+                            <span id="quickPhotoOcrResult"></span>
+                        </div>
+                        <button type="button" class="quick-photo-remove" id="quickPhotoRemove" aria-label="Hapus foto">×</button>
+                    </div>
+                </div>
+            </div>
+            <div class="quick-capture-info" role="note" aria-label="Informasi draf transaksi">
+                <div class="quick-capture-info-icon" aria-hidden="true">i</div>
+                <div>
+                    <b>Masih berupa draf sementara</b>
+                    <span>Data yang disimpan dari Catat Cepat belum memengaruhi saldo, laporan, maupun total transaksi. Saldo baru berubah setelah draf dikonfirmasi menjadi transaksi final.</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn secondary" type="button" id="quickCaptureCancel">Batal</button>
+                <button class="btn primary" type="button" id="quickCaptureSave">Simpan ke Draf Transaksi</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="transactionInboxModal" class="transaction-inbox-dialog">
+        <div class="modal-card transaction-inbox-card">
+            <div class="modal-head">
+                <div>
+                    <h3>Draf Transaksi</h3>
+                    <p class="modal-subtitle">Draf cepat yang belum memengaruhi saldo. Konfirmasi, edit, atau hapus saat Anda punya waktu.</p>
+                </div>
+                <button class="icon-btn" type="button" id="closeTransactionInbox" aria-label="Tutup">×</button>
+            </div>
+            <div class="transaction-inbox-summary">
+                <div><small>Belum dirapikan</small><strong id="inboxPendingTotal">0</strong></div>
+                <div class="transaction-inbox-summary-actions">
+                    <button type="button" class="btn secondary" id="inboxConfirmAll">Simpan semua</button>
+                    <button type="button" class="btn primary" id="inboxQuickAdd">+ Catat cepat</button>
+                </div>
+            </div>
+            <div class="transaction-inbox-list" id="transactionInboxList"></div>
         </div>
     </dialog>
 

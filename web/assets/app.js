@@ -55,6 +55,13 @@ let selectedPhoto = null;
 let premiumProofPrepared = null;
 let premiumProofPreparePromise = null;
 
+const TX_PAGE_SIZE = 10;
+const CHAT_PAGE_SIZE = 10;
+let txPageState = { page: 1, limit: TX_PAGE_SIZE, total: 0, has_more: false, loading: false };
+let chatPageState = { page: 1, limit: CHAT_PAGE_SIZE, total: 0, has_more: false, loading: false, user_interacted: false };
+let offlineTransactionPool = [];
+let offlineChatPool = [];
+
 
 let appInitialDataLoaded = false;
 let appDataLoadSequence = 0;
@@ -226,6 +233,8 @@ let realtimeRevision = 0;
 let realtimeChatSignature = "";
 let realtimeTransactionSignature = "";
 let realtimeAccountSignature = "";
+let realtimeNotificationSignature = "";
+let realtimeDraftSignature = "";
 let subscriptionState = null;
 let subscriptionCouponPreview = null;
 let realtimeTimer = null;
@@ -578,8 +587,10 @@ async function fetchJson(url, options = {}, offlineExtra = {}) {
   return j;
 }
 
-async function fetchTransactionView() {
+async function fetchTransactionView(page = 1, limit = TX_PAGE_SIZE) {
   const params = new URLSearchParams();
+  params.set("page", String(Math.max(1, Number(page || 1))));
+  params.set("limit", String(Math.max(1, Number(limit || TX_PAGE_SIZE))));
   params.set("type", txFilters.type);
   params.set("sort", txFilters.sort);
   if (txFilters.search) params.set("search", txFilters.search);
@@ -590,11 +601,36 @@ async function fetchTransactionView() {
   return fetchJson("ajax/transactions.php?" + params.toString());
 }
 
+async function fetchChatPage(page = 1, limit = CHAT_PAGE_SIZE) {
+  const params = new URLSearchParams({
+    page: String(Math.max(1, Number(page || 1))),
+    limit: String(Math.max(1, Number(limit || CHAT_PAGE_SIZE))),
+  });
+  return fetchJson("ajax/chats.php?" + params.toString());
+}
+
+function syncTransactionPagination(meta = {}) {
+  const p = meta?.pagination || {};
+  txPageState.page = Math.max(1, Number(p.page || 1));
+  txPageState.limit = Math.max(1, Number(p.limit || TX_PAGE_SIZE));
+  txPageState.total = Math.max(0, Number(p.total ?? meta.count ?? 0));
+  txPageState.has_more = !!p.has_more;
+  txPageState.loading = false;
+}
+
+function syncChatPagination(meta = {}) {
+  chatPageState.page = Math.max(1, Number(meta.page || 1));
+  chatPageState.limit = Math.max(1, Number(meta.limit || CHAT_PAGE_SIZE));
+  chatPageState.total = Math.max(0, Number(meta.total || 0));
+  chatPageState.has_more = !!meta.has_more;
+  chatPageState.loading = false;
+}
+
 // Ringkasan kartu pemasukan/pengeluaran hanya mengikuti PERIODE, bukan filter
 // kategori/dompet/pencarian. Saldo tetap berasal dari summary server yang
 // menghitung seluruh riwayat transaksi.
 async function fetchPeriodSummaryView() {
-  const params = new URLSearchParams({ type: "all", sort: "date_desc" });
+  const params = new URLSearchParams({ type: "all", sort: "date_desc", page: "1", limit: "1" });
   if (txFilters.from) params.set("from", txFilters.from);
   if (txFilters.to) params.set("to", txFilters.to);
   return fetchJson("ajax/transactions.php?" + params.toString());
@@ -694,6 +730,29 @@ async function applyOfflineQueueOverlay(baseState, allTransactions) {
   return { state: s, allTransactions: all, queue };
 }
 
+function mergeUniqueById(base = [], extra = []) {
+  const map = new Map();
+  [...(base || []), ...(extra || [])].forEach((row) => {
+    const key = String(row?.id ?? "");
+    if (!key) return;
+    map.set(key, row);
+  });
+  return Array.from(map.values());
+}
+
+function transactionSortForSnapshot(a, b) {
+  const da = String(a?.transaction_date || "");
+  const db = String(b?.transaction_date || "");
+  if (da !== db) return db.localeCompare(da);
+  return Number(b?.id || 0) - Number(a?.id || 0);
+}
+
+function chatSortAscending(a, b) {
+  const ai = Number(a?.id), bi = Number(b?.id);
+  if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+  return String(a?.created_at || "").localeCompare(String(b?.created_at || ""));
+}
+
 async function loadFromOfflineSnapshot() {
   updateAppDataLoader("Memuat data offline...", "Server belum dapat dijangkau. Membuka salinan data terakhir di perangkat.");
   if (!window.FinanceOffline) throw new Error("Penyimpanan offline tidak tersedia.");
@@ -704,8 +763,29 @@ async function loadFromOfflineSnapshot() {
   const filtered = localFilterTransactions(overlay.allTransactions);
   const periodSummary = localPeriodSummary(overlay.allTransactions);
   state = overlay.state;
-  state.transactions = filtered.transactions;
-  state.transaction_meta = filtered.meta;
+
+  offlineTransactionPool = filtered.transactions || [];
+  state.transactions = offlineTransactionPool.slice(0, TX_PAGE_SIZE);
+  state.transaction_meta = {
+    ...filtered.meta,
+    pagination: {
+      page: 1, limit: TX_PAGE_SIZE, total: offlineTransactionPool.length,
+      loaded: state.transactions.length, loaded_through: state.transactions.length,
+      has_more: state.transactions.length < offlineTransactionPool.length,
+      next_page: state.transactions.length < offlineTransactionPool.length ? 2 : null,
+    }
+  };
+  syncTransactionPagination(state.transaction_meta);
+
+  offlineChatPool = [...(state.chats || [])].sort(chatSortAscending);
+  const chatStart = Math.max(0, offlineChatPool.length - CHAT_PAGE_SIZE);
+  state.chats = offlineChatPool.slice(chatStart);
+  state.chat_meta = {
+    page: 1, limit: CHAT_PAGE_SIZE, total: offlineChatPool.length, loaded: state.chats.length,
+    has_more: chatStart > 0, next_page: chatStart > 0 ? 2 : null,
+  };
+  syncChatPagination(state.chat_meta);
+
   state.period_summary = periodSummary;
   state.offline_mode = true;
   render();
@@ -713,12 +793,16 @@ async function loadFromOfflineSnapshot() {
   return state;
 }
 
-async function cacheOnlineSnapshot(dashboard, allTx) {
+async function cacheOnlineSnapshot(dashboard, loadedTx = [], loadedChats = null) {
   if (!window.FinanceOffline) return;
   try {
+    const previousTx = (await FinanceOffline.getSnapshot("all_transactions")) || [];
+    const mergedTx = mergeUniqueById(previousTx, loadedTx).sort(transactionSortForSnapshot);
+    const dashboardCopy = JSON.parse(JSON.stringify(dashboard || state || {}));
+    if (Array.isArray(loadedChats)) dashboardCopy.chats = loadedChats;
     await Promise.all([
-      FinanceOffline.saveSnapshot("dashboard", dashboard),
-      FinanceOffline.saveSnapshot("all_transactions", allTx || []),
+      FinanceOffline.saveSnapshot("dashboard", dashboardCopy),
+      FinanceOffline.saveSnapshot("all_transactions", mergedTx),
     ]);
   } catch (_) {}
 }
@@ -728,15 +812,19 @@ async function load() {
     if (!appInitialDataLoaded && document.getElementById("appDataLoader")?.classList.contains("is-loading")) {
       updateAppDataLoader("Memuat data...", "Menghubungkan ke server dan mengambil data terbaru.");
     }
-    const [dashboard, txView, allView, periodView] = await Promise.all([
+    const [dashboard, txView, periodView] = await Promise.all([
       fetchJson("ajax/dashboard.php"),
-      fetchTransactionView(),
-      fetchJson("ajax/transactions.php?type=all&sort=date_desc"),
+      fetchTransactionView(1, TX_PAGE_SIZE),
       fetchPeriodSummaryView(),
     ]);
     state = dashboard;
     state.transactions = txView.transactions || [];
     state.transaction_meta = txView.meta || {};
+    syncTransactionPagination(state.transaction_meta);
+    syncChatPagination(dashboard.chat_meta || {
+      page: 1, limit: CHAT_PAGE_SIZE, total: (dashboard.chats || []).length,
+      loaded: (dashboard.chats || []).length, has_more: false
+    });
     state.period_summary = {
       income: Number(periodView.meta?.income || 0),
       expense: Number(periodView.meta?.expense || 0),
@@ -746,11 +834,15 @@ async function load() {
       mode: txPeriodMode,
     };
     state.offline_mode = false;
+    offlineTransactionPool = [];
+    offlineChatPool = [];
     realtimeRevision = Number(dashboard.realtime?.revision ?? dashboard.revision ?? realtimeRevision ?? 0);
     realtimeChatSignature = String(dashboard.realtime?.chat_signature || realtimeChatSignature || "");
     realtimeTransactionSignature = String(dashboard.realtime?.transaction_signature || realtimeTransactionSignature || "");
     realtimeAccountSignature = String(dashboard.realtime?.account_signature || realtimeAccountSignature || "");
-    await cacheOnlineSnapshot(dashboard, allView.transactions || []);
+    realtimeNotificationSignature = String(dashboard.realtime?.notification_signature || realtimeNotificationSignature || "");
+    realtimeDraftSignature = String(dashboard.realtime?.draft_signature || realtimeDraftSignature || "");
+    await cacheOnlineSnapshot(dashboard, state.transactions || [], state.chats || []);
     render();
     updateConnectionUi();
   } catch (err) {
@@ -761,9 +853,10 @@ async function load() {
 
 async function reloadTransactionsOnly() {
   try {
-    const [txView, periodView] = await Promise.all([fetchTransactionView(), fetchPeriodSummaryView()]);
+    const [txView, periodView] = await Promise.all([fetchTransactionView(1, TX_PAGE_SIZE), fetchPeriodSummaryView()]);
     state.transactions = txView.transactions || [];
     state.transaction_meta = txView.meta || {};
+    syncTransactionPagination(state.transaction_meta);
     state.period_summary = {
       income: Number(periodView.meta?.income || 0),
       expense: Number(periodView.meta?.expense || 0),
@@ -772,6 +865,7 @@ async function reloadTransactionsOnly() {
       to: txFilters.to,
       mode: txPeriodMode,
     };
+    if (!state.offline_mode) await cacheOnlineSnapshot(state, state.transactions || [], state.chats || []);
     renderSummaryCards();
     renderTransactions();
   } catch (err) {
@@ -781,12 +875,114 @@ async function reloadTransactionsOnly() {
     const filtered = localFilterTransactions(overlay.allTransactions);
     const periodSummary = localPeriodSummary(overlay.allTransactions);
     state = overlay.state;
-    state.transactions = filtered.transactions;
-    state.transaction_meta = filtered.meta;
+    offlineTransactionPool = filtered.transactions || [];
+    state.transactions = offlineTransactionPool.slice(0, TX_PAGE_SIZE);
+    state.transaction_meta = {
+      ...filtered.meta,
+      pagination: {
+        page: 1, limit: TX_PAGE_SIZE, total: offlineTransactionPool.length,
+        loaded: state.transactions.length, loaded_through: state.transactions.length,
+        has_more: state.transactions.length < offlineTransactionPool.length,
+        next_page: state.transactions.length < offlineTransactionPool.length ? 2 : null,
+      }
+    };
+    syncTransactionPagination(state.transaction_meta);
     state.period_summary = periodSummary;
     renderSummaryCards();
     renderTransactions();
   }
+}
+
+async function loadMoreTransactions() {
+  if (txPageState.loading || !txPageState.has_more) return;
+  txPageState.loading = true;
+  updateTransactionInfiniteLoader();
+  const list = document.getElementById("txList");
+  const oldScrollTop = list?.scrollTop || 0;
+  try {
+    if (state.offline_mode) {
+      const nextPage = txPageState.page + 1;
+      const end = nextPage * TX_PAGE_SIZE;
+      state.transactions = offlineTransactionPool.slice(0, end);
+      txPageState.page = nextPage;
+      txPageState.total = offlineTransactionPool.length;
+      txPageState.has_more = state.transactions.length < offlineTransactionPool.length;
+      state.transaction_meta = {
+        ...(state.transaction_meta || {}),
+        count: offlineTransactionPool.length,
+        pagination: {
+          page: nextPage, limit: TX_PAGE_SIZE, total: offlineTransactionPool.length,
+          loaded: Math.min(TX_PAGE_SIZE, Math.max(0, offlineTransactionPool.length - ((nextPage - 1) * TX_PAGE_SIZE))),
+          loaded_through: state.transactions.length,
+          has_more: txPageState.has_more,
+          next_page: txPageState.has_more ? nextPage + 1 : null,
+        }
+      };
+    } else {
+      const nextPage = txPageState.page + 1;
+      const page = await fetchTransactionView(nextPage, TX_PAGE_SIZE);
+      const newRows = page.transactions || [];
+      state.transactions = mergeUniqueById(state.transactions || [], newRows);
+      state.transaction_meta = page.meta || state.transaction_meta || {};
+      syncTransactionPagination(state.transaction_meta);
+      txPageState.page = nextPage;
+      await cacheOnlineSnapshot(state, newRows, state.chats || []);
+    }
+    renderTransactions();
+    if (list) list.scrollTop = oldScrollTop;
+  } catch (err) {
+    txPageState.loading = false;
+    updateTransactionInfiniteLoader("Gagal memuat. Scroll lagi untuk mencoba.", true);
+    return;
+  }
+  txPageState.loading = false;
+  updateTransactionInfiniteLoader();
+}
+
+async function loadMoreChats() {
+  if (chatPageState.loading || !chatPageState.has_more) return;
+  const cb = document.getElementById("chatBody");
+  if (!cb) return;
+  chatPageState.loading = true;
+  updateChatInfiniteLoader();
+  const oldHeight = cb.scrollHeight;
+  const oldTop = cb.scrollTop;
+  try {
+    if (state.offline_mode) {
+      const nextPage = chatPageState.page + 1;
+      const wanted = nextPage * CHAT_PAGE_SIZE;
+      const start = Math.max(0, offlineChatPool.length - wanted);
+      state.chats = offlineChatPool.slice(start);
+      chatPageState.page = nextPage;
+      chatPageState.total = offlineChatPool.length;
+      chatPageState.has_more = start > 0;
+      state.chat_meta = {
+        page: nextPage, limit: CHAT_PAGE_SIZE, total: offlineChatPool.length,
+        loaded: Math.min(CHAT_PAGE_SIZE, wanted), has_more: start > 0,
+        next_page: start > 0 ? nextPage + 1 : null,
+      };
+    } else {
+      const nextPage = chatPageState.page + 1;
+      const page = await fetchChatPage(nextPage, CHAT_PAGE_SIZE);
+      const older = page.chats || [];
+      state.chats = mergeUniqueById(older, state.chats || []).sort(chatSortAscending);
+      state.chat_meta = page.meta || state.chat_meta || {};
+      syncChatPagination(state.chat_meta);
+      chatPageState.page = nextPage;
+      await cacheOnlineSnapshot(state, state.transactions || [], state.chats || []);
+    }
+    renderChats(false);
+    requestAnimationFrame(() => {
+      const newHeight = cb.scrollHeight;
+      cb.scrollTop = Math.max(0, oldTop + (newHeight - oldHeight));
+    });
+  } catch (err) {
+    chatPageState.loading = false;
+    updateChatInfiniteLoader("Gagal memuat riwayat. Geser lagi untuk mencoba.", true);
+    return;
+  }
+  chatPageState.loading = false;
+  updateChatInfiniteLoader();
 }
 
 function photoUrl(att) {
@@ -994,6 +1190,23 @@ async function submitPendingConfirmation(card, action) {
   }
 }
 
+function updateChatInfiniteLoader(message = "", isError = false) {
+  const el = document.getElementById("chatHistoryLoader");
+  if (!el) return;
+  el.classList.toggle("is-error", !!isError);
+  if (message) {
+    el.innerHTML = `<span>${esc(message)}</span>`;
+    return;
+  }
+  if (chatPageState.loading) {
+    el.innerHTML = '<span class="infinite-spinner" aria-hidden="true"></span><span>Memuat riwayat chat...</span>';
+  } else if (chatPageState.has_more) {
+    el.innerHTML = '<span>Geser ke atas untuk memuat pesan sebelumnya</span>';
+  } else {
+    el.innerHTML = '<span>Semua riwayat chat sudah ditampilkan</span>';
+  }
+}
+
 function renderChats(forceBottom = false) {
   const cb = document.getElementById("chatBody");
   if (!cb) return;
@@ -1002,6 +1215,13 @@ function renderChats(forceBottom = false) {
   const wasNearBottom = distanceFromBottom < 90;
 
   cb.innerHTML = "";
+  if ((state.chats || []).length || chatPageState.has_more) {
+    const historyLoader = document.createElement("div");
+    historyLoader.id = "chatHistoryLoader";
+    historyLoader.className = "infinite-loader chat-history-loader";
+    cb.appendChild(historyLoader);
+    updateChatInfiniteLoader();
+  }
   (state.chats || []).forEach((c) => {
     const row = document.createElement("div");
     row.className = "chat-row " + c.role + (c.offline_pending ? " offline-pending" : "");
@@ -1055,6 +1275,7 @@ function render() {
   renderTransactions();
 
   renderDailyBudget();
+  renderTransactionInboxAssistant();
   renderLearningPending();
   if (typeof renderFinanceCenter === "function" && document.getElementById("financeCenter")?.open) renderFinanceCenter();
   if (typeof checkFinanceNotifications === "function") setTimeout(checkFinanceNotifications, 0);
@@ -1115,6 +1336,26 @@ function openTransactionDetail(id) {
   if (!dialog.open) dialog.showModal();
   dialog.scrollTop = 0;
   dialog.querySelector('.tx-detail-close').focus({preventScroll:true});
+}
+
+function updateTransactionInfiniteLoader(message = "", isError = false) {
+  const el = document.getElementById("txInfiniteLoader");
+  if (!el) return;
+  el.classList.toggle("is-error", !!isError);
+  if (message) {
+    el.innerHTML = `<span>${esc(message)}</span>`;
+    return;
+  }
+  if (txPageState.loading) {
+    el.innerHTML = '<span class="infinite-spinner" aria-hidden="true"></span><span>Memuat data transaksi...</span>';
+  } else if (txPageState.has_more) {
+    const shown = (state.transactions || []).length;
+    el.innerHTML = `<span>${shown} dari ${txPageState.total} data · scroll ke bawah untuk memuat berikutnya</span>`;
+  } else if ((state.transactions || []).length) {
+    el.innerHTML = `<span>Semua ${txPageState.total || (state.transactions || []).length} transaksi sudah ditampilkan</span>`;
+  } else {
+    el.innerHTML = "";
+  }
 }
 
 function renderTransactions() {
@@ -1182,6 +1423,14 @@ function renderTransactions() {
       </div>`;
     list.appendChild(x);
   });
+
+  if (transactions.length) {
+    const loader = document.createElement("div");
+    loader.id = "txInfiniteLoader";
+    loader.className = "infinite-loader tx-infinite-loader";
+    list.appendChild(loader);
+    updateTransactionInfiniteLoader();
+  }
 
   if (!transactions.length) {
     list.innerHTML = '<div class="empty tx-empty-filter">Tidak ada transaksi yang cocok dengan filter.<br><button type="button" id="txEmptyReset">Reset filter</button></div>';
@@ -2297,8 +2546,6 @@ function fillDailyBudgetForm() {
 function openDailyBudgetModal() { fillDailyBudgetForm(); budgetModal.showModal(); }
 document.getElementById("openBudget").onclick = () => { if (isMobileSidebar()) closeSidebar(); openDailyBudgetModal(); };
 document.getElementById("budgetCardEdit").onclick = openDailyBudgetModal;
-const mobileOpenBudget = document.getElementById("mobileOpenBudget");
-if (mobileOpenBudget) mobileOpenBudget.onclick = openDailyBudgetModal;
 document.querySelectorAll(".day-enabled").forEach((check) => check.addEventListener("change", () => updateDayRow(check.dataset.day)));
 function setSelectedDays(days) {
   for (let day = 1; day <= 7; day++) {
@@ -2512,6 +2759,32 @@ document.querySelectorAll(".mobile-nav-item[data-view]").forEach((btn) => {
     document.querySelectorAll(".mobile-nav-item[data-view]").forEach((b) => b.classList.toggle("active", b === btn));
     if (id === "chatPanel") setTimeout(() => { const el = document.getElementById("chatBody"); el.scrollTop = el.scrollHeight; }, 0);
   });
+});
+
+const txInfiniteScrollList = document.getElementById("txList");
+txInfiniteScrollList?.addEventListener("scroll", () => {
+  if (txPageState.loading || !txPageState.has_more) return;
+  const remaining = txInfiniteScrollList.scrollHeight - txInfiniteScrollList.scrollTop - txInfiniteScrollList.clientHeight;
+  if (remaining <= 180) loadMoreTransactions();
+}, { passive: true });
+txInfiniteScrollList?.addEventListener("click", (event) => {
+  if (event.target.closest("#txInfiniteLoader") && txPageState.has_more) loadMoreTransactions();
+});
+
+const chatInfiniteScrollBody = document.getElementById("chatBody");
+const armChatHistoryScroll = () => { chatPageState.user_interacted = true; };
+chatInfiniteScrollBody?.addEventListener("wheel", armChatHistoryScroll, { passive: true });
+chatInfiniteScrollBody?.addEventListener("touchstart", armChatHistoryScroll, { passive: true });
+chatInfiniteScrollBody?.addEventListener("pointerdown", armChatHistoryScroll, { passive: true });
+chatInfiniteScrollBody?.addEventListener("scroll", () => {
+  if (!chatPageState.user_interacted || chatPageState.loading || !chatPageState.has_more) return;
+  if (chatInfiniteScrollBody.scrollTop <= 70) loadMoreChats();
+}, { passive: true });
+chatInfiniteScrollBody?.addEventListener("click", (event) => {
+  if (event.target.closest("#chatHistoryLoader") && chatPageState.has_more) {
+    chatPageState.user_interacted = true;
+    loadMoreChats();
+  }
 });
 
 const messageInput = document.getElementById("message");
@@ -2730,17 +3003,23 @@ async function runRealtimePoll() {
       chat: realtimeChatSignature || "",
       tx: realtimeTransactionSignature || "",
       acc: realtimeAccountSignature || "",
+      notif: realtimeNotificationSignature || "",
+      draft: realtimeDraftSignature || "",
       _: String(Date.now()),
     });
 
     const j = await fetchJson("ajax/realtime.php?" + params.toString());
     const previousTxSignature = realtimeTransactionSignature;
     const previousChatSignature = realtimeChatSignature;
+    const previousNotificationSignature = realtimeNotificationSignature;
+    const previousDraftSignature = realtimeDraftSignature;
 
     realtimeRevision = Number(j.revision || 0);
     realtimeChatSignature = String(j.chat_signature || "");
     realtimeTransactionSignature = String(j.transaction_signature || "");
     realtimeAccountSignature = String(j.account_signature || realtimeAccountSignature || "");
+    realtimeNotificationSignature = String(j.notification_signature || realtimeNotificationSignature || "");
+    realtimeDraftSignature = String(j.draft_signature || realtimeDraftSignature || "");
 
     if (j.changed) {
       if (j.summary) state.summary = j.summary;
@@ -2751,7 +3030,14 @@ async function runRealtimePoll() {
       const chatChanged = previousChatSignature !== realtimeChatSignature;
       const txChanged = previousTxSignature !== realtimeTransactionSignature;
 
-      if (Array.isArray(j.chats)) state.chats = j.chats;
+      if ((chatChanged || previousChatSignature === "") && Array.isArray(j.chats)) {
+        state.chats = j.chats;
+        state.chat_meta = j.chat_meta || {
+          page: 1, limit: CHAT_PAGE_SIZE, total: j.chats.length, loaded: j.chats.length, has_more: false
+        };
+        syncChatPagination(state.chat_meta);
+        chatPageState.user_interacted = false;
+      }
       renderSummaryCards();
       renderDailyBudget();
 
@@ -2763,6 +3049,35 @@ async function runRealtimePoll() {
 
       if (txChanged || previousTxSignature === "") {
         try { await reloadTransactionsOnly(); } catch (_) {}
+      }
+
+      const draftChanged = !!j.draft_changed
+        || (previousDraftSignature !== "" && previousDraftSignature !== realtimeDraftSignature);
+      if (j.transaction_inbox && typeof j.transaction_inbox === "object") {
+        state.features = state.features || {};
+        state.features.transaction_inbox = j.transaction_inbox;
+        // Badge, isi modal Draf Transaksi, serta kartu rekonsiliasi langsung
+        // mengikuti perubahan dari tab/perangkat lain tanpa refresh halaman.
+        if (typeof renderTransactionInboxAssistant === "function") renderTransactionInboxAssistant();
+      } else if (draftChanged && typeof refreshFeatures === "function") {
+        // Fallback defensif bila server lama tidak mengirim snapshot.
+        try { await refreshFeatures(); } catch (_) {}
+      }
+
+      const notificationChanged = !!j.notification_changed
+        || (previousNotificationSignature !== "" && previousNotificationSignature !== realtimeNotificationSignature);
+      if (j.notification_center && typeof applyUserNotificationSnapshot === "function") {
+        const beforeUnread = Number(userNotificationState?.unread_count || 0);
+        applyUserNotificationSnapshot(j.notification_center);
+        const afterUnread = Number(j.notification_center.unread_count || 0);
+        if (notificationChanged && previousNotificationSignature !== "" && afterUnread > beforeUnread) {
+          const newest = Array.isArray(j.notification_center.notifications)
+            ? j.notification_center.notifications.find(n => !String(n?.read_at || "").trim())
+            : null;
+          const title = newest?.title ? `Pemberitahuan baru: ${newest.title}` : "Ada pemberitahuan baru";
+          const tone = newest?.type === "warning" ? "warning" : "info";
+          showFeatureToast(title, tone);
+        }
       }
     }
   } catch (err) {
@@ -3305,10 +3620,60 @@ async function featureAction(payload, successText = "") {
   return j;
 }
 
-function showFeatureToast(message) {
-  let t = document.querySelector(".feature-toast");
-  if (!t) { t = document.createElement("div"); t.className = "feature-toast"; document.body.appendChild(t); }
-  t.textContent = message; t.classList.add("show"); clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2200);
+async function featureFormAction(formData, successText = "", offlineExtra = {}) {
+  const j = await fetchJson("ajax/features.php", { method: "POST", body: formData }, offlineExtra);
+  state.features = j.features || state.features || {};
+  if (j.summary) state.summary = j.summary;
+  if (j.account) state.account = j.account;
+  renderAccountPlan();
+  renderFeatureSelectOptions();
+  renderFinanceCenter();
+  if (successText) showFeatureToast(successText);
+  return j;
+}
+
+function getFeatureToastHost() {
+  // Dialog HTML berada pada browser top-layer. Z-index elemen di body tidak dapat
+  // mengalahkan top-layer, jadi toast dipindahkan ke dialog paling atas bila ada.
+  const openDialogs = Array.from(document.querySelectorAll("dialog[open]"));
+  return openDialogs.length ? openDialogs[openDialogs.length - 1] : document.body;
+}
+
+function inferToastTone(message = "", tone = "default") {
+  if (tone && tone !== "default") return tone;
+  const text = String(message || "").toLowerCase();
+  if (/gagal|error|tidak berhasil|ditolak|invalid|wajib|belum dapat|tidak ditemukan|tidak cukup/.test(text)) return "error";
+  if (/berhasil|disimpan|diperbarui|diaktifkan|selesai|tercatat|disetujui|dipulihkan|diizinkan/.test(text)) return "success";
+  if (/peringatan|warning|hati-hati|mendekati|kuota|antrean/.test(text)) return "warning";
+  return "info";
+}
+
+function showFeatureToast(message, tone = "default") {
+  const host = getFeatureToastHost();
+  let t = document.getElementById("featureToast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "featureToast";
+    t.className = "feature-toast";
+    t.setAttribute("role", "status");
+    t.setAttribute("aria-live", "polite");
+    t.setAttribute("aria-atomic", "true");
+  }
+
+  if (t.parentElement !== host) host.appendChild(t);
+  t.classList.toggle("in-dialog", host instanceof HTMLDialogElement);
+  t.textContent = String(message || "");
+
+  const resolvedTone = inferToastTone(message, tone);
+  t.classList.remove("is-success", "is-error", "is-info", "is-warning");
+  t.classList.add(`is-${resolvedTone}`);
+
+  // Restart animasi jika toast dipanggil berurutan dengan cepat.
+  t.classList.remove("show");
+  void t.offsetWidth;
+  t.classList.add("show");
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove("show"), 3400);
 }
 
 const financeCenter = el("financeCenter");
@@ -3451,14 +3816,674 @@ const cat=el("analyticsCategoryBars");if(cat)cat.innerHTML=barRows(a.categories|
 const bud=el("analyticsBudgetBars");if(bud)bud.innerHTML=(a.monthly_budgets||[]).length?(a.monthly_budgets||[]).map(x=>`<div class="analytic-bar-row ${x.status}"><div><span>${esc(x.icon||"")} ${esc(x.category)}</span><b>${rupiah(x.spent)} / ${rupiah(x.limit)}</b></div><div class="analytic-track"><span style="width:${Math.min(100,x.percent)}%"></span></div><small>${x.percent}%</small></div>`).join(""):'<div class="empty compact">Belum ada budget kategori bulan ini.</div>';}
 el("paydayDay")?.addEventListener("change",async()=>{try{await featureAction({action:"payday_set",day:Number(el("paydayDay").value)},"Tanggal gajian disimpan");}catch(e){alert(e.message)}});
 
-function renderNotificationForm(n){if(!el("notifyEnabled"))return;el("notifyEnabled").checked=!!n.enabled;el("notifyDaily").checked=!!n.daily_budget;el("notifyBills").checked=!!n.bills;el("notifyLow").checked=!!n.low_balance;if(el("notifyEmailEnabled"))el("notifyEmailEnabled").checked=n.email_enabled!==false;el("notifyLowThreshold").value=Number(n.low_balance_threshold||100000);}
-el("saveNotificationSettings")?.addEventListener("click",async()=>{try{await featureAction({action:"notifications_set",settings:{enabled:el("notifyEnabled").checked,daily_budget:el("notifyDaily").checked,bills:el("notifyBills").checked,low_balance:el("notifyLow").checked,email_enabled:el("notifyEmailEnabled")?.checked!==false,low_balance_threshold:Number(el("notifyLowThreshold").value||0)}},"Pengaturan notifikasi disimpan");checkFinanceNotifications();}catch(e){alert(e.message)}});
+function renderNotificationForm(n){if(!el("notifyEnabled"))return;el("notifyEnabled").checked=!!n.enabled;el("notifyDaily").checked=!!n.daily_budget;el("notifyBills").checked=!!n.bills;el("notifyLow").checked=!!n.low_balance;if(el("notifyReconciliation"))el("notifyReconciliation").checked=n.daily_reconciliation!==false;if(el("notifyEmailEnabled"))el("notifyEmailEnabled").checked=n.email_enabled!==false;el("notifyLowThreshold").value=Number(n.low_balance_threshold||100000);}
+el("saveNotificationSettings")?.addEventListener("click",async()=>{try{await featureAction({action:"notifications_set",settings:{enabled:el("notifyEnabled").checked,daily_budget:el("notifyDaily").checked,bills:el("notifyBills").checked,low_balance:el("notifyLow").checked,daily_reconciliation:el("notifyReconciliation")?.checked!==false,email_enabled:el("notifyEmailEnabled")?.checked!==false,low_balance_threshold:Number(el("notifyLowThreshold").value||0)}},"Pengaturan notifikasi disimpan");renderTransactionInboxAssistant();checkFinanceNotifications();}catch(e){alert(e.message)}});
 el("requestNotifyBtn")?.addEventListener("click",async()=>{if(!("Notification" in window))return alert("Browser ini tidak mendukung notifikasi.");const p=await Notification.requestPermission();showFeatureToast(p==="granted"?"Notifikasi diizinkan":"Izin notifikasi belum diberikan");});
 
 function notificationEmailKind(key){if(String(key).startsWith("bill_"))return "bill";if(String(key).startsWith("budget_"))return "budget";if(String(key)==="low_balance")return "low_balance";return "info";}
 async function emailNotificationOnce(key,title,body){const n=featureState()?.notifications||{};if(n.email_enabled===false)return;try{await fetchJson("ajax/email_notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,kind:notificationEmailKind(key),title,message:body})});}catch(_){/* email tidak boleh mengganggu notifikasi utama */}}
-function notifyOnce(key,title,body){const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
-function checkFinanceNotifications(){const f=featureState(),n=f.notifications||{};if(!n.enabled)return;const b=state.daily_budget||{};if(n.daily_budget&&["warning","reached","exceeded"].includes(b.status))notifyOnce("budget_"+b.status,"Peringatan batas harian",b.message||"Pengeluaran mendekati batas.");if(n.bills){(f.bills||[]).filter(x=>["due_soon","overdue"].includes(x.status)).forEach(x=>notifyOnce("bill_"+x.id,"Tagihan "+x.name,x.status==="overdue"?"Tagihan sudah melewati jatuh tempo.":"Jatuh tempo "+formatBillDate(x.due_date)+" · "+rupiah(x.amount)));}if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0));}
+function persistWarningNotificationOnce(key,title,body){
+  const today=new Date().toISOString().slice(0,10);
+  const localKey="finance_center_notify_"+key+"_"+today;
+  if(localStorage.getItem(localKey))return;
+  fetchJson("ajax/notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"create_warning",key,title,message:body,kind:"warning"})})
+    .then(j=>{localStorage.setItem(localKey,"1");applyUserNotificationSnapshot(j);announceRealtimeMutation();})
+    .catch(()=>{/* pusat pemberitahuan tidak boleh mengganggu fitur utama */});
+}
+function notifyOnce(key,title,body,externalEnabled=true){persistWarningNotificationOnce(key,title,body);if(!externalEnabled)return;const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
+function checkFinanceNotifications(){const f=featureState(),n=f.notifications||{},externalEnabled=!!n.enabled;const b=state.daily_budget||{};if(n.daily_budget&&["warning","reached","exceeded"].includes(b.status))notifyOnce("budget_"+b.status,"Peringatan batas harian",b.message||"Pengeluaran mendekati batas.",externalEnabled);if(n.bills){(f.bills||[]).filter(x=>["due_soon","overdue"].includes(x.status)).forEach(x=>notifyOnce("bill_"+x.id,"Tagihan "+x.name,x.status==="overdue"?"Tagihan sudah melewati jatuh tempo.":"Jatuh tempo "+formatBillDate(x.due_date)+" · "+rupiah(x.amount),externalEnabled));}if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0),externalEnabled);const r=f.transaction_inbox?.reconciliation||{};if(n.daily_reconciliation!==false&&r.prompt_due&&!r.completed)notifyOnce("reconciliation","Sudah lengkap transaksi hari ini?",`${Number(r.transaction_count||0)} transaksi tercatat${Number(r.pending_count||0)>0?` · ${Number(r.pending_count)} draf transaksi belum dirapikan`:""}.`,externalEnabled);}
+
+
+// ---------------- PUSAT PEMBERITAHUAN V39 ----------------
+const notificationCenterModal = el("notificationCenterModal");
+let userNotificationState = { unread_count:0, notifications:[] };
+let userNotificationRequestRunning = false;
+let notificationPreviousMobileView = "chatPanel";
+
+function notificationTypeMeta(type="info") {
+  const map = {
+    login:{label:"Keamanan",icon:'<svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.8 2.8 8.1 7 10 4.2-1.9 7-5.2 7-10V6l-7-3Z"/><path d="M9 12l2 2 4-4"/></svg>',tone:"security"},
+    broadcast:{label:"Broadcast Admin",icon:'<svg viewBox="0 0 24 24"><path d="M4 13V9l12-5v14L4 13Z"/><path d="M8 14v5h4v-3M19 8c1 .8 1.5 2 1.5 3S20 13.2 19 14"/></svg>',tone:"broadcast"},
+    warning:{label:"Peringatan",icon:'<svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17.3h.01"/></svg>',tone:"warning"},
+    premium:{label:"Premium",icon:'<svg viewBox="0 0 24 24"><path d="m4 8 4 4 4-7 4 7 4-4-2 11H6L4 8Z"/></svg>',tone:"premium"},
+    info:{label:"Informasi",icon:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg>',tone:"info"},
+  };
+  return map[String(type||"")] || map.info;
+}
+function notificationCreatedLabel(value="") {
+  const m=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if(!m)return String(value||"");
+  return `${m[3]}/${m[2]}/${m[1]} · ${m[4]}:${m[5]} WITA`;
+}
+function updateUserNotificationBadges(count=0) {
+  count=Math.max(0,Number(count||0));
+  [el("sidebarNotificationBadge"),el("mobileNotificationBadge")].forEach(b=>{
+    if(!b)return;
+    b.textContent=count>99?"99+":String(count);
+    b.hidden=count<=0;
+  });
+  const copy=el("notificationUnreadText");
+  if(copy)copy.textContent=count>0?`${count} pemberitahuan belum dibaca`:"Semua pemberitahuan sudah dibaca";
+  const mark=el("markAllNotificationsRead");
+  if(mark)mark.disabled=count<=0;
+}
+function userNotificationDetails(n={}) {
+  const p=n.payload||{};
+  if(n.type==="login") {
+    const rows=[];
+    if(p.login_at)rows.push(["Waktu",p.login_at]);
+    if(p.device)rows.push(["Perangkat",p.device]);
+    if(p.via)rows.push(["Melalui",p.via]);
+    if(p.ip)rows.push(["Alamat IP",p.ip]);
+    return rows.length?`<div class="user-notification-details">${rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>`:"";
+  }
+  return "";
+}
+function renderUserNotificationList(rows=[]) {
+  const box=el("userNotificationList");if(!box)return;
+  rows=Array.isArray(rows)?rows:[];
+  if(!rows.length){box.innerHTML='<div class="empty notification-empty"><div class="notification-empty-icon">✓</div><b>Belum ada pemberitahuan</b><small>Aktivitas login, broadcast admin, dan peringatan aplikasi akan tampil di sini.</small></div>';return;}
+  box.innerHTML=rows.map(n=>{
+    const meta=notificationTypeMeta(n.type);
+    const unread=!String(n.read_at||"").trim();
+    const p=n.payload||{};
+    const hasAction=n.type==="broadcast"&&(/^(https?:\/\/|\/)/i.test(String(p.action_url||"")));
+    return `<article class="user-notification-item ${meta.tone}${unread?" unread":""}" data-user-notification-id="${Number(n.id||0)}">
+      <div class="user-notification-icon" aria-hidden="true">${meta.icon}</div>
+      <div class="user-notification-copy">
+        <div class="user-notification-title"><span>${esc(meta.label)}</span>${unread?'<i>BARU</i>':''}</div>
+        <b>${esc(n.title||"Pemberitahuan")}</b>
+        <p>${esc(n.message||"")}</p>
+        ${userNotificationDetails(n)}
+        <small>${esc(notificationCreatedLabel(n.created_at||""))}</small>
+        ${hasAction?`<a class="user-notification-action" href="${esc(String(p.action_url||""))}" target="_blank" rel="noopener noreferrer">${esc(p.action_label||"Buka Informasi")}</a>`:""}
+      </div>
+      ${unread?`<button type="button" class="notification-read-btn" data-notification-read="${Number(n.id||0)}">Tandai dibaca</button>`:""}
+    </article>`;
+  }).join("");
+  box.querySelectorAll("[data-notification-read]").forEach(btn=>btn.addEventListener("click",async e=>{e.stopPropagation();await markUserNotificationsRead([Number(btn.dataset.notificationRead||0)]);}));
+  box.querySelectorAll("[data-user-notification-id].unread").forEach(card=>card.addEventListener("click",e=>{if(e.target.closest("a,button"))return;markUserNotificationsRead([Number(card.dataset.userNotificationId||0)]);}));
+}
+function applyUserNotificationSnapshot(j={}) {
+  userNotificationState={unread_count:Number(j.unread_count||0),notifications:Array.isArray(j.notifications)?j.notifications:[]};
+  updateUserNotificationBadges(userNotificationState.unread_count);
+  renderUserNotificationList(userNotificationState.notifications);
+}
+async function refreshUserNotifications(silent=true) {
+  if(userNotificationRequestRunning)return userNotificationState;
+  userNotificationRequestRunning=true;
+  try{
+    const j=await fetchJson("ajax/notifications.php?_="+Date.now());
+    const before=Number(userNotificationState.unread_count||0);
+    applyUserNotificationSnapshot(j);
+    if(!silent&&Number(j.unread_count||0)>before)showFeatureToast("Ada pemberitahuan baru","info");
+    return userNotificationState;
+  }catch(_){return userNotificationState;}
+  finally{userNotificationRequestRunning=false;}
+}
+async function markUserNotificationsRead(ids=[]) {
+  try{
+    const action=ids.length?"mark_read":"mark_all_read";
+    const j=await fetchJson("ajax/notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,ids})});
+    applyUserNotificationSnapshot(j);
+    announceRealtimeMutation();
+  }catch(e){showFeatureToast(e.message||"Gagal memperbarui pemberitahuan","error");}
+}
+function activeMobileViewId(){return document.querySelector(".mobile-view.active")?.id||"chatPanel";}
+function restoreMobileNotificationNav(){
+  el("mobileOpenNotifications")?.classList.remove("active");
+  const id=notificationPreviousMobileView||activeMobileViewId();
+  document.querySelectorAll(".mobile-nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===id));
+}
+async function openNotificationCenter(){
+  if(typeof isMobileSidebar==="function"&&isMobileSidebar())closeSidebar();
+  notificationPreviousMobileView=activeMobileViewId();
+  document.querySelectorAll(".mobile-nav-item[data-view]").forEach(b=>b.classList.remove("active"));
+  el("mobileOpenNotifications")?.classList.add("active");
+  notificationCenterModal?.showModal();
+  await refreshUserNotifications(true);
+}
+el("openNotifications")?.addEventListener("click",openNotificationCenter);
+el("mobileOpenNotifications")?.addEventListener("click",openNotificationCenter);
+el("closeNotificationCenter")?.addEventListener("click",()=>notificationCenterModal?.close());
+el("markAllNotificationsRead")?.addEventListener("click",()=>markUserNotificationsRead([]));
+notificationCenterModal?.addEventListener("close",restoreMobileNotificationNav);
+notificationCenterModal?.addEventListener("click",e=>{if(e.target===notificationCenterModal)notificationCenterModal.close();});
+// V40: Pemberitahuan mengikuti kanal realtime utama (aktif ±2 detik).
+// Request langsung ini hanya fallback jika kanal realtime belum berhasil tersambung.
+setTimeout(()=>{if(!realtimeNotificationSignature)refreshUserNotifications(true);},2500);
+
+// Smart Transaction Assistant V29: Catat Cepat + Transaction Inbox + Daily Reconciliation
+const quickCaptureModal = el("quickCaptureModal");
+const transactionInboxModal = el("transactionInboxModal");
+let quickCaptureType = "expense";
+let quickCapturePhoto = null;
+let activeInboxEditId = 0;
+
+function transactionInboxState() {
+  return featureState()?.transaction_inbox || {items:[],pending_count:0,reconciliation:{}};
+}
+
+function walletNameById(id) {
+  return (featureState()?.wallets || []).find(w => Number(w.id) === Number(id))?.name || (id ? `Dompet #${id}` : "-");
+}
+
+function inboxTypeLabel(type) {
+  return ({expense:"Pengeluaran",income:"Pemasukan",transfer:"Transfer"})[String(type || "")] || "Transaksi";
+}
+
+function quickReceiptMerchant(text = "") {
+  const lines = String(text || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 5);
+  for (const line of lines) {
+    if (line.length < 3 || line.length > 70) continue;
+    if (/^(struk|receipt|nota|invoice|tanggal|date|telp|phone)\b/i.test(line)) continue;
+    if (/[A-Za-z]{3}/.test(line)) return line.replace(/\s+/g, " ");
+  }
+  return "";
+}
+
+function clearQuickCapturePhoto() {
+  if (quickCapturePhoto?.previewUrl) URL.revokeObjectURL(quickCapturePhoto.previewUrl);
+  quickCapturePhoto = null;
+  const wrap = el("quickPhotoPreviewWrap");
+  if (wrap) wrap.hidden = true;
+  if (el("quickPhotoPreview")) el("quickPhotoPreview").removeAttribute("src");
+  if (el("quickCameraPhoto")) el("quickCameraPhoto").value = "";
+  if (el("quickGalleryPhoto")) el("quickGalleryPhoto").value = "";
+  if (el("quickPhotoStatus")) el("quickPhotoStatus").textContent = "Belum ada foto";
+  if (el("quickPhotoOcrResult")) el("quickPhotoOcrResult").textContent = "";
+}
+
+async function scanQuickCapturePhoto() {
+  if (!quickCapturePhoto) return null;
+  if (quickCapturePhoto.ocrPromise) return quickCapturePhoto.ocrPromise;
+  quickCapturePhoto.ocrPromise = (async () => {
+    const status = el("quickPhotoStatus");
+    try {
+      if (status) status.textContent = "Memindai nota…";
+      const worker = await ensureOcrWorker();
+      const ret = await worker.recognize(quickCapturePhoto.file);
+      const text = ret?.data?.text || "";
+      const confidence = Number(ret?.data?.confidence || 0);
+      const candidate = detectReceiptAmount(text);
+      const merchant = quickReceiptMerchant(text);
+      quickCapturePhoto.ocr = { text, confidence, merchant, ...candidate };
+      if (candidate.amount > 0 && Number(el("quickCaptureAmount")?.value || 0) <= 0) el("quickCaptureAmount").value = String(candidate.amount);
+      if (merchant && !String(el("quickCaptureNote")?.value || "").trim()) el("quickCaptureNote").value = `Nota ${merchant}`;
+      if (el("quickPhotoOcrResult")) el("quickPhotoOcrResult").textContent = candidate.amount > 0 ? `Total terdeteksi ${rupiah(candidate.amount)}` : "Foto tersimpan · total belum terbaca";
+      if (status) status.textContent = candidate.amount > 0 ? "Nota terbaca" : "Foto siap";
+      return quickCapturePhoto.ocr;
+    } catch (_) {
+      quickCapturePhoto.ocr = { text: "", confidence: 0, merchant: "", amount: 0, score: 0, line: "" };
+      if (el("quickPhotoOcrResult")) el("quickPhotoOcrResult").textContent = "Foto siap disimpan tanpa OCR";
+      if (status) status.textContent = "Foto siap";
+      return quickCapturePhoto.ocr;
+    }
+  })();
+  return quickCapturePhoto.ocrPromise;
+}
+
+async function handleQuickCapturePhoto(file) {
+  if (!file) return;
+  clearQuickCapturePhoto();
+  if (el("quickPhotoStatus")) el("quickPhotoStatus").textContent = "Mengompres foto…";
+  const prepared = await preparePhoto(file);
+  const previewUrl = URL.createObjectURL(prepared.file);
+  quickCapturePhoto = { file: prepared.file, previewUrl, compression: prepared, ocr: null, ocrPromise: null };
+  if (el("quickPhotoPreview")) el("quickPhotoPreview").src = previewUrl;
+  if (el("quickPhotoPreviewName")) el("quickPhotoPreviewName").textContent = file.name || "Foto nota";
+  if (el("quickPhotoMeta")) el("quickPhotoMeta").textContent = prepared.compressed
+    ? `${formatImageBytes(prepared.originalSize)} → ${formatImageBytes(prepared.finalSize)} · hemat ${prepared.savedPercent}%`
+    : `${formatImageBytes(prepared.finalSize)} · ukuran sudah efisien`;
+  if (el("quickPhotoPreviewWrap")) el("quickPhotoPreviewWrap").hidden = false;
+  if (el("quickPhotoStatus")) el("quickPhotoStatus").textContent = "Memindai nota…";
+  scanQuickCapturePhoto();
+}
+
+function openQuickCapture(prefill = {}) {
+  clearQuickCapturePhoto();
+  quickCaptureType = ["expense","income","transfer"].includes(prefill.type) ? prefill.type : "expense";
+  document.querySelectorAll("[data-quick-type]").forEach(btn => {
+    const active = btn.dataset.quickType === quickCaptureType;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  if (el("quickCaptureAmount")) el("quickCaptureAmount").value = prefill.amount || "";
+  if (el("quickCaptureNote")) el("quickCaptureNote").value = prefill.note || "";
+  if (el("quickCaptureDate")) el("quickCaptureDate").value = prefill.transaction_date || localTodayValue();
+  if (!quickCaptureModal?.open) quickCaptureModal?.showModal();
+  setTimeout(() => el("quickCaptureAmount")?.focus(), 80);
+}
+
+function closeQuickCapture() { clearQuickCapturePhoto(); quickCaptureModal?.close(); }
+
+function resetQuickCaptureForm() {
+  clearQuickCapturePhoto();
+  quickCaptureType = "expense";
+  document.querySelectorAll("[data-quick-type]").forEach(btn => {
+    const active = btn.dataset.quickType === quickCaptureType;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  if (el("quickCaptureAmount")) el("quickCaptureAmount").value = "";
+  if (el("quickCaptureNote")) el("quickCaptureNote").value = "";
+  if (el("quickCaptureDate")) el("quickCaptureDate").value = localTodayValue();
+  setTimeout(() => el("quickCaptureAmount")?.focus(), 70);
+}
+
+async function saveQuickCapture() {
+  let amount = Number(el("quickCaptureAmount")?.value || 0);
+  let note = el("quickCaptureNote")?.value.trim() || "";
+  const transactionDate = el("quickCaptureDate")?.value || localTodayValue();
+  let ocr = quickCapturePhoto?.ocr || null;
+  if (quickCapturePhoto && (!ocr || amount <= 0 || !note)) ocr = await scanQuickCapturePhoto();
+  if (amount <= 0 && Number(ocr?.amount || 0) > 0) { amount = Number(ocr.amount); if (el("quickCaptureAmount")) el("quickCaptureAmount").value = String(amount); }
+  if (!note && quickCapturePhoto) { note = ocr?.merchant ? `Nota ${ocr.merchant}` : "Nota foto"; if (el("quickCaptureNote")) el("quickCaptureNote").value = note; }
+  if (amount <= 0) {
+    showFeatureToast(quickCapturePhoto ? "Nominal belum terbaca dari foto. Isi nominal terlebih dahulu." : "Isi nominal transaksi terlebih dahulu.", "error");
+    el("quickCaptureAmount")?.focus();
+    return;
+  }
+  if (!note) {
+    showFeatureToast("Isi keterangan singkat atau tambahkan foto nota.", "error");
+    el("quickCaptureNote")?.focus();
+    return;
+  }
+  const btn = el("quickCaptureSave"), old = btn?.textContent || "Simpan ke Draf Transaksi";
+  if (btn) { btn.disabled = true; btn.textContent = quickCapturePhoto ? "Mengunggah foto…" : "Menyimpan…"; }
+  try {
+    let response = null;
+    if (quickCapturePhoto) {
+      const fd = new FormData();
+      fd.append("action", "quick_capture");
+      fd.append("type", quickCaptureType);
+      fd.append("amount", String(amount));
+      fd.append("transaction_date", transactionDate);
+      fd.append("note", note);
+      fd.append("photo", quickCapturePhoto.file, quickCapturePhoto.file.name);
+      fd.append("ocr_text", ocr?.text || "");
+      fd.append("ocr_amount", String(ocr?.amount || 0));
+      fd.append("ocr_score", String(ocr?.score || 0));
+      fd.append("ocr_line", ocr?.line || "");
+      fd.append("ocr_confidence", String(ocr?.confidence || 0));
+      response = await featureFormAction(fd, "", { kind: "quick_capture_photo", preview: { amount, note, transaction_date: transactionDate, photo: true } });
+      if (response?.offline_queued) showOfflineToast("Draf foto tersimpan offline dan akan masuk ke Draf Transaksi setelah tersinkron.");
+      else showFeatureToast("Draf transaksi berhasil disimpan", "success");
+    } else {
+      response = await featureAction({action:"quick_capture",type:quickCaptureType,amount,transaction_date:transactionDate,note});
+      if (response?.offline_queued) showOfflineToast("Draf tersimpan offline dan akan masuk ke Draf Transaksi setelah tersinkron.");
+      else showFeatureToast("Draf transaksi berhasil disimpan", "success");
+    }
+    resetQuickCaptureForm();
+    if (navigator.onLine) await load();
+  } catch (e) {
+    showFeatureToast(e.message || "Draf cepat gagal disimpan.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old; }
+  }
+}
+
+function inboxSuggestedSummary(item) {
+  const s = item.suggested || {};
+  if (s.type === "transfer") return `${walletNameById(s.from_wallet_id)} → ${walletNameById(s.to_wallet_id)}`;
+  return `${s.category || "Lainnya"} · ${walletNameById(s.wallet_id)}`;
+}
+
+function inboxCanConfirm(item) {
+  const s = item.suggested || {};
+  if (s.type === "transfer") return Number(s.from_wallet_id||0)>0 && Number(s.to_wallet_id||0)>0 && Number(s.from_wallet_id)!==Number(s.to_wallet_id);
+  return Number(s.wallet_id||0)>0;
+}
+
+function renderTransactionInboxList() {
+  const list = el("transactionInboxList");
+  const inbox = transactionInboxState();
+  const items = inbox.items || [];
+  if (el("inboxPendingTotal")) el("inboxPendingTotal").textContent = String(items.length);
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="transaction-inbox-empty"><div>✓</div><b>Draf Transaksi sudah rapi</b><span>Belum ada draf transaksi yang perlu dikonfirmasi.</span></div>`;
+    return;
+  }
+  list.innerHTML = items.map(item => {
+    const s = item.suggested || {};
+    const can = inboxCanConfirm(item);
+    const photoFile = String(item.attachment?.file || "");
+    const photoSrc = photoFile ? photoUrl(item.attachment) : "";
+    const photo = photoFile ? `<button type="button" class="inbox-photo-thumb" data-inbox-photo="${esc(photoFile)}" aria-label="Lihat foto nota"><img src="${esc(photoSrc)}" alt="Foto nota" loading="lazy"></button>` : "";
+    return `<article class="transaction-inbox-item ${photoFile ? "has-photo" : ""}" data-inbox-row="${Number(item.id||0)}">
+      ${photo}
+      <div class="inbox-item-content">
+      <div class="inbox-item-top">
+        <span class="inbox-type ${esc(String(s.type||item.type||"expense"))}">${esc(inboxTypeLabel(s.type||item.type))}</span>
+        <strong>${esc(rupiah(item.amount||0))}</strong>
+      </div>
+      <b class="inbox-note">${esc(item.note||"Tanpa keterangan")}</b>
+      <small>${esc(item.transaction_date||"")} · Saran: ${esc(inboxSuggestedSummary(item))}</small>
+      <div class="inbox-item-actions">
+        <button type="button" class="inbox-confirm" data-inbox-confirm="${Number(item.id||0)}" ${can?"":"disabled"}>Konfirmasi</button>
+        <button type="button" data-inbox-edit="${Number(item.id||0)}">Edit & Simpan</button>
+        <button type="button" class="danger-link" data-inbox-dismiss="${Number(item.id||0)}">Hapus</button>
+      </div>
+      ${can?"":'<p class="inbox-warning">Lengkapi dompet transfer sebelum dikonfirmasi.</p>'}
+      </div>
+    </article>`;
+  }).join("");
+
+  list.querySelectorAll("[data-inbox-confirm]").forEach(btn => btn.onclick = () => confirmInboxSuggested(Number(btn.dataset.inboxConfirm), btn));
+  list.querySelectorAll("[data-inbox-edit]").forEach(btn => btn.onclick = () => openInboxForEdit(Number(btn.dataset.inboxEdit)));
+  list.querySelectorAll("[data-inbox-dismiss]").forEach(btn => btn.onclick = () => dismissInboxItem(Number(btn.dataset.inboxDismiss)));
+  list.querySelectorAll("[data-inbox-photo]").forEach(btn => btn.onclick = () => openPhotoViewer(photoUrl({file: btn.dataset.inboxPhoto || ""})));
+}
+
+function renderTransactionInboxAssistant() {
+  const inbox = transactionInboxState();
+  const count = Number(inbox.pending_count ?? (inbox.items || []).length);
+  [el("transactionInboxCount"), el("quickCaptureCount")].forEach(badge => {
+    if (!badge) return;
+    badge.textContent = String(count);
+    badge.hidden = count <= 0;
+  });
+  el("transactionInboxBtn")?.classList.toggle("has-items", count > 0);
+  el("quickCaptureFab")?.classList.toggle("has-items", count > 0);
+  renderTransactionInboxList();
+
+  const r = inbox.reconciliation || {};
+  const card = el("dailyReconciliationCard");
+  if (!card) return;
+  const show = !!r.enabled && !!r.prompt_due && !r.completed;
+  card.hidden = !show;
+  if (!show) return;
+  const pending = Number(r.pending_count || count || 0);
+  if (el("reconciliationPendingBadge")) {
+    el("reconciliationPendingBadge").hidden = pending <= 0;
+    el("reconciliationPendingBadge").textContent = `${pending} draf`;
+  }
+  const summary = `${Number(r.transaction_count||0)} transaksi tercatat hari ini · pengeluaran ${rupiah(r.expense||0)} · pemasukan ${rupiah(r.income||0)}${pending>0?` · ${pending} draft belum dirapikan`:""}.`;
+  if (el("reconciliationSummary")) el("reconciliationSummary").textContent = summary;
+}
+
+function openTransactionInbox() {
+  renderTransactionInboxList();
+  if (!transactionInboxModal?.open) transactionInboxModal?.showModal();
+}
+
+async function confirmInboxSuggested(id, button) {
+  const item = (transactionInboxState().items || []).find(x => Number(x.id) === Number(id));
+  if (!item) return alert("Draf transaksi tidak ditemukan.");
+  const s = item.suggested || {};
+  const payload = {...s, action:"inbox_confirm", id:Number(id), amount:Number(item.amount||0), transaction_date:item.transaction_date||localTodayValue(), note:item.note||""};
+  const old = button?.textContent || "Konfirmasi";
+  try {
+    if (button) { button.disabled = true; button.textContent = "Menyimpan..."; }
+    await featureAction(payload);
+    await load();
+    renderTransactionInboxAssistant();
+    showFeatureToast("Draf dikonfirmasi menjadi transaksi");
+  } catch (e) { alert(e.message || "Draf gagal dikonfirmasi."); }
+  finally { if (button) { button.disabled = false; button.textContent = old; } }
+}
+
+async function confirmAllInboxReady() {
+  const items = transactionInboxState().items || [];
+  const ready = items.filter(inboxCanConfirm);
+  if (!items.length) return showFeatureToast("Draf Transaksi sudah kosong");
+  if (!ready.length) return alert("Belum ada draf yang siap disimpan. Lengkapi draf terlebih dahulu melalui Edit & Simpan.");
+  const incomplete = items.length - ready.length;
+  const message = incomplete > 0
+    ? `Simpan ${ready.length} draf yang sudah siap? ${incomplete} draf yang belum lengkap akan tetap berada di Draf Transaksi.`
+    : `Simpan semua ${ready.length} draf menjadi transaksi sekarang?`;
+  if (!confirm(message)) return;
+  const btn = el("inboxConfirmAll"), old = btn?.textContent || "Simpan semua";
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = "Menyimpan…"; }
+    const r = await featureAction({action:"inbox_confirm_all", ids:ready.map(x => Number(x.id||0))});
+    const result = r?.result || {};
+    await load();
+    renderTransactionInboxAssistant();
+    const ok = Number(result.confirmed_count || 0);
+    const failed = Number(result.failed_count || 0);
+    const skipped = Number(result.skipped_count || 0);
+    if (failed || skipped) {
+      const notes = [];
+      if (ok) notes.push(`${ok} transaksi berhasil disimpan`);
+      if (failed) notes.push(`${failed} gagal`);
+      if (skipped) notes.push(`${skipped} belum lengkap`);
+      alert(notes.join(" · ") + ". Draf yang gagal/belum lengkap tetap berada di Draf Transaksi.");
+    } else {
+      showFeatureToast(`${ok} transaksi berhasil disimpan sekaligus`);
+    }
+  } catch (e) { alert(e.message || "Draf Transaksi gagal disimpan sekaligus."); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+}
+
+function prefillManualTransactionFromInbox(item) {
+  const s = item.suggested || {};
+  resetCreateTransactionForm();
+  activeInboxEditId = Number(item.id || 0);
+  if (el("createTxType")) el("createTxType").value = s.type || item.type || "expense";
+  syncCreateTxType();
+  if (el("createTxAmount")) el("createTxAmount").value = Number(item.amount || 0);
+  if (el("createTxDate")) el("createTxDate").value = item.transaction_date || localTodayValue();
+  if (el("createTxNote")) el("createTxNote").value = item.note || "";
+  if (s.type === "transfer") {
+    if (el("createTxFromWallet")) el("createTxFromWallet").value = String(s.from_wallet_id || "");
+    if (el("createTxToWallet")) el("createTxToWallet").value = String(s.to_wallet_id || "");
+  } else {
+    if (el("createTxWallet")) el("createTxWallet").value = String(s.wallet_id || "");
+    fillCreateTxCategories();
+    if (el("createTxCategory") && s.category) el("createTxCategory").value = s.category;
+    if (el("createTxSpendingKind") && s.spending_kind) el("createTxSpendingKind").value = s.spending_kind;
+  }
+  const title = txCreateModal?.querySelector(".modal-head h3");
+  const subtitle = txCreateModal?.querySelector(".modal-subtitle");
+  if (title) title.textContent = "Rapikan Draf Transaksi";
+  if (subtitle) subtitle.textContent = "Periksa hasil saran AI lalu simpan sebagai transaksi final.";
+}
+
+function resetManualTransactionTitle() {
+  const title = txCreateModal?.querySelector(".modal-head h3");
+  const subtitle = txCreateModal?.querySelector(".modal-subtitle");
+  if (title) title.textContent = "Tambah Transaksi";
+  if (subtitle) subtitle.textContent = "Catat pemasukan, pengeluaran, atau transfer antar dompet secara manual.";
+}
+
+function openInboxForEdit(id) {
+  const item = (transactionInboxState().items || []).find(x => Number(x.id) === Number(id));
+  if (!item) return alert("Draf transaksi tidak ditemukan.");
+  transactionInboxModal?.close();
+  prefillManualTransactionFromInbox(item);
+  if (!txCreateModal?.open) txCreateModal?.showModal();
+  setTimeout(() => el("createTxAmount")?.focus(), 80);
+}
+
+async function dismissInboxItem(id) {
+  if (!confirm("Hapus draf ini dari Draf Transaksi? Saldo tidak akan berubah.")) return;
+  try {
+    await featureAction({action:"inbox_dismiss",id:Number(id)});
+    renderTransactionInboxAssistant();
+    showFeatureToast("Draf transaksi dihapus");
+  } catch (e) { alert(e.message || "Draf gagal dihapus."); }
+}
+
+async function markDailyReconciliationDone() {
+  const pending = Number(transactionInboxState()?.pending_count || 0);
+  if (pending > 0 && !confirm(`Masih ada ${pending} draf di Draf Transaksi. Tetap tandai transaksi hari ini sudah lengkap?`)) return;
+  const btn = el("reconciliationDone"), old = btn?.textContent || "Sudah lengkap";
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+    await featureAction({action:"reconciliation_complete",date:localTodayValue()});
+    renderTransactionInboxAssistant();
+    showFeatureToast("Rekonsiliasi hari ini selesai");
+  } catch (e) { alert(e.message || "Rekonsiliasi gagal disimpan."); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+}
+
+const QUICK_FAB_POS_KEY = "finance.quickCaptureFab.position.v1";
+const QUICK_FAB_MOBILE_MAX = 720;
+const QUICK_FAB_DOCK_VISIBLE = 30;
+const QUICK_FAB_DOCK_THRESHOLD = 18;
+let quickFabSuppressClickUntil = 0;
+
+function quickCaptureFabIsMobile() {
+  return window.matchMedia(`(max-width:${QUICK_FAB_MOBILE_MAX}px)`).matches;
+}
+
+function clampQuickCaptureFabPosition(x, y, allowEdgeOverflow = false) {
+  const fab = el("quickCaptureFab");
+  if (!fab) return {x, y};
+  const margin = 8;
+  const w = fab.offsetWidth || 48, h = fab.offsetHeight || 48;
+  const minX = allowEdgeOverflow && quickCaptureFabIsMobile() ? -(w - QUICK_FAB_DOCK_VISIBLE) : margin;
+  const maxX = allowEdgeOverflow && quickCaptureFabIsMobile() ? window.innerWidth - QUICK_FAB_DOCK_VISIBLE : window.innerWidth - w - margin;
+  return {
+    x: Math.max(minX, Math.min(Number(x)||margin, maxX)),
+    y: Math.max(margin, Math.min(Number(y)||margin, window.innerHeight - h - margin)),
+  };
+}
+
+function setQuickCaptureFabDockClass(dock = "") {
+  const fab = el("quickCaptureFab");
+  if (!fab) return;
+  fab.classList.toggle("is-edge-docked", dock === "left" || dock === "right");
+  fab.classList.toggle("is-edge-docked-left", dock === "left");
+  fab.classList.toggle("is-edge-docked-right", dock === "right");
+  fab.dataset.edgeDock = dock || "";
+}
+
+function applyQuickCaptureFabPosition(pos, persist = false, options = {}) {
+  const fab = el("quickCaptureFab");
+  if (!fab || !pos) return;
+  const mobile = quickCaptureFabIsMobile();
+  const requestedDock = mobile && (options.dock === "left" || options.dock === "right") ? options.dock : "";
+  const w = fab.offsetWidth || 48;
+  let p;
+  if (requestedDock) {
+    p = clampQuickCaptureFabPosition(
+      requestedDock === "left" ? -(w - QUICK_FAB_DOCK_VISIBLE) : window.innerWidth - QUICK_FAB_DOCK_VISIBLE,
+      pos.y,
+      true
+    );
+  } else {
+    p = clampQuickCaptureFabPosition(pos.x, pos.y, Boolean(options.allowEdgeOverflow));
+  }
+  setQuickCaptureFabDockClass(requestedDock);
+  fab.style.left = `${Math.round(p.x)}px`;
+  fab.style.top = `${Math.round(p.y)}px`;
+  fab.style.right = "auto";
+  fab.style.bottom = "auto";
+  if (persist) {
+    try {
+      localStorage.setItem(QUICK_FAB_POS_KEY, JSON.stringify({
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        dock: requestedDock || "",
+      }));
+    } catch (_) {}
+  }
+}
+
+function restoreQuickCaptureFabPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QUICK_FAB_POS_KEY) || "null");
+    if (!saved || !Number.isFinite(Number(saved.x)) || !Number.isFinite(Number(saved.y))) return;
+    const dock = quickCaptureFabIsMobile() && (saved.dock === "left" || saved.dock === "right") ? saved.dock : "";
+    applyQuickCaptureFabPosition(saved, false, {dock});
+  } catch (_) {}
+}
+
+function maybeDockQuickCaptureFab() {
+  const fab = el("quickCaptureFab");
+  if (!fab) return;
+  const rect = fab.getBoundingClientRect();
+  if (!quickCaptureFabIsMobile()) {
+    applyQuickCaptureFabPosition({x:rect.left,y:rect.top}, true);
+    return;
+  }
+  const leftGap = rect.left;
+  const rightGap = window.innerWidth - rect.right;
+  if (leftGap <= QUICK_FAB_DOCK_THRESHOLD) {
+    applyQuickCaptureFabPosition({x:rect.left,y:rect.top}, true, {dock:"left"});
+  } else if (rightGap <= QUICK_FAB_DOCK_THRESHOLD) {
+    applyQuickCaptureFabPosition({x:rect.left,y:rect.top}, true, {dock:"right"});
+  } else {
+    applyQuickCaptureFabPosition({x:rect.left,y:rect.top}, true);
+  }
+}
+
+function initDraggableQuickCaptureFab() {
+  const fab = el("quickCaptureFab");
+  if (!fab) return;
+  restoreQuickCaptureFabPosition();
+  let drag = null;
+  fab.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const rect = fab.getBoundingClientRect();
+    drag = {
+      pointerId:e.pointerId,
+      startX:e.clientX,
+      startY:e.clientY,
+      left:rect.left,
+      top:rect.top,
+      moved:false,
+      wasDocked:fab.classList.contains("is-edge-docked")
+    };
+    try { fab.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  fab.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx,dy) < 6) return;
+    drag.moved = true;
+    fab.classList.add("is-dragging");
+    if (drag.wasDocked) setQuickCaptureFabDockClass("");
+    applyQuickCaptureFabPosition({x:drag.left+dx,y:drag.top+dy}, false, {allowEdgeOverflow:true});
+    e.preventDefault();
+  });
+  const finish = (e) => {
+    if (!drag || (e.pointerId !== undefined && e.pointerId !== drag.pointerId)) return;
+    const moved = drag.moved; drag = null;
+    fab.classList.remove("is-dragging");
+    if (moved) {
+      maybeDockQuickCaptureFab();
+      quickFabSuppressClickUntil = Date.now() + 350;
+      e?.preventDefault?.();
+    }
+  };
+  fab.addEventListener("pointerup", finish);
+  fab.addEventListener("pointercancel", finish);
+  window.addEventListener("resize", () => {
+    if (!(fab.style.left && fab.style.top)) return;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(QUICK_FAB_POS_KEY) || "null"); } catch (_) {}
+    const dock = quickCaptureFabIsMobile() && (saved?.dock === "left" || saved?.dock === "right") ? saved.dock : "";
+    const rect = fab.getBoundingClientRect();
+    applyQuickCaptureFabPosition({x:rect.left,y:rect.top}, false, {dock});
+  });
+}
+
+document.querySelectorAll("[data-quick-type]").forEach(btn => btn.addEventListener("click", () => {
+  quickCaptureType = btn.dataset.quickType || "expense";
+  document.querySelectorAll("[data-quick-type]").forEach(x => x.classList.toggle("active", x === btn));
+}));
+el("quickPhotoCameraBtn")?.addEventListener("click", () => el("quickCameraPhoto")?.click());
+el("quickPhotoGalleryBtn")?.addEventListener("click", () => el("quickGalleryPhoto")?.click());
+el("quickCameraPhoto")?.addEventListener("change", (e) => handleQuickCapturePhoto(e.target.files?.[0]).catch(err => alert(err.message)));
+el("quickGalleryPhoto")?.addEventListener("change", (e) => handleQuickCapturePhoto(e.target.files?.[0]).catch(err => alert(err.message)));
+el("quickPhotoRemove")?.addEventListener("click", clearQuickCapturePhoto);
+el("quickPhotoOpenPreview")?.addEventListener("click", () => { if (quickCapturePhoto?.previewUrl) openPhotoViewer(quickCapturePhoto.previewUrl); });
+el("quickCaptureFab")?.addEventListener("click", (e) => { if (Date.now() < quickFabSuppressClickUntil) { e.preventDefault(); return; } openQuickCapture(); });
+initDraggableQuickCaptureFab();
+el("closeQuickCapture")?.addEventListener("click", closeQuickCapture);
+el("quickCaptureCancel")?.addEventListener("click", closeQuickCapture);
+el("quickCaptureSave")?.addEventListener("click", saveQuickCapture);
+el("transactionInboxBtn")?.addEventListener("click", openTransactionInbox);
+el("closeTransactionInbox")?.addEventListener("click", () => transactionInboxModal?.close());
+el("inboxQuickAdd")?.addEventListener("click", () => { transactionInboxModal?.close(); openQuickCapture(); });
+el("inboxConfirmAll")?.addEventListener("click", confirmAllInboxReady);
+el("reconciliationQuickAdd")?.addEventListener("click", () => openQuickCapture());
+el("reconciliationOpenInbox")?.addEventListener("click", openTransactionInbox);
+el("reconciliationDone")?.addEventListener("click", markDailyReconciliationDone);
 
 // Tambah transaksi manual
 const txCreateModal=el("transactionCreateModal");
@@ -3507,6 +4532,8 @@ function syncCreateTxType() {
 }
 
 function resetCreateTransactionForm() {
+  activeInboxEditId = 0;
+  resetManualTransactionTitle();
   if (el("createTxType")) el("createTxType").value = "expense";
   if (el("createTxAmount")) el("createTxAmount").value = "";
   if (el("createTxDate")) el("createTxDate").value = localTodayValue();
@@ -3541,8 +4568,8 @@ el("addTransactionBtn")?.addEventListener("click", async () => {
 });
 
 el("createTxType")?.addEventListener("change", syncCreateTxType);
-el("closeTransactionCreate")?.addEventListener("click", () => txCreateModal?.close());
-el("cancelTransactionCreate")?.addEventListener("click", () => txCreateModal?.close());
+el("closeTransactionCreate")?.addEventListener("click", () => { activeInboxEditId = 0; resetManualTransactionTitle(); txCreateModal?.close(); });
+el("cancelTransactionCreate")?.addEventListener("click", () => { activeInboxEditId = 0; resetManualTransactionTitle(); txCreateModal?.close(); });
 
 el("saveTransactionCreate")?.addEventListener("click", async () => {
   const saveBtn = el("saveTransactionCreate");
@@ -3554,7 +4581,8 @@ el("saveTransactionCreate")?.addEventListener("click", async () => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) return alert("Tanggal transaksi belum valid.");
 
   const payload = {
-    action: "transaction_create",
+    action: activeInboxEditId > 0 ? "inbox_confirm" : "transaction_create",
+    ...(activeInboxEditId > 0 ? {id: activeInboxEditId} : {}),
     type,
     amount,
     transaction_date: transactionDate,
@@ -3584,10 +4612,14 @@ el("saveTransactionCreate")?.addEventListener("click", async () => {
   }
 
   try {
+    const wasInbox = activeInboxEditId > 0;
     await featureAction(payload);
     txCreateModal?.close();
+    activeInboxEditId = 0;
+    resetManualTransactionTitle();
     await load();
     showFeatureToast(
+      wasInbox ? "Draf Transaksi berhasil dirapikan" :
       type === "transfer"
         ? "Transfer berhasil dicatat"
         : type === "income"

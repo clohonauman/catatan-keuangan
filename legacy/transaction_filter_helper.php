@@ -30,6 +30,36 @@ function txReadFilters($source) {
     return ['type'=>$type, 'from'=>$from, 'to'=>$to, 'sort'=>$sort, 'search'=>$search, 'wallet_id'=>$wallet, 'category'=>$category];
 }
 
+
+function txReadPagination($source, $defaultLimit=10, $maxLimit=100) {
+    $page = max(1, (int)($source['page'] ?? 1));
+    $limit = (int)($source['limit'] ?? $defaultLimit);
+    if ($limit <= 0) $limit = $defaultLimit;
+    $limit = min(max(1, $limit), max(1, (int)$maxLimit));
+    return ['page'=>$page, 'limit'=>$limit];
+}
+
+function txPaginateResult(array $result, int $page, int $limit): array {
+    $items = array_values((array)($result['transactions'] ?? []));
+    $total = count($items);
+    $page = max(1, $page);
+    $limit = max(1, $limit);
+    $offset = ($page - 1) * $limit;
+    $paged = array_slice($items, $offset, $limit);
+    $loadedThrough = min($total, $offset + count($paged));
+    $result['transactions'] = $paged;
+    $result['meta']['pagination'] = [
+        'page'=>$page,
+        'limit'=>$limit,
+        'total'=>$total,
+        'loaded'=>count($paged),
+        'loaded_through'=>$loadedThrough,
+        'has_more'=>$loadedThrough < $total,
+        'next_page'=>$loadedThrough < $total ? $page + 1 : null,
+    ];
+    return $result;
+}
+
 function txSortTransactions(&$items, $sort) {
     usort($items, function ($a, $b) use ($sort) {
         $amountA = (int)($a['amount'] ?? 0);

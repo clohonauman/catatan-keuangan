@@ -7,7 +7,9 @@ require_once __DIR__ . '/../transaction_filter_helper.php';
 
 try {
     $filters = txReadFilters($_GET);
+    $pagination = txReadPagination($_GET, 10, 100);
     $result = txFilterTransactions(allTransactions(), $filters);
+    $result = txPaginateResult($result, (int)$pagination['page'], (int)$pagination['limit']);
     echo json_encode([
         'ok' => true,
         'transactions' => $result['transactions'],

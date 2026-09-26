@@ -226,8 +226,8 @@ function faqKnowledgeBase(): array {
             'id' => 'faq-30',
             'category' => 'sinkronisasi',
             'question' => 'Apa saja yang ikut dalam backup aplikasi?',
-            'keywords' => 'backup restore adaptive learning ai data pindah perangkat version 4',
-            'answer_html' => 'Backup menyimpan data keuangan dan konfigurasi yang didukung, termasuk data Adaptive Learning pada format backup terbaru. Gunakan menu <b>Backup &amp; Aplikasi</b> dan lakukan backup terutama sebelum mengganti perangkat atau melakukan perubahan besar.',
+            'keywords' => 'backup restore adaptive learning ai data pindah perangkat version 5',
+            'answer_html' => 'Backup menyimpan data keuangan dan konfigurasi yang didukung, termasuk data Adaptive Learning dan Draf Transaksi pada format backup terbaru. Gunakan menu <b>Backup &amp; Aplikasi</b> dan lakukan backup terutama sebelum mengganti perangkat atau melakukan perubahan besar.',
         ],
         [
             'id' => 'faq-31',
@@ -261,8 +261,8 @@ function faqKnowledgeBase(): array {
             'id' => 'faq-35',
             'category' => 'akun',
             'question' => 'Apakah notifikasi aplikasi bisa dikirim ke email?',
-            'keywords' => 'email notifikasi broadcast pembaruan android tagihan saldo batas harian',
-            'answer_html' => 'Bisa. Aktifkan <b>Kirim notifikasi juga ke email terverifikasi</b> pada menu <b>Backup &amp; Aplikasi → Notifikasi</b>. Peringatan batas harian, tagihan jatuh tempo, saldo rendah, serta pemberitahuan penting dari aplikasi dapat dikirim ke email. Sistem melakukan deduplikasi agar peringatan yang sama tidak dikirim berulang pada hari yang sama.',
+            'keywords' => 'email notifikasi pemberitahuan login keamanan broadcast pembaruan android tagihan saldo batas harian',
+            'answer_html' => 'Bisa. Aktifkan <b>Kirim notifikasi juga ke email terverifikasi</b> pada menu <b>Backup &amp; Aplikasi → Notifikasi</b>. Peringatan batas harian, tagihan jatuh tempo, saldo rendah, serta pemberitahuan penting dari aplikasi dapat dikirim ke email. Riwayat login baru, broadcast admin, dan peringatan aplikasi juga tersimpan di menu <b>Pemberitahuan</b>. Sistem melakukan deduplikasi agar peringatan yang sama tidak dibuat berulang pada hari yang sama.',
         ],
         [
             'id' => 'faq-36',
@@ -270,6 +270,27 @@ function faqKnowledgeBase(): array {
             'question' => 'Bagaimana menghapus akun?',
             'keywords' => 'hapus akun permanen data privasi password pin',
             'answer_html' => 'Gunakan menu <b>Hapus Akun</b>, lakukan verifikasi dengan password atau PIN, lalu konfirmasi penghapusan. Penghapusan bersifat permanen dan mencakup data akun serta data terkait di server sesuai penjelasan pada halaman tersebut.',
+        ],
+        [
+            'id' => 'faq-37',
+            'category' => 'transaksi',
+            'question' => 'Apa itu Catat Cepat dan Draf Transaksi?',
+            'keywords' => 'catat cepat quick add draf transaksi draft transaksi transaction inbox lupa transaksi rapikan nanti',
+            'answer_html' => '<b>Catat Cepat</b> dipakai saat Anda tidak sempat melengkapi transaksi. Isi nominal, jenis, dan keterangan singkat lalu simpan ke <b>Draf Transaksi</b>. Saldo belum berubah sampai draf dikonfirmasi. Saat punya waktu, buka Draf Transaksi untuk menerima saran kategori/dompet, mengedit detail, lalu menyimpannya sebagai transaksi final.',
+        ],
+        [
+            'id' => 'faq-38',
+            'category' => 'transaksi',
+            'question' => 'Bagaimana aplikasi membantu jika saya lupa mencatat transaksi?',
+            'keywords' => 'lupa mencatat transaksi rekonsiliasi harian sudah lengkap transaksi hari ini pengingat',
+            'answer_html' => 'Setiap malam mulai sekitar <b>19.00</b>, fitur <b>Rekonsiliasi Harian</b> dapat menampilkan ringkasan jumlah transaksi, pemasukan, pengeluaran, serta draf transaksi yang belum dirapikan. Pilih <b>+ Yang terlupa</b> untuk mencatat cepat, <b>Rapikan Draf Transaksi</b> untuk melengkapi draf, atau <b>Sudah lengkap</b> jika semua transaksi hari itu sudah tercatat.',
+        ],
+        [
+            'id' => 'faq-39',
+            'category' => 'sinkronisasi',
+            'question' => 'Apakah Draf Transaksi ikut dalam backup?',
+            'keywords' => 'backup transaction inbox catat cepat draft backup versi 5 restore',
+            'answer_html' => 'Ya. Format backup terbaru ikut menyimpan <b>Draf Transaksi</b> beserta data Adaptive Learning. Backup versi lama tetap dapat direstore; jika field Draf Transaksi tidak ada, data draf yang sudah ada tidak perlu dibuat ulang dari transaksi lama.',
         ],
     ];
 }
@@ -320,7 +341,7 @@ function faqLooksLikeFeatureQuestion(string $message): bool {
     if (preg_match('/\b(?:ubah|atur|edit|kelola|setting)\s+(?:harga\s+)?(?:paket|premium|subscription)\b/u', $t)) return false;
     if (strpos($message, '?') !== false) return true;
     if (preg_match('/^(?:apa|apakah|bagaimana|gimana|cara|kenapa|mengapa|bisa|bisakah|berapa|dimana|kapan)\b/u', $t)) return true;
-    return (bool)preg_match('/\b(?:free trial|trial premium|saldo minimum|dana disisihkan|adaptive learning|belajar dari koreksi|tambah transaksi manual|transaksi manual|nota foto|scan nota|offline|sinkronisasi|backup|biometrik|face id|sidik jari|hapus akun|lupa pin|lupa password|notifikasi email)\b/u', $t);
+    return (bool)preg_match('/\b(?:free trial|trial premium|saldo minimum|dana disisihkan|adaptive learning|belajar dari koreksi|tambah transaksi manual|transaksi manual|catat cepat|draf transaksi|transaction inbox|rekonsiliasi harian|lupa mencatat transaksi|nota foto|scan nota|offline|sinkronisasi|backup|biometrik|face id|sidik jari|hapus akun|lupa pin|lupa password|notifikasi email|pemberitahuan)\b/u', $t);
 }
 
 function faqFindBestMatch(string $message): ?array {

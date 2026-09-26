@@ -212,7 +212,7 @@ function emailBroadcastCreate(array $admin, array $input): array {
     $recipients = emailBroadcastTargetUsers($target, (array)($input['user_ids'] ?? []));
     if (!$recipients) throw new InvalidArgumentException('Tidak ada pengguna dengan email terverifikasi pada target ini.');
 
-    return emailNotifyMutate(function (&$data) use ($admin,$kind,$target,$title,$subject,$message,$actionUrl,$actionLabel,$includeLink,$actionUrlRewritten,$recipients) {
+    $campaign = emailNotifyMutate(function (&$data) use ($admin,$kind,$target,$title,$subject,$message,$actionUrl,$actionLabel,$includeLink,$actionUrlRewritten,$recipients) {
         $campaign=[
             'id'=>(int)$data['meta']['next_campaign_id']++, 'kind'=>$kind, 'target'=>$target,
             'title'=>$title, 'subject'=>$subject, 'message'=>$message, 'action_url'=>$actionUrl, 'action_label'=>$actionLabel,
@@ -224,6 +224,25 @@ function emailBroadcastCreate(array $admin, array $input): array {
         if (count($data['campaigns']) > 100) $data['campaigns'] = array_slice($data['campaigns'], -100);
         return $campaign;
     });
+
+    // Broadcast admin juga masuk ke Pusat Pemberitahuan aplikasi. Penyimpanan ini
+    // terpisah dari SMTP sehingga tetap tersedia di aplikasi walau email masih antre.
+    foreach ($recipients as $recipient) {
+        $uid = (int)($recipient['user_id'] ?? 0);
+        if ($uid <= 0) continue;
+        try {
+            userNotificationCreate($uid, 'broadcast', $title, $message, [
+                'campaign_id'=>(int)($campaign['id'] ?? 0),
+                'kind'=>$kind,
+                'action_url'=>$actionUrl,
+                'action_label'=>$actionLabel,
+            ], 'broadcast:'.(int)($campaign['id'] ?? 0));
+        } catch (Throwable $e) {
+            error_log('[Broadcast app notification] user_id='.$uid.' gagal: '.$e->getMessage());
+        }
+    }
+
+    return $campaign;
 }
 
 function emailBroadcastFind(int $id): ?array {

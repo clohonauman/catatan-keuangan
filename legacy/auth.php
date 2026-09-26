@@ -2,6 +2,7 @@
 require_once __DIR__ . '/config.php';
 use app\repositories\AuthRepository;
 require_once __DIR__ . '/mail_helper.php';
+require_once __DIR__ . '/user_notification_helper.php';
 
 define('DEVICE_COOKIE', 'finance_device');
 define('DEVICE_COOKIE_DAYS', 180);
@@ -90,8 +91,26 @@ function authDescribeDevice($userAgent = null)
     elseif (strpos($low, 'linux') !== false) $os = 'Linux';
 
     $browser = 'Browser';
-    if (strpos($low, 'charliefinanceandroid') !== false || strpos($low, '; wv)') !== false || strpos($low, ' version/4.0 ') !== false && strpos($low, 'android') !== false) {
+    $channel = 'browser';
+    $appVersion = '';
+
+    // User-Agent resmi aplikasi native ditambahkan oleh Android/iOS WebView.
+    // Cek marker aplikasi sebelum marker browser agar WebView tidak salah dibaca sebagai Chrome/Safari.
+    if (preg_match('/CatatanKeuanganAndroid\/([0-9.]+)/i', $ua, $m)) {
         $browser = 'Aplikasi Catatan Keuangan (Android)';
+        $channel = 'app';
+        $appVersion = (string)($m[1] ?? '');
+    } elseif (preg_match('/CatatanKeuanganIOS\/([0-9.]+)/i', $ua, $m)) {
+        $browser = 'Aplikasi Catatan Keuangan (iOS)';
+        $channel = 'app';
+        $appVersion = (string)($m[1] ?? '');
+    } elseif (preg_match('/CharlieFinanceAndroid\/?([0-9.]*)/i', $ua, $m)) {
+        $browser = 'Aplikasi Catatan Keuangan (Android)';
+        $channel = 'app';
+        $appVersion = (string)($m[1] ?? '');
+    } elseif (strpos($low, '; wv)') !== false || (strpos($low, ' version/4.0 ') !== false && strpos($low, 'android') !== false)) {
+        $browser = 'Aplikasi/WebView Android';
+        $channel = 'app';
     } elseif (strpos($low, 'edg/') !== false) $browser = 'Microsoft Edge';
     elseif (strpos($low, 'opr/') !== false || strpos($low, 'opera') !== false) $browser = 'Opera';
     elseif (strpos($low, 'firefox/') !== false || strpos($low, 'fxios/') !== false) $browser = 'Firefox';
@@ -101,7 +120,125 @@ function authDescribeDevice($userAgent = null)
 
     $label = $os;
     if ($browser !== 'Browser') $label .= ' · ' . $browser;
-    return ['label' => $label, 'os' => $os, 'browser' => $browser, 'user_agent' => $ua];
+    return [
+        'label' => $label,
+        'os' => $os,
+        'browser' => $browser,
+        'channel' => $channel,
+        'app_version' => $appVersion,
+        'user_agent' => $ua,
+    ];
+}
+
+function authLoginDateLabel($timestamp = null)
+{
+    $ts = $timestamp === null ? time() : (int)$timestamp;
+    $days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    $months = [1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'];
+    return $days[(int)date('w', $ts)] . ', ' . date('d', $ts) . ' ' . $months[(int)date('n', $ts)] . ' ' . date('Y H:i:s', $ts) . ' WITA';
+}
+
+function authLoginNotificationHtml(array $user, array $deviceInfo, $loginAt, $ip)
+{
+    $esc = function ($value) { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); };
+    $username = $esc($user['username'] ?? '');
+    $device = $esc($deviceInfo['os'] ?? 'Perangkat tidak dikenal');
+    $via = (string)($deviceInfo['browser'] ?? 'Browser');
+    if (!empty($deviceInfo['app_version'])) $via .= ' v' . (string)$deviceInfo['app_version'];
+    $via = $esc($via);
+    $loginAt = $esc($loginAt);
+    $ip = trim((string)$ip);
+    $ipRow = $ip !== ''
+        ? '<tr><td style="padding:10px 0;color:#667085;font-size:13px;width:120px">Alamat IP</td><td style="padding:10px 0;color:#101828;font-size:13px;font-weight:700">'.$esc($ip).'</td></tr>'
+        : '';
+    $app = $esc(defined('APP_NAME') ? APP_NAME : 'Catatan Keuangan');
+
+    return '<!doctype html><html><body style="margin:0;background:#f5f7fb;font-family:Arial,sans-serif;color:#101828">'
+        .'<div style="max-width:560px;margin:32px auto;padding:0 16px"><div style="background:#fff;border:1px solid #e4e7ec;border-radius:20px;padding:28px;box-shadow:0 8px 30px rgba(16,24,40,.08)">'
+        .'<div style="font-size:12px;font-weight:700;color:#175cd3;margin-bottom:8px">'.$app.'</div>'
+        .'<h2 style="margin:0 0 10px;font-size:22px">Login baru ke akun Anda</h2>'
+        .'<p style="margin:0 0 18px;color:#667085;font-size:14px;line-height:1.6">Kami mendeteksi login berhasil ke akun <strong style="color:#101828">'.$username.'</strong>.</p>'
+        .'<div style="background:#f8fafc;border:1px solid #eaecf0;border-radius:14px;padding:8px 16px;margin-bottom:18px">'
+        .'<table role="presentation" style="border-collapse:collapse;width:100%">'
+        .'<tr><td style="padding:10px 0;color:#667085;font-size:13px;width:120px">Waktu</td><td style="padding:10px 0;color:#101828;font-size:13px;font-weight:700">'.$loginAt.'</td></tr>'
+        .'<tr><td style="padding:10px 0;color:#667085;font-size:13px">Perangkat</td><td style="padding:10px 0;color:#101828;font-size:13px;font-weight:700">'.$device.'</td></tr>'
+        .'<tr><td style="padding:10px 0;color:#667085;font-size:13px">Melalui</td><td style="padding:10px 0;color:#101828;font-size:13px;font-weight:700">'.$via.'</td></tr>'
+        .$ipRow
+        .'</table></div>'
+        .'<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:14px 16px;color:#9a3412;font-size:13px;line-height:1.6">'
+        .'<strong>Jika ini bukan Anda:</strong> segera ubah password, lalu buka <strong>Email &amp; Keamanan</strong> dan keluarkan perangkat lain dari akun Anda.'
+        .'</div>'
+        .'<p style="margin:16px 0 0;color:#98a2b3;font-size:12px;line-height:1.6">Jika login ini memang dilakukan oleh Anda, tidak ada tindakan yang perlu dilakukan.</p>'
+        .'</div></div></body></html>';
+}
+
+/**
+ * Mengirim pemberitahuan keamanan setelah autentikasi username/password berhasil.
+ * Email hanya dikirim ke alamat yang sudah diverifikasi agar detail login tidak
+ * bocor ke alamat yang belum terbukti dimiliki pengguna. Kegagalan SMTP tidak
+ * boleh menggagalkan login pengguna.
+ */
+function authSendLoginNotification(array $user)
+{
+    $info = authDescribeDevice();
+    $loginTs = time();
+    $loginAt = authLoginDateLabel($loginTs);
+    $ip = authClientIp();
+    $via = (string)($info['browser'] ?? 'Browser');
+    if (!empty($info['app_version'])) $via .= ' v' . (string)$info['app_version'];
+
+    // Pusat Pemberitahuan aplikasi harus tetap merekam login walaupun akun belum
+    // memiliki email terverifikasi atau provider SMTP sedang bermasalah.
+    try {
+        userNotificationCreate(
+            (int)($user['id'] ?? 0),
+            'login',
+            'Login baru ke akun Anda',
+            'Login berhasil melalui '.$via.' pada '.(string)($info['os'] ?? 'Perangkat tidak dikenal').'.',
+            [
+                'device'=>(string)($info['os'] ?? 'Perangkat tidak dikenal'),
+                'via'=>$via,
+                'ip'=>$ip,
+                'login_at'=>$loginAt,
+                'channel'=>(string)($info['channel'] ?? 'browser'),
+                'app_version'=>(string)($info['app_version'] ?? ''),
+            ]
+        );
+    } catch (Throwable $e) {
+        error_log('[Login app notification] user_id=' . (int)($user['id'] ?? 0) . ' gagal: ' . $e->getMessage());
+    }
+
+    $email = authNormalizeEmail($user['email'] ?? '');
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['sent' => false, 'skipped' => true, 'reason' => 'Akun belum memiliki email valid.'];
+    }
+    if (trim((string)($user['email_verified_at'] ?? '')) === '') {
+        return ['sent' => false, 'skipped' => true, 'reason' => 'Email akun belum diverifikasi.'];
+    }
+
+    $subject = '[' . APP_NAME . '] Login baru terdeteksi';
+    $html = authLoginNotificationHtml($user, $info, $loginAt, $ip);
+    $text = "Login baru ke akun " . (string)($user['username'] ?? '') . " berhasil.
+"
+        . "Waktu: " . $loginAt . "
+"
+        . "Perangkat: " . (string)($info['os'] ?? 'Perangkat tidak dikenal') . "
+"
+        . "Melalui: " . $via . "
+"
+        . ($ip !== '' ? "Alamat IP: " . $ip . "
+" : '')
+        . "
+Jika ini bukan Anda, segera ubah password dan keluarkan perangkat lain melalui menu Email & Keamanan.";
+
+    try {
+        $delivery = financeSendMail($email, $subject, $html, $text);
+        return ['sent' => true, 'email' => $email, 'delivery' => $delivery];
+    } catch (Throwable $e) {
+        // Notifikasi keamanan bersifat best-effort: kegagalan provider email tidak boleh memblokir login.
+        error_log('[Login notification] user_id=' . (int)($user['id'] ?? 0) . ' gagal: ' . $e->getMessage());
+        return ['sent' => false, 'error' => $e->getMessage()];
+    }
 }
 
 function authDevicePublicId($deviceToken)
@@ -397,6 +534,7 @@ function authLogin($username, $password)
     $_SESSION['user_id'] = (int)$user['id'];
     $_SESSION['pin_verified'] = empty($user['pin_hash']);
     authIssueDeviceToken($user['id']);
+    authSendLoginNotification($user);
     return $user;
 }
 

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/db.php';
 require_once __DIR__.'/adaptive_learning_helper.php';
+require_once __DIR__.'/transaction_inbox_helper.php';
 
 /**
  * Fitur keuangan lanjutan tetap memakai file JSON per user.
@@ -37,9 +38,11 @@ function financeEnsureFeatureData(&$d) {
             'low_balance'=>false,
             'low_balance_threshold'=>100000,
             'email_enabled'=>true,
+            'daily_reconciliation'=>true,
         ];
     }
     if (!array_key_exists('email_enabled', $d['settings']['notifications'])) $d['settings']['notifications']['email_enabled'] = true;
+    if (!array_key_exists('daily_reconciliation', $d['settings']['notifications'])) $d['settings']['notifications']['daily_reconciliation'] = true;
 
     if (!isset($d['wallets']) || !is_array($d['wallets']) || count($d['wallets']) === 0) {
         $legacyInitial = max(0, (int)($d['settings']['initial_balance'] ?? 0));
@@ -703,6 +706,8 @@ function financeCreateManualTransaction(array $input): array {
         'note'=>$note,
         'source'=>'manual'
     ];
+    if(isset($input['attachment'])&&is_array($input['attachment']))$tx['attachment']=$input['attachment'];
+    if(isset($input['ocr'])&&is_array($input['ocr']))$tx['ocr']=$input['ocr'];
 
     if($type==='transfer'){
         $from=(int)($input['from_wallet_id']??0);
@@ -789,7 +794,7 @@ function financeUndoAudit($auditId){
 }
 
 function financeNotificationSettings(){ $d=financeReadData();return $d['settings']['notifications']; }
-function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),'email_enabled'=>!array_key_exists('email_enabled',$input)||!empty($input['email_enabled'])];setSetting('notifications',$cfg);return $cfg;}
+function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),'email_enabled'=>!array_key_exists('email_enabled',$input)||!empty($input['email_enabled']),'daily_reconciliation'=>!array_key_exists('daily_reconciliation',$input)||!empty($input['daily_reconciliation'])];setSetting('notifications',$cfg);return $cfg;}
 
 function financeFeatureSnapshot(){
     financeProcessRecurring();
@@ -804,6 +809,7 @@ function financeFeatureSnapshot(){
         'prediction'=>financePrediction(),
         'payday_day'=>(int)setting('payday_day',1),
         'notifications'=>financeNotificationSettings(),
+        'transaction_inbox'=>transactionInboxSnapshot(),
         'pending_confirmation'=>financePendingChatConfirmation(),
         'history'=>financeAuditHistory(30),
     ];
