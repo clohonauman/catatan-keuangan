@@ -8,5 +8,6 @@
 !/storage/private/.gitignore
 !/storage/private/receipts/
 !/storage/private/payment_proofs/
+/storage/*
 *.zip
 .DS_Store
