@@ -129,7 +129,7 @@ function faqKnowledgeBase(): array {
             'category' => 'saldo',
             'question' => 'Bagaimana menambah dompet atau rekening?',
             'keywords' => 'dompet rekening cash ewallet bank tambah wallet transfer',
-            'answer_html' => 'Buka <b>Dompet &amp; Rekening</b>, kemudian tambahkan sumber dana seperti cash, rekening bank, atau e-wallet. Saat mencatat transaksi, pilih dompet yang benar agar saldo tiap sumber dana tetap akurat.',
+            'answer_html' => 'Buka <b>Dompet &amp; Rekening</b>, kemudian tambahkan cash, rekening bank, e-wallet, tabungan, atau <b>Kartu Kredit</b>. Untuk kartu kredit isi limit dan tagihan terpakai awal; pengeluaran kartu menambah tagihan, sedangkan transfer dari bank/dompet ke kartu kredit dianggap pembayaran tagihan.',
         ],
         [
             'id' => 'faq-17',

@@ -81,10 +81,27 @@ function financeEnsureFeatureData(&$d) {
         $d['meta'][$pair[1]] = max((int)$d['meta'][$pair[1]], $max + 1);
     }
 
+    // V52: urutan dompet tersimpan per akun melalui sort_order di extra_json wallet.
+    // Wallet lama yang belum mempunyai sort_order tetap mengikuti ID lama agar backward-compatible.
+    usort($d['wallets'], static function($a,$b){
+        $ao=array_key_exists('sort_order',(array)$a)?(int)$a['sort_order']:((int)($a['id']??0)*10);
+        $bo=array_key_exists('sort_order',(array)$b)?(int)$b['sort_order']:((int)($b['id']??0)*10);
+        $cmp=$ao<=>$bo;
+        return $cmp!==0?$cmp:((int)($a['id']??0)<=>(int)($b['id']??0));
+    });
+
     // Transaksi lama otomatis diarahkan ke dompet utama.
     foreach ($d['wallets'] as &$w) {
         if(!isset($w['reserved_balance'])) $w['reserved_balance']=0;
         if(!isset($w['minimum_balance'])) $w['minimum_balance']=0;
+        if(strtolower((string)($w['type']??''))==='credit_card'){
+            if(!isset($w['credit_limit'])) $w['credit_limit']=0;
+            if(!isset($w['opening_debt'])) $w['opening_debt']=0;
+            if(!isset($w['billing_day'])) $w['billing_day']=0;
+            $w['initial_balance']=0;
+            $w['reserved_balance']=0;
+            $w['minimum_balance']=0;
+        }
     }
     unset($w);
     foreach ($d['transactions'] as &$t) {
@@ -130,7 +147,11 @@ function financeWalletBalances($data=null) {
     $d = is_array($data) ? $data : financeReadData();
     financeEnsureFeatureData($d);
     $balances = [];
-    foreach ($d['wallets'] as $w) $balances[(int)$w['id']] = (int)($w['initial_balance'] ?? 0);
+    foreach ($d['wallets'] as $w) {
+        $balances[(int)$w['id']] = strtolower((string)($w['type']??''))==='credit_card'
+            ? -max(0,(int)($w['opening_debt']??0))
+            : (int)($w['initial_balance'] ?? 0);
+    }
     foreach ($d['transactions'] as $t) {
         $type = (string)($t['type'] ?? '');
         $amount = (int)($t['amount'] ?? 0);
@@ -161,6 +182,21 @@ function financeWalletsWithBalances() {
     foreach ($d['wallets'] as $w) {
         if (!empty($w['archived'])) continue;
         $gross=(int)($balances[(int)$w['id']] ?? 0);
+        if(strtolower((string)($w['type']??''))==='credit_card'){
+            $limit=max(0,(int)($w['credit_limit']??0));
+            $debt=max(0,-$gross);
+            $w['balance']=-$debt;
+            $w['credit_limit']=$limit;
+            $w['credit_used']=$debt;
+            $w['outstanding_balance']=$debt;
+            $w['available_limit']=max(0,$limit-$debt);
+            $w['available_balance']=$w['available_limit'];
+            $w['reserved_balance']=0;
+            $w['minimum_balance']=0;
+            $w['protected_balance']=0;
+            $out[]=$w;
+            continue;
+        }
         $reserved=max(0,(int)($w['reserved_balance'] ?? 0));
         $minimum=max(0,(int)($w['minimum_balance'] ?? 0));
         $protected=$reserved+$minimum;
@@ -181,26 +217,45 @@ function financeSaveWallet($input) {
     $initial = (int)($input['initial_balance'] ?? 0);
     $reserved = max(0,(int)($input['reserved_balance'] ?? 0));
     $minimum = max(0,(int)($input['minimum_balance'] ?? 0));
+    $creditLimit=max(0,(int)($input['credit_limit']??0));
+    $openingDebt=max(0,(int)($input['opening_debt']??0));
+    $billingDay=max(0,(int)($input['billing_day']??0));
     if ($name === '') throw new InvalidArgumentException('Nama dompet/rekening wajib diisi.');
-    if (!in_array($type, ['cash','bank','ewallet','savings'], true)) $type = 'cash';
+    if (!in_array($type, ['cash','bank','ewallet','savings','credit_card'], true)) $type = 'cash';
     if ($initial < 0) throw new InvalidArgumentException('Saldo awal tidak boleh negatif.');
+    if($type==='credit_card'){
+        if($creditLimit<=0) throw new InvalidArgumentException('Limit kartu kredit wajib lebih dari nol.');
+        if($openingDebt>$creditLimit) throw new InvalidArgumentException('Saldo/tagihan terpakai awal tidak boleh melebihi limit kartu kredit.');
+        if($billingDay>31) throw new InvalidArgumentException('Tanggal penagihan kartu kredit harus antara 1 sampai 31.');
+        $initial=0;$reserved=0;$minimum=0;
+    }else{
+        $creditLimit=0;$openingDebt=0;$billingDay=0;
+    }
 
-    $r = financeMutate(function (&$d) use ($id,$name,$type,$initial,$reserved,$minimum) {
+    $r = financeMutate(function (&$d) use ($id,$name,$type,$initial,$reserved,$minimum,$creditLimit,$openingDebt,$billingDay) {
         if ($id > 0) {
             foreach ($d['wallets'] as &$w) if ((int)$w['id'] === $id) {
                 $before=$w;
                 $w['name'] = substr($name,0,60); $w['type']=$type; $w['initial_balance']=$initial; $w['reserved_balance']=$reserved; $w['minimum_balance']=$minimum; $w['archived']=false;
+                if($type==='credit_card'){$w['credit_limit']=$creditLimit;$w['opening_debt']=$openingDebt;$w['billing_day']=$billingDay;}
+                else{unset($w['credit_limit'],$w['opening_debt'],$w['billing_day'],$w['credit_used'],$w['outstanding_balance'],$w['available_limit']);}
                 auditAdd($d,'update','wallet',$id,$before,$w,true,'Dompet diperbarui');
                 return $w;
             }
             unset($w);
             throw new InvalidArgumentException('Dompet tidak ditemukan.');
         }
-        $new = ['id'=>(int)$d['meta']['next_wallet_id']++,'name'=>substr($name,0,60),'type'=>$type,'initial_balance'=>$initial,'reserved_balance'=>$reserved,'minimum_balance'=>$minimum,'archived'=>false,'created_at'=>date('Y-m-d H:i:s')];
+        $maxSort=0;
+        foreach((array)$d['wallets'] as $existingWallet){
+            $maxSort=max($maxSort,array_key_exists('sort_order',(array)$existingWallet)?(int)$existingWallet['sort_order']:((int)($existingWallet['id']??0)*10));
+        }
+        $new = ['id'=>(int)$d['meta']['next_wallet_id']++,'name'=>substr($name,0,60),'type'=>$type,'initial_balance'=>$initial,'reserved_balance'=>$reserved,'minimum_balance'=>$minimum,'sort_order'=>$maxSort+10,'archived'=>false,'created_at'=>date('Y-m-d H:i:s')];
+        if($type==='credit_card'){$new['credit_limit']=$creditLimit;$new['opening_debt']=$openingDebt;$new['billing_day']=$billingDay;}
         $d['wallets'][] = $new;
         auditAdd($d,'create','wallet',(int)$new['id'],null,$new,false,'Dompet dibuat');
         return $new;
     });
+    financeSyncCreditCardBills();
     return $r['result'];
 }
 
@@ -213,6 +268,44 @@ function financeArchiveWallet($id) {
         foreach ($d['wallets'] as &$w) if ((int)$w['id'] === $id) { $w['archived']=true; return true; }
         unset($w);
         throw new InvalidArgumentException('Dompet tidak ditemukan.');
+    });
+    financeSyncCreditCardBills();
+    return $r['result'];
+}
+
+
+function financeReorderWallets($walletIds) {
+    $ids=[];
+    foreach((array)$walletIds as $raw){
+        $id=(int)$raw;
+        if($id>0 && !in_array($id,$ids,true)) $ids[]=$id;
+    }
+    if(!$ids) throw new InvalidArgumentException('Urutan dompet tidak valid.');
+
+    $r=financeMutate(function (&$d) use ($ids) {
+        $activeIds=[];
+        foreach((array)$d['wallets'] as $w){
+            if(empty($w['archived'])) $activeIds[]=(int)($w['id']??0);
+        }
+        sort($activeIds,SORT_NUMERIC);
+        $requested=$ids; sort($requested,SORT_NUMERIC);
+        if($activeIds!==$requested) throw new InvalidArgumentException('Daftar dompet berubah. Muat ulang lalu coba atur urutan kembali.');
+
+        $orderMap=[];
+        foreach($ids as $index=>$id) $orderMap[$id]=($index+1)*10;
+        $archivedBase=(count($ids)+1)*10;
+        $archivedIndex=0;
+        foreach($d['wallets'] as &$w){
+            $wid=(int)($w['id']??0);
+            if(isset($orderMap[$wid])) $w['sort_order']=$orderMap[$wid];
+            elseif(!empty($w['archived'])) $w['sort_order']=$archivedBase+(++$archivedIndex)*10;
+        }
+        unset($w);
+        usort($d['wallets'], static function($a,$b){
+            $cmp=(int)($a['sort_order']??0)<=>(int)($b['sort_order']??0);
+            return $cmp!==0?$cmp:((int)($a['id']??0)<=>(int)($b['id']??0));
+        });
+        return ['wallet_ids'=>$ids];
     });
     return $r['result'];
 }
@@ -274,7 +367,10 @@ function financeAppendTransactionData(&$d,$t) {
     $type=(string)($t['type']??'expense');
     $amount=max(0,(int)($t['amount']??0));
     if($type==='expense') assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
-    elseif($type==='transfer') assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
+    elseif($type==='transfer'){
+        assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
+        assertWalletCreditPaymentAllowedData($d,(int)($t['to_wallet_id']??0),$amount);
+    }
     $id=(int)$d['meta']['next_transaction_id']++;
     $x=['id'=>$id,'type'=>$type,'category'=>(string)($t['category']??'Lainnya'),'amount'=>$amount,'note'=>substr(trim((string)($t['note']??'')),0,255),'transaction_date'=>(string)($t['transaction_date']??date('Y-m-d')),'created_at'=>date('Y-m-d H:i:s')];
     if($type==='transfer'){$x['from_wallet_id']=(int)($t['from_wallet_id']??0);$x['to_wallet_id']=(int)($t['to_wallet_id']??0);}
@@ -294,6 +390,7 @@ function financeTransfer($from,$to,$amount,$note='',$date='') {
     if($amount<=0)throw new InvalidArgumentException('Nominal transfer harus lebih dari nol.');
     if(!financeWalletById($from)||!financeWalletById($to))throw new InvalidArgumentException('Dompet transfer tidak ditemukan.');
     $r=financeMutate(function(&$d)use($from,$to,$amount,$note,$date){return financeAppendTransactionData($d,['type'=>'transfer','category'=>'Transfer Antar Dompet','amount'=>$amount,'note'=>$note?:'Transfer antar dompet','transaction_date'=>$date,'from_wallet_id'=>$from,'to_wallet_id'=>$to,'source'=>'wallet_transfer']);});
+    financeSyncCreditCardBills();
     return $r['result'];
 }
 
@@ -305,8 +402,233 @@ function financeIsValidDate($date){
     return $dt!==false && ($errors===false || ((int)$errors['warning_count']===0 && (int)$errors['error_count']===0)) && $dt->format('Y-m-d')===$date;
 }
 
+function financeIsAutoCreditCardBill(array $bill): bool {
+    return !empty($bill['auto_generated']) && (($bill['bill_type'] ?? '') === 'credit_card');
+}
+
+function financeDefaultPaymentWalletIdData(array $d): int {
+    foreach ((array)($d['wallets'] ?? []) as $w) {
+        if (!empty($w['archived'])) continue;
+        if (strtolower((string)($w['type'] ?? '')) === 'credit_card') continue;
+        return (int)($w['id'] ?? 0);
+    }
+    return 0;
+}
+
+function financeCreditCardBillDueDateForTransaction(int $billingDay, string $transactionDate): string {
+    if (!financeIsValidDate($transactionDate)) $transactionDate = date('Y-m-d');
+    $tx = new DateTimeImmutable($transactionDate);
+    $due = financeCreditCardDueDateForMonth($billingDay, $tx);
+    // Transaksi pada/sebelum tanggal tagihan masuk siklus bulan berjalan.
+    // Transaksi setelah tanggal tagihan masuk siklus bulan berikutnya.
+    if ($tx > $due) {
+        $due = financeCreditCardDueDateForMonth($billingDay, $tx->modify('first day of next month'));
+    }
+    return $due->format('Y-m-d');
+}
+
+function financeSyncCreditCardBillsData(array &$d): bool {
+    financeEnsureFeatureData($d);
+    $before = json_encode($d['bills'], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+
+    $cards = [];
+    foreach ((array)$d['wallets'] as $w) {
+        if (!empty($w['archived'])) continue;
+        if (strtolower((string)($w['type'] ?? '')) !== 'credit_card') continue;
+        $billingDay = max(0, min(31, (int)($w['billing_day'] ?? 0)));
+        if ($billingDay <= 0) continue;
+        $cards[(int)$w['id']] = $w;
+    }
+
+    $manualBills = [];
+    $existingAuto = [];
+    foreach ((array)$d['bills'] as $bill) {
+        if (financeIsAutoCreditCardBill((array)$bill)) {
+            $key = (int)($bill['credit_card_wallet_id'] ?? 0).'|'.(string)($bill['due_date'] ?? '');
+            if (!isset($existingAuto[$key])) $existingAuto[$key] = $bill;
+            continue;
+        }
+        $manualBills[] = $bill;
+    }
+
+    $groups = [];
+    $addUsage = function(int $walletId, string $date, int $amount, int $txId, string $kind='transaction') use (&$groups, $cards) {
+        if (!isset($cards[$walletId]) || $amount === 0) return;
+        $billingDay = (int)($cards[$walletId]['billing_day'] ?? 0);
+        $dueDate = financeCreditCardBillDueDateForTransaction($billingDay, $date);
+        $key = $walletId.'|'.$dueDate;
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'wallet_id'=>$walletId,
+                'due_date'=>$dueDate,
+                'amount'=>0,
+                'transaction_ids'=>[],
+                'opening_debt_component'=>0,
+            ];
+        }
+        $groups[$key]['amount'] += $amount;
+        if ($txId > 0) $groups[$key]['transaction_ids'][] = $txId;
+        if ($kind === 'opening_debt') $groups[$key]['opening_debt_component'] += $amount;
+    };
+
+    // Saldo/tagihan awal kartu ikut dimasukkan ke siklus pertama agar menu Tagihan
+    // tidak berbeda dengan total kewajiban kartu yang sudah dicatat saat setup.
+    foreach ($cards as $walletId=>$w) {
+        $openingDebt = max(0, (int)($w['opening_debt'] ?? 0));
+        if ($openingDebt <= 0) continue;
+        $createdDate = substr((string)($w['created_at'] ?? date('Y-m-d')), 0, 10);
+        if (!financeIsValidDate($createdDate)) $createdDate = date('Y-m-d');
+        $addUsage((int)$walletId, $createdDate, $openingDebt, 0, 'opening_debt');
+    }
+
+    foreach ((array)$d['transactions'] as $tx) {
+        $type = (string)($tx['type'] ?? '');
+        $amount = max(0, (int)($tx['amount'] ?? 0));
+        if ($amount <= 0) continue;
+        $date = (string)($tx['transaction_date'] ?? date('Y-m-d'));
+        $txId = (int)($tx['id'] ?? 0);
+
+        if ($type === 'expense') {
+            $addUsage((int)($tx['wallet_id'] ?? 0), $date, $amount, $txId);
+        } elseif ($type === 'income') {
+            // Refund / kredit balik ke kartu mengurangi tagihan siklus yang sama.
+            $wid = (int)($tx['wallet_id'] ?? 0);
+            if (isset($cards[$wid])) $addUsage($wid, $date, -$amount, $txId);
+        } elseif ($type === 'transfer') {
+            // Transfer keluar dari kartu dianggap penggunaan limit/cash advance.
+            $from = (int)($tx['from_wallet_id'] ?? 0);
+            if (isset($cards[$from])) $addUsage($from, $date, $amount, $txId);
+        }
+    }
+
+    $paymentWalletDefault = financeDefaultPaymentWalletIdData($d);
+    $autoBills = [];
+    ksort($groups);
+    foreach ($groups as $key=>$g) {
+        $amount = max(0, (int)$g['amount']);
+        if ($amount <= 0) continue;
+        $cardId = (int)$g['wallet_id'];
+        $card = $cards[$cardId] ?? null;
+        if (!$card) continue;
+        $existing = $existingAuto[$key] ?? [];
+        $id = (int)($existing['id'] ?? 0);
+        if ($id <= 0) $id = (int)$d['meta']['next_bill_id']++;
+
+        $paymentWallet = (int)($existing['wallet_id'] ?? 0);
+        $paymentWalletOk = false;
+        foreach ((array)$d['wallets'] as $w) {
+            if ((int)($w['id'] ?? 0) !== $paymentWallet || !empty($w['archived'])) continue;
+            if (strtolower((string)($w['type'] ?? '')) !== 'credit_card') $paymentWalletOk = true;
+            break;
+        }
+        if (!$paymentWalletOk) $paymentWallet = $paymentWalletDefault;
+
+        $payments = [];
+
+        $due = new DateTimeImmutable($g['due_date']);
+        $prevDue = financeCreditCardDueDateForMonth((int)$card['billing_day'], $due->modify('first day of previous month'));
+        $cycleStart = $prevDue->modify('+1 day')->format('Y-m-d');
+
+        $autoBills[] = [
+            'id'=>$id,
+            'name'=>'Tagihan '.substr((string)($card['name'] ?? 'Kartu Kredit'),0,60),
+            'amount'=>$amount,
+            'due_date'=>$g['due_date'],
+            'due_day'=>(int)$due->format('d'),
+            'schedule_type'=>'credit_card_cycle',
+            'category'=>'Kartu Kredit',
+            'wallet_id'=>$paymentWallet,
+            'reminder_days'=>2,
+            'active'=>true,
+            'payments'=>$payments,
+            'created_at'=>$existing['created_at'] ?? date('Y-m-d H:i:s'),
+            'auto_generated'=>true,
+            'bill_type'=>'credit_card',
+            'credit_card_wallet_id'=>$cardId,
+            'credit_card_name'=>(string)($card['name'] ?? 'Kartu Kredit'),
+            'cycle_start'=>$cycleStart,
+            'cycle_end'=>$g['due_date'],
+            'transaction_ids'=>array_values(array_unique(array_map('intval',$g['transaction_ids']))),
+            'transaction_count'=>count(array_unique(array_map('intval',$g['transaction_ids']))),
+            'opening_debt_component'=>max(0,(int)$g['opening_debt_component']),
+        ];
+    }
+
+    usort($autoBills, function($a,$b){
+        $c = strcmp((string)$a['due_date'], (string)$b['due_date']);
+        return $c !== 0 ? $c : ((int)$a['credit_card_wallet_id'] <=> (int)$b['credit_card_wallet_id']);
+    });
+
+    // Setiap transfer masuk ke kartu kredit adalah pembayaran kartu. Alokasikan
+    // pembayaran ke tagihan tertua yang belum lunas. Jika transaksi berasal dari
+    // tombol Bayar pada menu Tagihan, bill_id diprioritaskan terlebih dahulu.
+    $billIndexById=[];$billIndexesByCard=[];
+    foreach($autoBills as $i=>$bill){
+        $billIndexById[(int)$bill['id']]=$i;
+        $billIndexesByCard[(int)$bill['credit_card_wallet_id']][]=$i;
+    }
+    $paymentTx=[];
+    foreach((array)$d['transactions'] as $tx){
+        if(($tx['type']??'')!=='transfer')continue;
+        $cardId=(int)($tx['to_wallet_id']??0);
+        if(!isset($cards[$cardId]))continue;
+        $amount=max(0,(int)($tx['amount']??0));if($amount<=0)continue;
+        $paymentTx[]=$tx;
+    }
+    usort($paymentTx,function($a,$b){
+        $c=strcmp((string)($a['transaction_date']??''),(string)($b['transaction_date']??''));
+        return $c!==0?$c:((int)($a['id']??0)<=>(int)($b['id']??0));
+    });
+    $paidTotals=array_fill(0,count($autoBills),0);
+    foreach($paymentTx as $tx){
+        $remaining=max(0,(int)($tx['amount']??0));if($remaining<=0)continue;
+        $cardId=(int)($tx['to_wallet_id']??0);$txId=(int)($tx['id']??0);
+        $preferred=(int)($tx['bill_id']??0);
+        $targets=[];
+        if($preferred>0&&isset($billIndexById[$preferred])){
+            $idx=$billIndexById[$preferred];
+            if((int)$autoBills[$idx]['credit_card_wallet_id']===$cardId)$targets[]=$idx;
+        }
+        foreach((array)($billIndexesByCard[$cardId]??[]) as $idx)if(!in_array($idx,$targets,true))$targets[]=$idx;
+        foreach($targets as $idx){
+            $need=max(0,(int)$autoBills[$idx]['amount']-(int)$paidTotals[$idx]);
+            if($need<=0)continue;
+            $allocated=min($need,$remaining);
+            if($allocated<=0)continue;
+            $autoBills[$idx]['payments']['tx:'.$txId]=[
+                'date'=>(string)($tx['transaction_date']??date('Y-m-d')),
+                'transaction_id'=>$txId,
+                'amount'=>$allocated,
+                'from_wallet_id'=>(int)($tx['from_wallet_id']??0),
+            ];
+            if((int)($tx['from_wallet_id']??0)>0)$autoBills[$idx]['wallet_id']=(int)$tx['from_wallet_id'];
+            $paidTotals[$idx]+=$allocated;$remaining-=$allocated;
+            if($remaining<=0)break;
+        }
+    }
+
+    $d['bills'] = array_values(array_merge($manualBills, $autoBills));
+
+    $after = json_encode($d['bills'], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    return $before !== $after;
+}
+
+function financeSyncCreditCardBills(): bool {
+    $snapshot = financeReadData();
+    $before = json_encode($snapshot['bills'] ?? [], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    financeSyncCreditCardBillsData($snapshot);
+    $after = json_encode($snapshot['bills'] ?? [], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    if ($before === $after) return false;
+    financeMutate(function (&$d) {
+        financeSyncCreditCardBillsData($d);
+        return true;
+    });
+    return true;
+}
+
 function financeSaveBill($input){
     $id=(int)($input['id']??0);
+    if($id>0){$existing=financeBillById($id);if($existing&&financeIsAutoCreditCardBill((array)$existing))throw new InvalidArgumentException('Tagihan kartu kredit otomatis tidak dapat diedit manual. Ubah transaksi kartu atau tanggal penagihan kartu.');}
     $name=trim((string)($input['name']??''));
     $amount=max(0,(int)($input['amount']??0));
     $dueDate=trim((string)($input['due_date']??''));
@@ -359,6 +681,7 @@ function financeSaveBill($input){
 }
 function financeDeleteBill($id){
     $id=(int)$id;
+    $existing=financeBillById($id);if($existing&&financeIsAutoCreditCardBill((array)$existing))throw new InvalidArgumentException('Tagihan kartu kredit otomatis tidak dapat dihapus manual. Hapus/ubah transaksi kartu yang membentuk tagihan tersebut.');
     financeMutate(function(&$d)use($id){
         $d['bills']=array_values(array_filter($d['bills'],function($b)use($id){return(int)$b['id']!==$id;}));
         foreach($d['transactions'] as &$t) if((int)($t['bill_id']??0)===$id){unset($t['bill_id']);if(($t['source']??'')==='bill')$t['source']='manual';$t['updated_at']=date('Y-m-d H:i:s');} unset($t);
@@ -373,31 +696,49 @@ function financeBillPaymentKey($bill,$referenceDate=''){
     return financeBillPeriod($referenceDate?:date('Y-m-d'));
 }
 
-function financePayBill($id,$date=''){
+function financePayBill($id,$date='',$paymentWalletId=0){
     $id=(int)$id;
+    $paymentWalletId=(int)$paymentWalletId;
     $date=$date?:date('Y-m-d');
     if(!financeIsValidDate($date))throw new InvalidArgumentException('Tanggal pembayaran tidak valid.');
-    $r=financeMutate(function(&$d)use($id,$date){
+    $r=financeMutate(function(&$d)use($id,$date,$paymentWalletId){
         foreach($d['bills'] as &$b)if((int)$b['id']===$id){
+            if(financeIsAutoCreditCardBill((array)$b)){
+                $paidAmount=0;foreach((array)($b['payments']??[]) as $p)$paidAmount+=max(0,(int)($p['amount']??0));
+                $remaining=max(0,(int)($b['amount']??0)-$paidAmount);
+                if($remaining<=0)throw new InvalidArgumentException('Tagihan kartu kredit ini sudah lunas.');
+                $cardId=(int)($b['credit_card_wallet_id']??0);
+                if($cardId<=0)throw new InvalidArgumentException('Kartu kredit tagihan tidak ditemukan.');
+                $from=$paymentWalletId>0?$paymentWalletId:(int)($b['wallet_id']??0);
+                if($from<=0)$from=financeDefaultPaymentWalletIdData($d);
+                if($from<=0||$from===$cardId)throw new InvalidArgumentException('Pilih dompet/rekening non-kartu kredit untuk membayar tagihan.');
+                $sourceWallet=null;foreach((array)$d['wallets'] as $w)if((int)($w['id']??0)===$from){$sourceWallet=$w;break;}
+                if(!$sourceWallet||!empty($sourceWallet['archived'])||strtolower((string)($sourceWallet['type']??''))==='credit_card')throw new InvalidArgumentException('Dompet pembayaran tagihan kartu kredit tidak valid.');
+                $tx=financeAppendTransactionData($d,[
+                    'type'=>'transfer','category'=>'Pembayaran Kartu Kredit','amount'=>$remaining,
+                    'note'=>'Bayar '.$b['name'],'transaction_date'=>$date,
+                    'from_wallet_id'=>$from,'to_wallet_id'=>$cardId,
+                    'source'=>'credit_card_bill_payment','bill_id'=>(int)$b['id']
+                ]);
+                $b['wallet_id']=$from;
+                $b['payments']['tx:'.$tx['id']]=['date'=>$date,'transaction_id'=>$tx['id'],'amount'=>$remaining];
+                return $tx;
+            }
+
             $key=financeBillPaymentKey($b,$date);
             if(isset($b['payments'][$key]))throw new InvalidArgumentException('Tagihan ini sudah dibayar.');
             $tx=financeAppendTransactionData($d,[
-                'type'=>'expense',
-                'category'=>$b['category']??'Tagihan',
-                'amount'=>(int)$b['amount'],
-                'note'=>'Bayar '.$b['name'],
-                'transaction_date'=>$date,
-                'wallet_id'=>(int)($b['wallet_id']??1),
-                'source'=>'bill',
-                'bill_id'=>(int)$b['id'],
-                'spending_kind'=>'once'
+                'type'=>'expense','category'=>$b['category']??'Tagihan','amount'=>(int)$b['amount'],
+                'note'=>'Bayar '.$b['name'],'transaction_date'=>$date,'wallet_id'=>(int)($b['wallet_id']??1),
+                'source'=>'bill','bill_id'=>(int)$b['id'],'spending_kind'=>'once'
             ]);
-            $b['payments'][$key]=['date'=>$date,'transaction_id'=>$tx['id']];
+            $b['payments'][$key]=['date'=>$date,'transaction_id'=>$tx['id'],'amount'=>(int)$b['amount']];
             return $tx;
         }
         unset($b);
         throw new InvalidArgumentException('Tagihan tidak ditemukan.');
     });
+    financeSyncCreditCardBills();
     return $r['result'];
 }
 
@@ -416,19 +757,30 @@ function financeBillsStatus($date=''){
             $due=new DateTimeImmutable($storedDue);
             $paymentKey='due:'.$storedDue;
         }else{
-            // Kompatibilitas tagihan lama: tetap dianggap tagihan bulanan berdasarkan due_day.
             $day=min(max(1,(int)($b['due_day']??1)),$daysIn);
             $due=new DateTimeImmutable($today->format('Y-m-').sprintf('%02d',$day));
             $paymentKey=$period;
         }
 
-        $paid=isset($b['payments'][$paymentKey]);
+        if(financeIsAutoCreditCardBill((array)$b)){
+            $paidAmount=0;
+            foreach((array)($b['payments']??[]) as $p)$paidAmount+=max(0,(int)($p['amount']??0));
+            $remaining=max(0,(int)($b['amount']??0)-$paidAmount);
+            $paid=$remaining<=0 && (int)($b['amount']??0)>0;
+            $b['payment_total']=$paidAmount;
+            $b['remaining_amount']=$remaining;
+            $b['schedule_type']='credit_card_cycle';
+        }else{
+            $paid=isset($b['payments'][$paymentKey]);
+            $b['payment_total']=$paid?(int)($b['amount']??0):0;
+            $b['remaining_amount']=$paid?0:(int)($b['amount']??0);
+        }
+
         $diff=(int)$today->diff($due)->format('%r%a');
         $status=$paid?'paid':($diff<0?'overdue':($diff<=(int)($b['reminder_days']??3)?'due_soon':'upcoming'));
-
         $b['period']=$isExact?$storedDue:$period;
         $b['due_date']=$due->format('Y-m-d');
-        $b['schedule_type']=$isExact?'once':'monthly_legacy';
+        if(!financeIsAutoCreditCardBill((array)$b))$b['schedule_type']=$isExact?'once':'monthly_legacy';
         $b['days_left']=$diff;
         $b['status']=$status;
         $b['paid']=$paid;
@@ -467,6 +819,7 @@ function financeProcessRecurring($throughDate=''){
         unset($x);
         return $created;
     });
+    financeSyncCreditCardBills();
     return $r['result'];
 }
 
@@ -518,7 +871,13 @@ function financeForecastBills(array $bills, string $today, string $through): arr
         $stored=trim((string)($b['due_date']??''));
         if(financeIsValidDate($stored)){
             // Exact-date bills are one-off: never roll them into another month.
-            if($stored<=$through&&!isset($b['payments']['due:'.$stored])){
+            if(financeIsAutoCreditCardBill((array)$b)){
+                $paidAmount=0;foreach((array)($b['payments']??[]) as $p)$paidAmount+=max(0,(int)($p['amount']??0));
+                $remaining=max(0,(int)($b['amount']??0)-$paidAmount);
+                if($stored<=$through&&$remaining>0){
+                    $b['schedule_type']='credit_card_cycle';$b['paid']=false;$b['remaining_amount']=$remaining;$b['amount']=$remaining;$rows[]=$b;
+                }
+            }elseif($stored<=$through&&!isset($b['payments']['due:'.$stored])){
                 $b['schedule_type']='once';$b['paid']=false;$rows[]=$b;
             }
             continue;
@@ -571,6 +930,7 @@ function financeBillCandidatesForTransaction(array $tx): array {
     $amount=(int)($tx['amount']??0);$text=strtolower(trim((string)($tx['category']??'').' '.(string)($tx['note']??'')));
     $rows=[];
     foreach(financeBillsStatus() as $b){
+        if(financeIsAutoCreditCardBill((array)$b))continue;
         if(!empty($b['paid']))continue;
         $score=0;
         if((int)($b['amount']??0)===$amount)$score+=60;
@@ -774,13 +1134,13 @@ function financeUndoAudit($auditId){
             foreach($d['transactions'] as $x)if((int)($x['id']??0)===$id)throw new InvalidArgumentException('Transaksi dengan ID ini sudah ada.');
             $row=(array)($a['before']??[]);
             if(($row['type']??'')==='expense') assertWalletSpendAllowedData($d,(int)($row['wallet_id']??financeDefaultWalletId()),(int)($row['amount']??0));
-            elseif(($row['type']??'')==='transfer') assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0));
+            elseif(($row['type']??'')==='transfer'){assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0));assertWalletCreditPaymentAllowedData($d,(int)($row['to_wallet_id']??0),(int)($row['amount']??0));}
             $d['transactions'][]=$row;$d['meta']['next_transaction_id']=max((int)$d['meta']['next_transaction_id'],$id+1);
             if(!empty($row['bill_id'])){foreach($d['bills'] as &$b)if((int)$b['id']===(int)$row['bill_id']){$key=financeBillPaymentKey($b,(string)($row['transaction_date']??date('Y-m-d')));$b['payments'][$key]=['date'=>$row['transaction_date'],'transaction_id'=>$id];}unset($b);}
         } elseif($type==='transaction' && ($a['action']??'')==='update'){
             $row=(array)$a['before'];$found=false;
             if(($row['type']??'')==='expense') assertWalletSpendAllowedData($d,(int)($row['wallet_id']??financeDefaultWalletId()),(int)($row['amount']??0),$id);
-            elseif(($row['type']??'')==='transfer') assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0),$id);
+            elseif(($row['type']??'')==='transfer'){assertWalletSpendAllowedData($d,(int)($row['from_wallet_id']??0),(int)($row['amount']??0),$id);assertWalletCreditPaymentAllowedData($d,(int)($row['to_wallet_id']??0),(int)($row['amount']??0),$id);}
             foreach($d['bills'] as &$bill){foreach((array)($bill['payments']??[]) as $key=>$payment)if((int)($payment['transaction_id']??0)===$id)unset($bill['payments'][$key]);}unset($bill);
             foreach($d['transactions'] as &$x)if((int)($x['id']??0)===$id){$x=$row;$found=true;break;}unset($x);if(!$found)throw new InvalidArgumentException('Transaksi yang akan dipulihkan sudah tidak ada.');
             if(!empty($row['bill_id'])){foreach($d['bills'] as &$bill)if((int)($bill['id']??0)===(int)$row['bill_id']){$key=financeBillPaymentKey($bill,(string)($row['transaction_date']??date('Y-m-d')));if(isset($bill['payments'][$key])&&(int)($bill['payments'][$key]['transaction_id']??0)!==$id)throw new InvalidArgumentException('Tagihan lama sudah terhubung ke transaksi lain, sehingga perubahan tidak dapat dibatalkan.');$bill['payments'][$key]=['date'=>$row['transaction_date'],'transaction_id'=>$id];break;}unset($bill);}
@@ -793,11 +1153,44 @@ function financeUndoAudit($auditId){
     });return $r['result'];
 }
 
+function financeCreditCardDueDateForMonth(int $billingDay, DateTimeImmutable $month): DateTimeImmutable {
+    $billingDay=max(1,min(31,$billingDay));
+    $lastDay=(int)$month->format('t');
+    $day=min($billingDay,$lastDay);
+    return $month->setDate((int)$month->format('Y'),(int)$month->format('m'),$day)->setTime(0,0,0);
+}
+
+function financeCreditCardReminders(): array {
+    $today=new DateTimeImmutable('today');
+    $out=[];
+    foreach(financeBillsStatus() as $b){
+        if(!financeIsAutoCreditCardBill((array)$b) || !empty($b['paid'])) continue;
+        $remaining=max(0,(int)($b['remaining_amount']??$b['amount']??0));
+        if($remaining<=0 || !financeIsValidDate((string)($b['due_date']??''))) continue;
+        $due=new DateTimeImmutable((string)$b['due_date']);
+        $daysUntil=(int)$today->diff($due)->format('%r%a');
+        if($daysUntil<0) continue;
+        $out[]=[
+            'wallet_id'=>(int)($b['credit_card_wallet_id']??0),
+            'bill_id'=>(int)($b['id']??0),
+            'name'=>(string)($b['credit_card_name']??$b['name']??'Kartu Kredit'),
+            'billing_day'=>(int)substr((string)$b['due_date'],8,2),
+            'due_date'=>(string)$b['due_date'],
+            'days_until'=>$daysUntil,
+            'amount'=>$remaining,
+            'cycle_start'=>(string)($b['cycle_start']??''),
+            'cycle_end'=>(string)($b['cycle_end']??''),
+        ];
+    }
+    return $out;
+}
+
 function financeNotificationSettings(){ $d=financeReadData();return $d['settings']['notifications']; }
 function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),'email_enabled'=>!array_key_exists('email_enabled',$input)||!empty($input['email_enabled']),'daily_reconciliation'=>!array_key_exists('daily_reconciliation',$input)||!empty($input['daily_reconciliation'])];setSetting('notifications',$cfg);return $cfg;}
 
 function financeFeatureSnapshot(){
     financeProcessRecurring();
+    financeSyncCreditCardBills();
     return [
         'wallets'=>financeWalletsWithBalances(),
         'categories'=>financeCategories(),
@@ -809,6 +1202,7 @@ function financeFeatureSnapshot(){
         'prediction'=>financePrediction(),
         'payday_day'=>(int)setting('payday_day',1),
         'notifications'=>financeNotificationSettings(),
+        'credit_card_reminders'=>financeCreditCardReminders(),
         'transaction_inbox'=>transactionInboxSnapshot(),
         'pending_confirmation'=>financePendingChatConfirmation(),
         'history'=>financeAuditHistory(30),

@@ -1,20 +1,20 @@
 -- Merging decision tree log ---
 provider#androidx.core.content.FileProvider
-INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:19:9-27:20
+INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:20:9-28:20
 	android:grantUriPermissions
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:23:13-47
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:24:13-47
 	android:authorities
 		INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:21:13-64
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:22:13-64
 	android:exported
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:22:13-37
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:23:13-37
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:20:13-62
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:21:13-62
 manifest
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-47:12
-INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-47:12
-INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-47:12
-INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-47:12
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
+INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
+INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
+INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
 MERGED from [androidx.biometric:biometric:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/dab816dfab2d053d9959217446d976c9/transformed/biometric-1.1.0/AndroidManifest.xml:17:1-29:12
 MERGED from [androidx.appcompat:appcompat:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/313b7d5dbe5dc9219fc547695506f52e/transformed/appcompat-1.2.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.fragment:fragment:1.9.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/ef053a33e3961ec87e636d993dd85d4a/transformed/fragment-1.9.0/AndroidManifest.xml:2:1-7:12
@@ -76,15 +76,19 @@ uses-permission#android.permission.ACCESS_NETWORK_STATE
 ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:7:5-79
 	android:name
 		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:7:22-76
-uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:5-108
-	android:maxSdkVersion
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:79-105
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:5-77
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:22-78
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:22-74
+uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:5-108
+	android:maxSdkVersion
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:79-105
+	android:name
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:22-78
 application
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:10:5-46:19
-INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:10:5-46:19
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:5-51:19
+INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:5-51:19
 MERGED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:5-89
 MERGED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:5-89
 MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/80cbc4dba6c47357d96551e666b341e2/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
@@ -98,55 +102,61 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/charlielohonauman/.g
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:15:9-35
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:16:9-35
 	android:label
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:13:9-41
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:14:9-41
 	android:roundIcon
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:14:9-48
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:15:9-48
 	android:icon
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:12:9-43
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:13:9-43
 	android:allowBackup
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:9-36
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:12:9-36
 	android:theme
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:16:9-40
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:17:9-40
 	android:usesCleartextTraffic
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:17:9-45
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:18:9-45
 activity#com.charlie.finance.SplashActivity
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:29:9-38:20
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:30:9-39:20
 	android:screenOrientation
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:32:13-52
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:33:13-52
 	android:exported
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:31:13-36
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:32:13-36
 	android:theme
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:33:13-47
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:34:13-47
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:30:13-43
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:31:13-43
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:34:13-37:29
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:13-38:29
 action#android.intent.action.MAIN
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:17-69
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:17-69
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:25-66
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:17-77
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:37:17-77
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:27-74
-activity#com.charlie.finance.MainActivity
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:40:9-44:55
-	android:screenOrientation
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:44:13-52
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:37:27-74
+receiver#com.charlie.finance.CreditCardReminderReceiver
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:41:9-43:40
 	android:exported
 		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:43:13-37
+	android:name
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:42:13-55
+activity#com.charlie.finance.MainActivity
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:45:9-49:55
+	android:screenOrientation
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:49:13-52
+	android:exported
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:48:13-37
 	android:configChanges
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:42:13-109
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:47:13-109
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:41:13-41
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:46:13-41
 meta-data#android.support.FILE_PROVIDER_PATHS
-ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:24:13-26:54
+ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:25:13-27:54
 	android:resource
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:26:17-51
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:27:17-51
 	android:name
-		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:25:17-67
+		ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:26:17-67
 uses-sdk
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml

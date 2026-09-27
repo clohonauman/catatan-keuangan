@@ -195,6 +195,12 @@ function humanoidProtectedFundsReply(string $message): ?string {
     $s=humanoidWalletSnapshot($wallet);
     if(!$s) return null;
     $name=$wallet?(string)($s['name']??'Dompet'):'semua dompet';
+    if(strtolower((string)($s['type']??''))==='credit_card'){
+        return "Rincian kartu kredit {$name}:\n"
+            .'• Limit: '.rupiah((int)($s['credit_limit']??0))."\n"
+            .'• Tagihan/terpakai: '.rupiah((int)($s['credit_used']??0))."\n"
+            .'• Sisa limit: '.rupiah((int)($s['available_limit']??0)).'.';
+    }
     $gross=(int)($s['balance']??0);$reserved=(int)($s['reserved_balance']??0);$minimum=(int)($s['minimum_balance']??0);$available=(int)($s['available_balance']??0);
     return "Rincian {$name}:\n"
         .'• Saldo aktual: '.rupiah($gross)."\n"
@@ -206,8 +212,8 @@ function humanoidProtectedFundsReply(string $message): ?string {
 function humanoidWalletRankingReply(string $message): ?string {
     $t=norm($message);
     if(!preg_match('/\b(?:dompet|rekening)\b/u',$t) || !preg_match('/\b(?:paling banyak|terbesar|tertinggi|paling sedikit|terkecil|terendah|saldo terbanyak|saldo paling)\b/u',$t)) return null;
-    $rows=financeWalletsWithBalances();
-    if(!$rows) return 'Belum ada dompet/rekening aktif.';
+    $rows=array_values(array_filter(financeWalletsWithBalances(),fn($w)=>strtolower((string)($w['type']??''))!=='credit_card'));
+    if(!$rows) return 'Belum ada dompet/rekening kas aktif.';
     $small=(bool)preg_match('/\b(?:paling sedikit|terkecil|terendah)\b/u',$t);
     usort($rows,function($a,$b)use($small){$cmp=(int)($b['available_balance']??0)<=>(int)($a['available_balance']??0);return $small?-$cmp:$cmp;});
     $w=$rows[0];

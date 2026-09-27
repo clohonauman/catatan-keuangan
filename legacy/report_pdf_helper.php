@@ -240,7 +240,7 @@ function financeReportWalletContext($wallets, $allTransactions, $filteredTransac
         $id = (int)($w['id'] ?? 0);
         if ($id <= 0) continue;
         $walletMap[$id] = $w;
-        $balances[$id] = (int)($w['initial_balance'] ?? 0);
+        $balances[$id] = strtolower((string)($w['type']??''))==='credit_card' ? -max(0,(int)($w['opening_debt']??0)) : (int)($w['initial_balance'] ?? 0);
     }
 
     // Pastikan transaksi legacy yang merujuk ID dompet lama tetap dapat dilaporkan.
@@ -351,7 +351,7 @@ function financeReportWalletContext($wallets, $allTransactions, $filteredTransac
         if (!empty($w['archived']) && !$hasActivity) continue;
         $summaryRows[] = [
             'id'=>$id,
-            'name'=>(string)($w['name'] ?? ('Dompet #' . $id)),
+            'name'=>(string)($w['name'] ?? ('Dompet #' . $id)).(strtolower((string)($w['type']??''))==='credit_card'?' (Kartu Kredit)':''),
             'opening'=>$opening,
             'income'=>(int)$flow['income'],
             'expense'=>(int)$flow['expense'],

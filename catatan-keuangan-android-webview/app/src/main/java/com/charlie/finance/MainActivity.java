@@ -1,6 +1,11 @@
 package com.charlie.finance;
 
+import android.Manifest;
+import android.app.AlarmManager;
 import android.app.DownloadManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -32,6 +37,7 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.text.TextUtils;
 
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
@@ -44,6 +50,11 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.util.concurrent.Executor;
 
 public class MainActivity extends FragmentActivity {
@@ -57,6 +68,9 @@ public class MainActivity extends FragmentActivity {
     private static final String PREF_OFFLINE_READY = "offline_ready";
     private static final String PREF_OFFLINE_USER_ID = "offline_user_id";
     private static final String PREF_OFFLINE_READY_AT = "offline_ready_at";
+    private static final String REMINDER_PREFS = "credit_card_reminders";
+    private static final String PREF_REMINDER_CODES = "request_codes";
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 2002;
     private static final long BIOMETRIC_RELOCK_AFTER_MS = 30_000L;
     private static final int BIOMETRIC_MODE_UNLOCK = 1;
     private static final int BIOMETRIC_MODE_ENABLE = 2;
@@ -71,6 +85,7 @@ public class MainActivity extends FragmentActivity {
     private ConnectivityManager.NetworkCallback networkCallback;
     private SharedPreferences securityPrefs;
     private SharedPreferences offlinePrefs;
+    private SharedPreferences reminderPrefs;
     private boolean offlineBootRetryAttempted = false;
     private FrameLayout biometricLockOverlay;
     private TextView biometricLockMessage;
@@ -92,6 +107,8 @@ public class MainActivity extends FragmentActivity {
         biometricUsePinButton = findViewById(R.id.biometricUsePinButton);
         securityPrefs = getSharedPreferences(SECURITY_PREFS, MODE_PRIVATE);
         offlinePrefs = getSharedPreferences(OFFLINE_PREFS, MODE_PRIVATE);
+        reminderPrefs = getSharedPreferences(REMINDER_PREFS, MODE_PRIVATE);
+        ensureCreditCardNotificationChannel();
 
         configureWebView();
         configureBiometricGate();
@@ -152,7 +169,7 @@ public class MainActivity extends FragmentActivity {
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
         settings.setUserAgentString(
-                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.3");
+                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.4");
 
         // Cookie/session login tetap tersimpan
         CookieManager cookieManager = CookieManager.getInstance();
@@ -167,6 +184,7 @@ public class MainActivity extends FragmentActivity {
         webView.setDownloadListener(new FinanceDownloadListener());
         webView.addJavascriptInterface(new BiometricBridge(), "AndroidBiometric");
         webView.addJavascriptInterface(new OfflineBridge(), "AndroidOffline");
+        webView.addJavascriptInterface(new ReminderBridge(), "AndroidReminders");
 
         // Debug WebView hanya aktif pada debug build
         boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
@@ -429,6 +447,116 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public boolean isReady() {
             return isOfflineReady();
+        }
+    }
+
+    private class ReminderBridge {
+        @JavascriptInterface
+        public void replaceCreditCardSchedules(String json) {
+            runOnUiThread(() -> replaceCreditCardSchedulesInternal(json));
+        }
+
+        @JavascriptInterface
+        public void clearCreditCardSchedules() {
+            runOnUiThread(() -> clearCreditCardSchedulesInternal());
+        }
+    }
+
+    private void ensureCreditCardNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                NotificationChannel channel = new NotificationChannel(
+                        CreditCardReminderReceiver.CHANNEL_ID,
+                        "Pengingat Kartu Kredit",
+                        NotificationManager.IMPORTANCE_HIGH);
+                channel.setDescription("Pengingat H-2 dan H-1 penagihan kartu kredit");
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
+        }
+    }
+
+    private int reminderRequestCode(String key) {
+        int code = Math.abs((key == null ? "" : key).hashCode());
+        return 490000 + (code % 100000);
+    }
+
+    private PendingIntent reminderPendingIntent(int requestCode, String title, String message) {
+        Intent intent = new Intent(this, CreditCardReminderReceiver.class);
+        intent.putExtra("title", title);
+        intent.putExtra("message", message);
+        intent.putExtra("notification_id", requestCode);
+        return PendingIntent.getBroadcast(
+                this,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private void clearCreditCardSchedulesInternal() {
+        if (reminderPrefs == null) return;
+        AlarmManager alarms = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        String stored = reminderPrefs.getString(PREF_REMINDER_CODES, "");
+        if (alarms != null && stored != null && !stored.trim().isEmpty()) {
+            for (String part : stored.split(",")) {
+                try {
+                    int requestCode = Integer.parseInt(part.trim());
+                    Intent intent = new Intent(this, CreditCardReminderReceiver.class);
+                    PendingIntent pending = PendingIntent.getBroadcast(
+                            this,
+                            requestCode,
+                            intent,
+                            PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+                    if (pending != null) {
+                        alarms.cancel(pending);
+                        pending.cancel();
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        reminderPrefs.edit().remove(PREF_REMINDER_CODES).apply();
+    }
+
+    private void replaceCreditCardSchedulesInternal(String json) {
+        clearCreditCardSchedulesInternal();
+        requestNotificationPermissionIfNeeded();
+        if (json == null || json.trim().isEmpty()) return;
+        AlarmManager alarms = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        if (alarms == null) return;
+        List<String> requestCodes = new ArrayList<>();
+        try {
+            JSONArray schedules = new JSONArray(json);
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < schedules.length(); i++) {
+                JSONObject row = schedules.optJSONObject(i);
+                if (row == null) continue;
+                String key = row.optString("key", "cc_" + i);
+                long triggerAt = row.optLong("trigger_at", 0L);
+                if (triggerAt <= now + 30000L) continue;
+                String title = row.optString("title", "Pengingat Tagihan Kartu Kredit");
+                String message = row.optString("message", "Tagihan kartu kredit akan segera ditagihkan.");
+                int requestCode = reminderRequestCode(key);
+                PendingIntent pending = reminderPendingIntent(requestCode, title, message);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending);
+                } else {
+                    alarms.set(AlarmManager.RTC_WAKEUP, triggerAt, pending);
+                }
+                requestCodes.add(String.valueOf(requestCode));
+            }
+            if (reminderPrefs != null) {
+                reminderPrefs.edit().putString(PREF_REMINDER_CODES, TextUtils.join(",", requestCodes)).apply();
+            }
+        } catch (Exception ignored) {
+            // Reminder lokal tidak boleh mengganggu fungsi utama WebView.
         }
     }
 

@@ -57,7 +57,23 @@ final class FinanceRepository
         ];
     }
 
-    private static function readWallets(int $u): array { $out=[]; foreach((new Query())->from('{{%wallet}}')->where(['user_id'=>$u])->orderBy('legacy_id')->all() as $r){$out[]=self::mergeExtra(['id'=>(int)$r['legacy_id'],'name'=>$r['name'],'type'=>$r['type'],'initial_balance'=>(int)$r['initial_balance'],'reserved_balance'=>(int)$r['reserved_balance'],'minimum_balance'=>(int)$r['minimum_balance'],'archived'=>(bool)$r['archived'],'created_at'=>$r['created_at']],$r['extra_json']);} return $out; }
+    private static function readWallets(int $u): array {
+        $out=[];
+        foreach((new Query())->from('{{%wallet}}')->where(['user_id'=>$u])->orderBy('legacy_id')->all() as $r){
+            $out[]=self::mergeExtra([
+                'id'=>(int)$r['legacy_id'],'name'=>$r['name'],'type'=>$r['type'],
+                'initial_balance'=>(int)$r['initial_balance'],'reserved_balance'=>(int)$r['reserved_balance'],
+                'minimum_balance'=>(int)$r['minimum_balance'],'archived'=>(bool)$r['archived'],'created_at'=>$r['created_at']
+            ],$r['extra_json']);
+        }
+        usort($out, static function(array $a,array $b): int {
+            $aOrder=array_key_exists('sort_order',$a)?(int)$a['sort_order']:((int)($a['id']??0)*10);
+            $bOrder=array_key_exists('sort_order',$b)?(int)$b['sort_order']:((int)($b['id']??0)*10);
+            $cmp=$aOrder<=>$bOrder;
+            return $cmp!==0?$cmp:((int)($a['id']??0)<=>(int)($b['id']??0));
+        });
+        return $out;
+    }
     private static function readCategories(int $u): array { $out=[]; foreach((new Query())->from('{{%category}}')->where(['user_id'=>$u])->orderBy('legacy_id')->all() as $r){$out[]=self::mergeExtra(['id'=>(int)$r['legacy_id'],'name'=>$r['name'],'type'=>$r['type'],'icon'=>$r['icon'],'keywords'=>self::jdec($r['keywords_json'],[]),'archived'=>(bool)$r['archived']],$r['extra_json']);} return $out; }
     private static function readTransactions(int $u): array { $out=[]; foreach((new Query())->from('{{%finance_transaction}}')->where(['user_id'=>$u])->orderBy('legacy_id')->all() as $r){$x=['id'=>(int)$r['legacy_id'],'type'=>$r['type'],'category'=>$r['category'],'amount'=>(int)$r['amount'],'note'=>$r['note']??'','transaction_date'=>$r['transaction_date'],'created_at'=>$r['created_at']]; foreach(['wallet_id','from_wallet_id','to_wallet_id','bill_id'] as $k) if($r[$k]!==null)$x[$k]=(int)$r[$k]; foreach(['spending_kind','source','updated_at'] as $k) if($r[$k]!==null&&$r[$k]!=='')$x[$k]=$r[$k]; if($r['attachment_json'])$x['attachment']=self::jdec($r['attachment_json'],[]); if($r['ocr_json'])$x['ocr']=self::jdec($r['ocr_json'],[]); $out[]=self::mergeExtra($x,$r['extra_json']);} return $out; }
     private static function readChats(int $u): array { $out=[]; foreach((new Query())->from('{{%chat_message}}')->where(['user_id'=>$u])->orderBy('legacy_id')->all() as $r){$x=['id'=>(int)$r['legacy_id'],'role'=>$r['role'],'message'=>$r['message'],'created_at'=>$r['created_at']]; if($r['attachment_json'])$x['attachment']=self::jdec($r['attachment_json'],[]);$out[]=self::mergeExtra($x,$r['extra_json']);}return $out; }
@@ -188,8 +204,16 @@ final class FinanceRepository
         + COALESCE(SUM(CASE WHEN type='transfer' AND to_wallet_id=:w4 THEN amount ELSE 0 END),0) AS delta
         FROM {{%finance_transaction}} WHERE user_id=:u";
         $delta=(int)self::db()->createCommand($sql,[':u'=>$userId,':w1'=>$walletId,':w2'=>$walletId,':w3'=>$walletId,':w4'=>$walletId])->queryScalar();
+        $extra=self::jdec($w['extra_json']??'',[]);
+        if(strtolower((string)($w['type']??''))==='credit_card'){
+            $limit=max(0,(int)($extra['credit_limit']??0));
+            $openingDebt=max(0,(int)($extra['opening_debt']??0));
+            $raw=-$openingDebt+$delta;
+            $debt=max(0,-$raw);
+            return ['name'=>(string)$w['name'],'type'=>'credit_card','gross'=>$raw,'debt'=>$debt,'limit'=>$limit,'available'=>max(0,$limit-$debt)];
+        }
         $gross=(int)$w['initial_balance']+$delta;$reserved=max(0,(int)$w['reserved_balance']);$minimum=max(0,(int)$w['minimum_balance']);
-        return ['name'=>(string)$w['name'],'gross'=>$gross,'reserved'=>$reserved,'minimum'=>$minimum,'available'=>max(0,$gross-$reserved-$minimum)];
+        return ['name'=>(string)$w['name'],'type'=>(string)($w['type']??'cash'),'gross'=>$gross,'reserved'=>$reserved,'minimum'=>$minimum,'available'=>max(0,$gross-$reserved-$minimum)];
     }
 
     public static function appendTransaction(int $userId,array $t): array {
@@ -200,12 +224,22 @@ final class FinanceRepository
             [$m,$extra]=self::bumpMetaLocked($userId,'tx');
             if($type==='expense'){
                 $w=self::walletAvailableForInsert($userId,(int)($t['wallet_id']??1));
-                if($amount>$w['available'])throw new \InvalidArgumentException('Saldo tersedia '.$w['name'].' hanya Rp'.number_format($w['available'],0,',','.').'.');
+                if($amount>$w['available']){
+                    $label=($w['type']??'')==='credit_card'?'Sisa limit ':'Saldo tersedia ';
+                    throw new \InvalidArgumentException($label.$w['name'].' hanya Rp'.number_format($w['available'],0,',','.').'.');
+                }
             }elseif($type==='transfer'){
                 $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
                 if($from<=0||$to<=0||$from===$to)throw new \InvalidArgumentException('Dompet asal dan tujuan transfer harus berbeda.');
                 $w=self::walletAvailableForInsert($userId,$from);
-                if($amount>$w['available'])throw new \InvalidArgumentException('Saldo tersedia '.$w['name'].' hanya Rp'.number_format($w['available'],0,',','.').'.');
+                if($amount>$w['available']){
+                    $label=($w['type']??'')==='credit_card'?'Sisa limit ':'Saldo tersedia ';
+                    throw new \InvalidArgumentException($label.$w['name'].' hanya Rp'.number_format($w['available'],0,',','.').'.');
+                }
+                $target=self::walletAvailableForInsert($userId,$to);
+                if(($target['type']??'')==='credit_card' && $amount>(int)($target['debt']??0)){
+                    throw new \InvalidArgumentException('Tagihan kartu '.$target['name'].' saat ini hanya Rp'.number_format((int)($target['debt']??0),0,',','.').'. Pembayaran tidak boleh melebihi tagihan.');
+                }
             }
             $id=max(1,(int)($m['next_transaction_id']??1));$auditId=max(1,(int)($m['next_audit_id']??1));$now=date('Y-m-d H:i:s');
             $x=['id'=>$id,'type'=>$type,'category'=>$t['category']??'Lainnya','amount'=>$amount,'note'=>$t['note']??'','transaction_date'=>$t['transaction_date']??date('Y-m-d'),'created_at'=>$now];

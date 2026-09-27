@@ -62,6 +62,55 @@ let chatPageState = { page: 1, limit: CHAT_PAGE_SIZE, total: 0, has_more: false,
 let offlineTransactionPool = [];
 let offlineChatPool = [];
 
+// V47: cold-start offline readiness. Android baru dianggap siap offline jika
+// shell aplikasi DAN snapshot dashboard sudah berhasil disimpan pada origin domain.
+let offlineShellReadyForColdStart = false;
+let offlineSnapshotReadyForColdStart = false;
+let offlineNativeReadyNotified = false;
+
+function notifyAndroidOfflineReadyIfPossible() {
+  if (offlineNativeReadyNotified || !offlineShellReadyForColdStart || !offlineSnapshotReadyForColdStart) return;
+  offlineNativeReadyNotified = true;
+  try {
+    if (window.AndroidOffline && typeof window.AndroidOffline.markReady === "function") {
+      window.AndroidOffline.markReady(String(window.FINANCE_APP?.userId || ""));
+    }
+  } catch (_) {}
+}
+
+function clearAndroidOfflineReady() {
+  offlineNativeReadyNotified = false;
+  try {
+    if (window.AndroidOffline && typeof window.AndroidOffline.clearReady === "function") {
+      window.AndroidOffline.clearReady();
+    }
+  } catch (_) {}
+}
+
+async function cacheCurrentShellForOffline() {
+  if (!("serviceWorker" in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const target = navigator.serviceWorker.controller || reg.active || reg.waiting;
+    if (!target) return false;
+    const ok = await new Promise((resolve) => {
+      const channel = new MessageChannel();
+      let done = false;
+      const finish = (value) => { if (done) return; done = true; resolve(!!value); };
+      const timer = setTimeout(() => finish(false), 5000);
+      channel.port1.onmessage = (event) => { clearTimeout(timer); finish(event.data?.ok === true); };
+      target.postMessage({ type: "CACHE_CURRENT_SHELL", url: location.href }, [channel.port2]);
+    });
+    if (ok) {
+      offlineShellReadyForColdStart = true;
+      notifyAndroidOfflineReadyIfPossible();
+    }
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 
 let appInitialDataLoaded = false;
 let appDataLoadSequence = 0;
@@ -262,8 +311,8 @@ const DAILY_BUDGET_DISMISSED_KEY = "finance_daily_budget_dismissed";
 
 function balanceIsHidden() { return localStorage.getItem(BALANCE_VISIBILITY_KEY) === "1"; }
 function totalAvailableFromWallets() {
-  const wallets = ((state.features || {}).wallets || []).filter(w => !w.archived);
-  if (!wallets.length) return null;
+  const wallets = ((state.features || {}).wallets || []).filter(w => !w.archived && String(w.type || "") !== "credit_card");
+  if (!wallets.length) return 0;
   return wallets.reduce((sum, w) => {
     const gross = Number(w.balance || 0);
     const reserved = Math.max(0, Number(w.reserved_balance || 0));
@@ -309,7 +358,17 @@ function walletBalanceIcon(type = "") {
   if (t === "bank") return iconSvg("wallet");
   if (t === "ewallet") return iconSvg("smartphone");
   if (t === "savings") return iconSvg("flag");
+  if (t === "credit_card") return iconSvg("creditCard");
   return iconSvg("wallet");
+}
+function walletTypeLabel(type = "") {
+  const t = String(type || "").toLowerCase();
+  return ({bank:"Bank", ewallet:"E-Wallet", savings:"Tabungan", credit_card:"Kartu Kredit", cash:"Cash"})[t] || "Dompet";
+}
+function walletAvailabilityLabel(w = {}) {
+  return String(w.type || "") === "credit_card"
+    ? `sisa limit ${rupiah(w.available_limit ?? w.available_balance ?? 0)}`
+    : `tersedia ${rupiah(w.available_balance ?? w.balance ?? 0)}`;
 }
 
 function categoryLineIcon(category = {}) {
@@ -340,15 +399,17 @@ function renderWalletBalanceDetails() {
   }
 
   list.innerHTML = wallets.map((w) => `
-    <div class="wallet-balance-row">
+    <div class="wallet-balance-row" data-wallet-sort-row data-wallet-sort-id="${Number(w.id)}">
+      <button type="button" class="wallet-sort-handle" data-wallet-sort-handle aria-label="Geser urutan ${esc(w.name || 'Dompet')}" title="Tarik untuk mengubah urutan"><span></span><span></span><span></span><span></span><span></span><span></span></button>
       <div class="wallet-balance-icon">${walletBalanceIcon(w.type)}</div>
       <div class="wallet-balance-name">
         <b>${esc(w.name || "Dompet")}</b>
-        <small>${esc(w.type === "bank" ? "Bank" : w.type === "ewallet" ? "E-Wallet" : w.type === "savings" ? "Tabungan" : "Cash")} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}${Number(w.minimum_balance||0)>0 && Number(w.balance||0)<Number(w.minimum_balance||0)?` · di bawah minimum`:""}</small>
+        <small>${String(w.type||"")==="credit_card" ? `${esc(walletTypeLabel(w.type))} · limit ${rupiah(w.credit_limit||0)} · terpakai ${rupiah(w.credit_used ?? w.outstanding_balance ?? 0)}` : `${esc(walletTypeLabel(w.type))} · total ${rupiah(w.balance || 0)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}${Number(w.minimum_balance||0)>0 && Number(w.balance||0)<Number(w.minimum_balance||0)?` · di bawah minimum`:""}`}</small>
       </div>
-      <strong>${rupiah(w.available_balance ?? w.balance ?? 0)}</strong>
+      <strong>${String(w.type||"")==="credit_card" ? `${rupiah(w.available_limit ?? w.available_balance ?? 0)}<small class="money-caption"> sisa limit</small>` : rupiah(w.available_balance ?? w.balance ?? 0)}</strong>
     </div>
   `).join("");
+  setupWalletSortList(list);
 }
 
 function openWalletBalanceDetails() {
@@ -733,11 +794,42 @@ async function applyOfflineQueueOverlay(baseState, allTransactions) {
   s.chats = [...(s.chats || [])];
   let chatSeq = 0;
   for (const rec of queue) {
-    if (String(rec.url).split("?")[0].replace(/^\//, "") !== "ajax/finance.php") continue;
+    const cleanUrl = String(rec.url).split("?")[0].replace(/^\//, "");
     const p = rec.preview || {};
-    const label = p.message || (p.photo ? "📷 Foto tersimpan offline" : "Permintaan chat offline");
-    s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "user", message: label, created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
-    s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "assistant", message: "⏳ Tersimpan offline. Setelah tersinkron, transaksi akan ditampilkan untuk konfirmasi sebelum disimpan.", created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
+
+    if (cleanUrl === "ajax/finance.php") {
+      const label = p.message || (p.photo ? "📷 Foto tersimpan offline" : "Permintaan chat offline");
+      s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "user", message: label, created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
+      s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "assistant", message: "⏳ Tersimpan offline. Setelah tersinkron, transaksi akan ditampilkan untuk konfirmasi sebelum disimpan.", created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
+      continue;
+    }
+
+    // Transaksi manual yang dibuat offline langsung terlihat di daftar sebagai
+    // pending. Saldo server tidak dianggap final sampai queue berhasil sync.
+    if (cleanUrl === "ajax/features.php" && p.action === "transaction_create" && p.payload) {
+      const x = p.payload || {};
+      all.push({
+        id: `offline-tx-${rec.id}`,
+        type: String(x.type || "expense"),
+        amount: Number(x.amount || 0),
+        transaction_date: String(x.transaction_date || new Date(rec.created_at).toISOString().slice(0, 10)),
+        category: String(x.type || "") === "transfer" ? "Transfer Antar Dompet" : String(x.category || "Lainnya"),
+        note: String(x.note || ""),
+        wallet_id: Number(x.wallet_id || 0),
+        from_wallet_id: Number(x.from_wallet_id || 0),
+        to_wallet_id: Number(x.to_wallet_id || 0),
+        spending_kind: String(x.spending_kind || "once"),
+        source: "offline_pending",
+        offline_pending: true,
+        created_at: new Date(rec.created_at).toISOString(),
+      });
+      continue;
+    }
+
+    if (cleanUrl === "ajax/delete_transaction.php" && p.id) {
+      const idx = all.findIndex(row => String(row.id) === String(p.id));
+      if (idx >= 0) all.splice(idx, 1);
+    }
   }
   return { state: s, allTransactions: all, queue };
 }
@@ -816,6 +908,11 @@ async function cacheOnlineSnapshot(dashboard, loadedTx = [], loadedChats = null)
       FinanceOffline.saveSnapshot("dashboard", dashboardCopy),
       FinanceOffline.saveSnapshot("all_transactions", mergedTx),
     ]);
+    offlineSnapshotReadyForColdStart = true;
+    notifyAndroidOfflineReadyIfPossible();
+    if (!offlineShellReadyForColdStart && "serviceWorker" in navigator) {
+      cacheCurrentShellForOffline().catch(() => false);
+    }
   } catch (_) {}
 }
 
@@ -1031,7 +1128,7 @@ function renderSummaryCards() {
   applyBalanceVisibility();
 
   const initial = document.getElementById("initialBalance");
-  const primaryWallet = ((state.features || {}).wallets || [])[0];
+  const primaryWallet = ((state.features || {}).wallets || []).find(w => String(w.type || "") !== "credit_card");
   if (initial) initial.value = primaryWallet ? Number(primaryWallet.initial_balance || 0) : (s.initial || 0);
   if (document.getElementById("walletBalanceModal")?.open) renderWalletBalanceDetails();
 }
@@ -1042,7 +1139,7 @@ function spendingKindLabel(kind) {
 
 function pendingWalletOptions(selected) {
   const wallets = ((state.features || {}).wallets || []).filter(w => !w.archived);
-  return wallets.map(w => optionHtml(String(w.id), `${w.name} · tersedia ${rupiah(w.available_balance ?? w.balance ?? 0)}`, String(w.id) === String(selected))).join("");
+  return wallets.map(w => optionHtml(String(w.id), `${w.name} · ${walletAvailabilityLabel(w)}`, String(w.id) === String(selected))).join("");
 }
 
 function pendingCategoryOptions(selected, type) {
@@ -1295,7 +1392,7 @@ function render() {
 
 // Invoice-style, read-only preview of the transaction already loaded for this account.
 function transactionDetailMarkup(t, wallets = []) {
-  const names = Object.fromEntries(wallets.map(w => [String(w.id), w.name]));
+  const names = Object.fromEntries(wallets.map(w => [String(w.id), String(w.type||"")==="credit_card" ? `${w.name} (Kartu Kredit)` : w.name]));
   const wallet = id => names[String(id)] || (id ? `Dompet #${id}` : 'Tidak tersedia');
   const pending = !!t.offline_pending;
   const transfer = t.type === 'transfer';
@@ -1305,7 +1402,7 @@ function transactionDetailMarkup(t, wallets = []) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawDate);
   const date = match ? `${match[3]}/${match[2]}/${match[1]}` : rawDate || 'Tidak tersedia';
   const ref = pending ? `LOKAL-${String(t.id)}` : `TRX-${String(t.id).padStart(6, '0')}`;
-  const sources = {bill:'Pembayaran tagihan',recurring:'Transaksi berulang',receipt_scan:'Scan nota',chat_with_photo:'Chat dengan foto',wallet_transfer:'Transfer dompet',offline_pending:'Catatan offline',manual:'Catatan manual'};
+  const sources = {bill:'Pembayaran tagihan',credit_card_bill_payment:'Pembayaran kartu kredit',recurring:'Transaksi berulang',receipt_scan:'Scan nota',chat_with_photo:'Chat dengan foto',wallet_transfer:'Transfer dompet',offline_pending:'Catatan offline',manual:'Catatan manual'};
   const source = sources[t.source] || (t.source ? String(t.source) : 'Catatan transaksi');
   const billRow = ((state.features || {}).bills || []).find(b => Number(b.id) === Number(t.bill_id || 0));
   const billLabel = billRow ? `${billRow.name} · ${rupiah(billRow.amount)}` : (t.bill_id ? `Tagihan #${t.bill_id}` : '');
@@ -1376,7 +1473,7 @@ function renderTransactions() {
   const list = document.getElementById("txList");
   if (!list) return;
 
-  const wallets = Object.fromEntries(((state.features || {}).wallets || []).map(w => [Number(w.id), w.name]));
+  const wallets = Object.fromEntries(((state.features || {}).wallets || []).map(w => [Number(w.id), String(w.type||"")==="credit_card" ? `${w.name} · Kartu Kredit` : w.name]));
   list.innerHTML = "";
   transactions.forEach((t) => {
     const isTransfer = t.type === "transfer";
@@ -2465,7 +2562,7 @@ const modal = document.getElementById("settingModal");
 function renderInitialWalletForm() {
   const box = document.getElementById('initialWalletList');
   if (!box) return;
-  const wallets = (state.features?.wallets || []).filter(w => !w.archived);
+  const wallets = (state.features?.wallets || []).filter(w => !w.archived && String(w.type || "") !== "credit_card");
   box.innerHTML = wallets.map((w,index) => {
     const locked = index > 0 && !isPremiumUser();
     return `<div class="initial-wallet-row"><div class="initial-wallet-heading"><b>${esc(w.name)}</b><span>Tersedia: ${esc(rupiah(w.available_balance ?? w.balance ?? 0))}</span></div>
@@ -2980,6 +3077,7 @@ if (window.FinanceOffline) FinanceOffline.onStatus((s) => updateConnectionUi(s))
 
 document.querySelectorAll('form input[name="action"][value="logout"]').forEach((input) => {
   input.form?.addEventListener("submit", () => {
+    clearAndroidOfflineReady();
     try { navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_OFFLINE_SHELL" }); } catch (_) {}
   });
 });
@@ -3021,6 +3119,7 @@ async function runRealtimePoll() {
     });
 
     const j = await fetchJson("ajax/realtime.php?" + params.toString());
+    const previousRevision = realtimeRevision;
     const previousTxSignature = realtimeTransactionSignature;
     const previousChatSignature = realtimeChatSignature;
     const previousNotificationSignature = realtimeNotificationSignature;
@@ -3599,9 +3698,9 @@ function renderFeatureSelectOptions() {
   const wallets = f.wallets || [];
   const categories = f.categories || [];
   const bills = f.bills || [];
-  fillSelect("txFilterWallet", wallets, x => x.id, x => `${x.name} (${rupiah(x.available_balance ?? x.balance ?? 0)} tersedia)`, { value: "0", label: "Semua dompet" });
+  fillSelect("txFilterWallet", wallets, x => x.id, x => `${x.name} (${walletAvailabilityLabel(x)})`, { value: "0", label: "Semua dompet" });
   fillSelect("txFilterCategory", categories, x => x.name, x => `${x.icon || ""} ${x.name}`.trim(), { value: "", label: "Semua kategori" });
-  ["transferFrom","transferTo","billWallet","recurringWallet","editTxWallet","editTxFromWallet","editTxToWallet","createTxWallet","createTxFromWallet","createTxToWallet"].forEach(id => fillSelect(id, wallets, x => x.id, x => `${x.name} · tersedia ${rupiah(x.available_balance ?? x.balance ?? 0)}`));
+  ["transferFrom","transferTo","billWallet","recurringWallet","editTxWallet","editTxFromWallet","editTxToWallet","createTxWallet","createTxFromWallet","createTxToWallet"].forEach(id => fillSelect(id, wallets, x => x.id, x => `${x.name} · ${walletAvailabilityLabel(x)}`));
   fillSelect("monthlyBudgetCategory", categories.filter(x => x.type === "expense" || x.type === "both"), x => x.id, x => `${x.icon || ""} ${x.name}`.trim());
   ["billCategory","recurringCategory","editTxCategory"].forEach(id => fillSelect(id, categories, x => x.name, x => `${x.icon || ""} ${x.name}`.trim()));
   fillSelect("editTxBill", bills, x => x.id, x => `${x.name} · ${rupiah(x.amount)}${x.paid ? " · lunas" : ""}`, {value:"0",label:"Tidak dihubungkan"});
@@ -3624,7 +3723,11 @@ async function refreshFeatures() {
 }
 
 async function featureAction(payload, successText = "") {
-  const j = await fetchJson("ajax/features.php", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const j = await fetchJson(
+    "ajax/features.php",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    { kind: "features", preview: { action: String(payload?.action || ""), payload: { ...(payload || {}) } } }
+  );
   state.features = j.features || state.features || {};
   if (j.summary) state.summary = j.summary;
   if (j.account) state.account = j.account;
@@ -3762,13 +3865,46 @@ function renderFinanceCenter() {
   renderSyncQueueDetails();
 }
 
+function syncWalletTypeFields() {
+  const credit = String(el("walletType")?.value || "") === "credit_card";
+  if (el("walletStandardFields")) el("walletStandardFields").hidden = credit;
+  if (el("walletCreditFields")) el("walletCreditFields").hidden = !credit;
+}
+el("walletType")?.addEventListener("change", syncWalletTypeFields);
+
+function resetWalletForm() {
+  ["walletId","walletName","walletInitial","walletReserved","walletMinimum","walletCreditLimit","walletOpeningDebt","walletBillingDay"].forEach(id => { if (el(id)) el(id).value = ""; });
+  if (el("walletType")) el("walletType").value = "cash";
+  syncWalletTypeFields();
+}
+
 function renderWallets(wallets) {
   const box = el("walletList"); if (!box) return;
-  box.innerHTML = wallets.length ? wallets.map(w => `<div class="feature-list-row"><div class="feature-row-icon">${walletBalanceIcon(w.type)}</div><div class="feature-row-main"><b>${esc(w.name)}</b><small>${esc(w.type)} · total ${rupiah(w.balance)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}</small></div><strong>${rupiah(w.available_balance ?? w.balance ?? 0)}<small class="money-caption"> tersedia</small></strong><div class="row-actions"><button data-wallet-edit="${w.id}">Edit</button><button class="danger-link" data-wallet-archive="${w.id}">Arsip</button></div></div>`).join("") : '<div class="empty">Belum ada dompet.</div>';
-  box.querySelectorAll("[data-wallet-edit]").forEach(b => b.onclick = () => { const w=wallets.find(x=>Number(x.id)===Number(b.dataset.walletEdit)); if(!w)return;el("walletId").value=w.id;el("walletName").value=w.name;el("walletType").value=w.type;el("walletInitial").value=w.initial_balance;if(el("walletReserved"))el("walletReserved").value=Number(w.reserved_balance||0);if(el("walletMinimum"))el("walletMinimum").value=Number(w.minimum_balance||0); });
+  box.innerHTML = wallets.length ? wallets.map(w => {
+    const credit=String(w.type||"")==="credit_card";
+    const details=credit
+      ? `Kartu Kredit · limit ${rupiah(w.credit_limit||0)} · terpakai ${rupiah(w.credit_used ?? w.outstanding_balance ?? 0)}${Number(w.billing_day||0)>0?` · penagihan tgl ${Number(w.billing_day)}`:""}`
+      : `${walletTypeLabel(w.type)} · total ${rupiah(w.balance)}${Number(w.reserved_balance||0)>0?` · disisihkan ${rupiah(w.reserved_balance)}`:""}${Number(w.minimum_balance||0)>0?` · minimum ${rupiah(w.minimum_balance)}`:""}`;
+    const amount=credit
+      ? `${rupiah(w.available_limit ?? w.available_balance ?? 0)}<small class="money-caption"> sisa limit</small>`
+      : `${rupiah(w.available_balance ?? w.balance ?? 0)}<small class="money-caption"> tersedia</small>`;
+    return `<div class="feature-list-row wallet-manage-row ${credit?'is-credit-card':''}" data-wallet-sort-row data-wallet-sort-id="${Number(w.id)}"><button type="button" class="wallet-sort-handle" data-wallet-sort-handle aria-label="Geser urutan ${esc(w.name)}" title="Tarik untuk mengubah urutan"><span></span><span></span><span></span><span></span><span></span><span></span></button><div class="feature-row-icon">${walletBalanceIcon(w.type)}</div><div class="feature-row-main"><b>${esc(w.name)}</b><small>${details}</small></div><strong>${amount}</strong><div class="row-actions"><button data-wallet-edit="${w.id}">Edit</button><button class="danger-link" data-wallet-archive="${w.id}">Arsip</button></div></div>`;
+  }).join("") : '<div class="empty">Belum ada dompet.</div>';
+  setupWalletSortList(box);
+  box.querySelectorAll("[data-wallet-edit]").forEach(b => b.onclick = () => {
+    const w=wallets.find(x=>Number(x.id)===Number(b.dataset.walletEdit)); if(!w)return;
+    el("walletId").value=w.id; el("walletName").value=w.name; el("walletType").value=w.type;
+    el("walletInitial").value=Number(w.initial_balance||0); if(el("walletReserved"))el("walletReserved").value=Number(w.reserved_balance||0); if(el("walletMinimum"))el("walletMinimum").value=Number(w.minimum_balance||0);
+    if(el("walletCreditLimit"))el("walletCreditLimit").value=Number(w.credit_limit||0); if(el("walletOpeningDebt"))el("walletOpeningDebt").value=Number(w.opening_debt||0); if(el("walletBillingDay"))el("walletBillingDay").value=Number(w.billing_day||0)||"";
+    syncWalletTypeFields();
+  });
   box.querySelectorAll("[data-wallet-archive]").forEach(b => b.onclick = async()=>{if(confirm("Arsipkan dompet ini? Transaksi lama tetap tersimpan.")){try{await featureAction({action:"wallet_archive",id:Number(b.dataset.walletArchive)},"Dompet diarsipkan");await load();}catch(e){alert(e.message)}}});
 }
-el("saveWallet")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_save",id:Number(el("walletId").value||0),name:el("walletName").value,type:el("walletType").value,initial_balance:Number(el("walletInitial").value||0),reserved_balance:Number(el("walletReserved")?.value||0),minimum_balance:Number(el("walletMinimum")?.value||0)},"Dompet disimpan");el("walletId").value="";el("walletName").value="";el("walletInitial").value="";if(el("walletReserved"))el("walletReserved").value="";if(el("walletMinimum"))el("walletMinimum").value="";await load();}catch(e){alert(e.message)}});
+el("saveWallet")?.addEventListener("click", async()=>{try{
+  const type=el("walletType").value;
+  await featureAction({action:"wallet_save",id:Number(el("walletId").value||0),name:el("walletName").value,type,initial_balance:Number(el("walletInitial")?.value||0),reserved_balance:Number(el("walletReserved")?.value||0),minimum_balance:Number(el("walletMinimum")?.value||0),credit_limit:Number(el("walletCreditLimit")?.value||0),opening_debt:Number(el("walletOpeningDebt")?.value||0),billing_day:Number(el("walletBillingDay")?.value||0)}, type==="credit_card"?"Kartu kredit disimpan":"Dompet disimpan");
+  resetWalletForm(); await load();
+}catch(e){alert(e.message)}});
 
 el("saveTransfer")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_transfer",from_wallet_id:Number(el("transferFrom").value),to_wallet_id:Number(el("transferTo").value),amount:Number(el("transferAmount").value||0),note:el("transferNote").value},"Transfer dicatat");el("transferAmount").value="";el("transferNote").value="";await load();}catch(e){alert(e.message)}});
 
@@ -3783,8 +3919,32 @@ el("saveCategory")?.addEventListener("click",async()=>{try{await featureAction({
 el("saveMonthlyBudget")?.addEventListener("click",async()=>{try{await featureAction({action:"monthly_budget_set",month:el("monthlyBudgetMonth").value,category_id:Number(el("monthlyBudgetCategory").value||0),limit:Number(el("monthlyBudgetLimit").value||0)},"Budget disimpan");}catch(e){alert(e.message)}});
 
 function formatBillDate(value){if(!value)return "-";const p=String(value).split("-");if(p.length!==3)return value;return `${p[2]}/${p[1]}/${p[0]}`;}
-function renderBills(bills){const box=el("billList");if(!box)return;box.innerHTML=bills.length?bills.map(b=>`<div class="feature-list-row bill-${esc(b.status)}"><div class="feature-row-icon">${b.paid?iconSvg("check"):iconSvg("receipt")}</div><div class="feature-row-main"><b>${esc(b.name)}</b><small>Jatuh tempo ${esc(formatBillDate(b.due_date))} · ${esc(b.category||"Tagihan")}</small></div><strong>${rupiah(b.amount)}</strong><span class="status-pill ${esc(b.status)}">${b.paid?"Lunas":b.status==="overdue"?"Terlambat":b.status==="due_soon"?"Segera":"Belum"}</span><div class="row-actions">${!b.paid?`<button class="success-link" data-bill-pay="${b.id}">Bayar</button>`:""}<button data-bill-edit="${b.id}">Edit</button><button class="danger-link" data-bill-delete="${b.id}">Hapus</button></div></div>`).join(""):'<div class="empty">Belum ada tagihan/cicilan.</div>';
-box.querySelectorAll("[data-bill-pay]").forEach(x=>x.onclick=async()=>{if(confirm("Tandai lunas dan catat sebagai pengeluaran?")){try{await featureAction({action:"bill_pay",id:Number(x.dataset.billPay)},"Tagihan dibayar");await load();}catch(e){alert(e.message)}}});box.querySelectorAll("[data-bill-edit]").forEach(x=>x.onclick=()=>{const b=bills.find(v=>Number(v.id)===Number(x.dataset.billEdit));if(!b)return;el("billId").value=b.id;el("billName").value=b.name;el("billAmount").value=b.amount;el("billDueDate").value=b.due_date||"";el("billCategory").value=b.category;el("billWallet").value=String(b.wallet_id||1);});box.querySelectorAll("[data-bill-delete]").forEach(x=>x.onclick=async()=>{if(confirm("Hapus tagihan ini?")){try{await featureAction({action:"bill_delete",id:Number(x.dataset.billDelete)},"Tagihan dihapus");}catch(e){alert(e.message)}}});}
+function renderBills(bills){
+  const box=el("billList");if(!box)return;
+  const wallets=(state.features?.wallets||[]).filter(w=>!w.archived&&String(w.type||"")!=="credit_card");
+  const paymentOptions=(selected)=>wallets.map(w=>`<option value="${Number(w.id)}" ${Number(selected)===Number(w.id)?"selected":""}>${esc(w.name)} · ${rupiah(w.available_balance??w.balance??0)}</option>`).join("");
+  box.innerHTML=bills.length?bills.map(b=>{
+    const card=!!b.auto_generated&&b.bill_type==="credit_card";
+    const remain=Number(b.remaining_amount??b.amount??0);
+    const cycle=card&&b.cycle_start?` · Siklus ${esc(formatBillDate(b.cycle_start))}–${esc(formatBillDate(b.cycle_end||b.due_date))}`:"";
+    const count=card?(Number(b.transaction_count||0)>0?` · ${Number(b.transaction_count||0)} transaksi`:(Number(b.opening_debt_component||0)>0?` · saldo/tagihan awal`:``)):"";
+    const meta=card?`Kartu Kredit · otomatis${count}${cycle}`:`${esc(b.category||"Tagihan")}`;
+    const amountLabel=card&&Number(b.payment_total||0)>0&&!b.paid?`${rupiah(remain)}<small class="money-caption"> sisa dari ${rupiah(b.amount)}</small>`:rupiah(b.amount);
+    const payWallet=card&&!b.paid&&wallets.length?`<select class="bill-pay-wallet" data-bill-pay-wallet="${b.id}" aria-label="Rekening pembayaran">${paymentOptions(b.wallet_id)}</select>`:"";
+    return `<div class="feature-list-row bill-row ${card?"credit-card-bill-row":"standard-bill-row"} bill-${esc(b.status)}"><div class="feature-row-icon bill-row-icon">${b.paid?iconSvg("check"):card?iconSvg("creditCard"):iconSvg("receipt")}</div><div class="feature-row-main bill-row-main"><b>${esc(b.name)}</b><small>Jatuh tempo ${esc(formatBillDate(b.due_date))} · ${meta}</small></div><div class="bill-row-summary"><strong class="bill-row-amount">${amountLabel}</strong><span class="status-pill bill-row-status ${esc(b.status)}">${b.paid?"Lunas":b.status==="overdue"?"Terlambat":b.status==="due_soon"?"Segera":"Belum"}</span></div><div class="row-actions bill-row-actions">${payWallet}${!b.paid?`<button class="success-link bill-pay-button" data-bill-pay="${b.id}">${card?"Bayar Kartu":"Bayar"}</button>`:""}${card?"":`<button data-bill-edit="${b.id}">Edit</button><button class="danger-link" data-bill-delete="${b.id}">Hapus</button>`}</div></div>`;
+  }).join(""):'<div class="empty">Belum ada tagihan/cicilan.</div>';
+  box.querySelectorAll("[data-bill-pay]").forEach(x=>x.onclick=async()=>{
+    const b=bills.find(v=>Number(v.id)===Number(x.dataset.billPay));if(!b)return;
+    const card=!!b.auto_generated&&b.bill_type==="credit_card";
+    const walletId=card?Number(box.querySelector(`[data-bill-pay-wallet="${b.id}"]`)?.value||0):0;
+    if(card&&walletId<=0){alert("Pilih rekening/dompet untuk membayar kartu kredit.");return;}
+    const msg=card?`Bayar tagihan ${b.name} sebesar ${rupiah(b.remaining_amount??b.amount)}? Pembayaran akan dicatat sebagai transfer ke kartu kredit.`:"Tandai lunas dan catat sebagai pengeluaran?";
+    if(confirm(msg)){try{await featureAction({action:"bill_pay",id:Number(x.dataset.billPay),wallet_id:walletId},card?"Tagihan kartu kredit dibayar":"Tagihan dibayar");await load();}catch(e){alert(e.message)}}
+  });
+  box.querySelectorAll("[data-bill-edit]").forEach(x=>x.onclick=()=>{const b=bills.find(v=>Number(v.id)===Number(x.dataset.billEdit));if(!b)return;el("billId").value=b.id;el("billName").value=b.name;el("billAmount").value=b.amount;el("billDueDate").value=b.due_date||"";el("billCategory").value=b.category;el("billWallet").value=String(b.wallet_id||1);});
+  box.querySelectorAll("[data-bill-delete]").forEach(x=>x.onclick=async()=>{if(confirm("Hapus tagihan ini?")){try{await featureAction({action:"bill_delete",id:Number(x.dataset.billDelete)},"Tagihan dihapus");}catch(e){alert(e.message)}}});
+}
+
 el("saveBill")?.addEventListener("click",async()=>{try{const dueDate=el("billDueDate").value;if(!dueDate)throw new Error("Pilih tanggal jatuh tempo terlebih dahulu.");await featureAction({action:"bill_save",id:Number(el("billId").value||0),name:el("billName").value,amount:Number(el("billAmount").value||0),due_date:dueDate,category:el("billCategory").value,wallet_id:Number(el("billWallet").value||1),reminder_days:3,active:true},"Tagihan disimpan");el("billId").value="";el("billName").value="";el("billAmount").value="";el("billDueDate").value="";}catch(e){alert(e.message)}});
 
 function renderRecurring(items){const box=el("recurringList");if(!box)return;box.innerHTML=items.length?items.map(r=>`<div class="feature-list-row"><div class="feature-row-icon">${iconSvg("repeat")}</div><div class="feature-row-main"><b>${esc(r.name)}</b><small>${r.type==="income"?"Pemasukan":"Pengeluaran"} · ${esc(r.frequency)} setiap ${r.interval} · berikutnya ${esc(r.next_run)}${r.last_error?` · <span class="danger-text">tertahan: ${esc(r.last_error)}</span>`:""}</small></div><strong class="${r.type}">${rupiah(r.amount)}</strong><div class="row-actions"><button data-recurring-edit="${r.id}">Edit</button><button class="danger-link" data-recurring-delete="${r.id}">Hapus</button></div></div>`).join(""):'<div class="empty">Belum ada transaksi berulang.</div>';
@@ -3836,7 +3996,7 @@ function renderNotificationForm(n){if(!el("notifyEnabled"))return;el("notifyEnab
 el("saveNotificationSettings")?.addEventListener("click",async()=>{try{await featureAction({action:"notifications_set",settings:{enabled:el("notifyEnabled").checked,daily_budget:el("notifyDaily").checked,bills:el("notifyBills").checked,low_balance:el("notifyLow").checked,daily_reconciliation:el("notifyReconciliation")?.checked!==false,email_enabled:el("notifyEmailEnabled")?.checked!==false,low_balance_threshold:Number(el("notifyLowThreshold").value||0)}},"Pengaturan notifikasi disimpan");renderTransactionInboxAssistant();checkFinanceNotifications();}catch(e){alert(e.message)}});
 el("requestNotifyBtn")?.addEventListener("click",async()=>{if(!("Notification" in window))return alert("Browser ini tidak mendukung notifikasi.");const p=await Notification.requestPermission();showFeatureToast(p==="granted"?"Notifikasi diizinkan":"Izin notifikasi belum diberikan");});
 
-function notificationEmailKind(key){if(String(key).startsWith("bill_"))return "bill";if(String(key).startsWith("budget_"))return "budget";if(String(key)==="low_balance")return "low_balance";return "info";}
+function notificationEmailKind(key){if(String(key).startsWith("credit_card_due_"))return "bill";if(String(key).startsWith("bill_"))return "bill";if(String(key).startsWith("budget_"))return "budget";if(String(key)==="low_balance")return "low_balance";return "info";}
 async function emailNotificationOnce(key,title,body){const n=featureState()?.notifications||{};if(n.email_enabled===false)return;try{await fetchJson("ajax/email_notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,kind:notificationEmailKind(key),title,message:body})});}catch(_){/* email tidak boleh mengganggu notifikasi utama */}}
 function persistWarningNotificationOnce(key,title,body){
   const today=new Date().toISOString().slice(0,10);
@@ -3847,7 +4007,52 @@ function persistWarningNotificationOnce(key,title,body){
     .catch(()=>{/* pusat pemberitahuan tidak boleh mengganggu fitur utama */});
 }
 function notifyOnce(key,title,body,externalEnabled=true){persistWarningNotificationOnce(key,title,body);if(!externalEnabled)return;const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
-function checkFinanceNotifications(){const f=featureState(),n=f.notifications||{},externalEnabled=!!n.enabled;const b=state.daily_budget||{};if(n.daily_budget&&["warning","reached","exceeded"].includes(b.status))notifyOnce("budget_"+b.status,"Peringatan batas harian",b.message||"Pengeluaran mendekati batas.",externalEnabled);if(n.bills){(f.bills||[]).filter(x=>["due_soon","overdue"].includes(x.status)).forEach(x=>notifyOnce("bill_"+x.id,"Tagihan "+x.name,x.status==="overdue"?"Tagihan sudah melewati jatuh tempo.":"Jatuh tempo "+formatBillDate(x.due_date)+" · "+rupiah(x.amount),externalEnabled));}if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0),externalEnabled);const r=f.transaction_inbox?.reconciliation||{};if(n.daily_reconciliation!==false&&r.prompt_due&&!r.completed)notifyOnce("reconciliation","Sudah lengkap transaksi hari ini?",`${Number(r.transaction_count||0)} transaksi tercatat${Number(r.pending_count||0)>0?` · ${Number(r.pending_count)} draf transaksi belum dirapikan`:""}.`,externalEnabled);}
+function formatCreditCardReminderDate(value){return formatBillDate(value);}
+function creditCardReminderMessage(r){
+  const h=Number(r.days_until||0);
+  return `H-${h} penagihan ${r.name} pada ${formatCreditCardReminderDate(r.due_date)} · tagihan tercatat ${rupiah(r.amount||0)}.`;
+}
+function syncAndroidCreditCardReminders(){
+  try{
+    if(!window.AndroidReminders || typeof window.AndroidReminders.replaceCreditCardSchedules!=="function")return;
+    const schedules=[];
+    (featureState()?.credit_card_reminders||[]).forEach(r=>{
+      if(Number(r.amount||0)<=0 || !r.due_date)return;
+      [2,1].forEach(daysBefore=>{
+        const due=new Date(`${r.due_date}T09:00:00`);
+        if(Number.isNaN(due.getTime()))return;
+        const trigger=new Date(due.getTime()-daysBefore*86400000);
+        if(trigger.getTime()<=Date.now()+30000)return;
+        schedules.push({
+          key:`cc_${Number(r.wallet_id||0)}_${r.due_date}_h${daysBefore}`,
+          trigger_at:trigger.getTime(),
+          title:`Pengingat Tagihan ${r.name}`,
+          message:`H-${daysBefore} penagihan ${formatCreditCardReminderDate(r.due_date)}. Tagihan tercatat ${rupiah(r.amount||0)}.`,
+          wallet_id:Number(r.wallet_id||0),
+          due_date:r.due_date,
+          amount:Number(r.amount||0)
+        });
+      });
+    });
+    window.AndroidReminders.replaceCreditCardSchedules(JSON.stringify(schedules));
+  }catch(_){/* bridge Android opsional */}
+}
+function checkFinanceNotifications(){
+  const f=featureState(),n=f.notifications||{},externalEnabled=!!n.enabled;
+  const b=state.daily_budget||{};
+  if(n.daily_budget&&["warning","reached","exceeded"].includes(b.status))notifyOnce("budget_"+b.status,"Peringatan batas harian",b.message||"Pengeluaran mendekati batas.",externalEnabled);
+  if(n.bills){
+    (f.bills||[]).filter(x=>!(x.auto_generated&&x.bill_type==="credit_card")&&["due_soon","overdue"].includes(x.status)).forEach(x=>notifyOnce("bill_"+x.id,"Tagihan "+x.name,x.status==="overdue"?"Tagihan sudah melewati jatuh tempo.":"Jatuh tempo "+formatBillDate(x.due_date)+" · "+rupiah(x.amount),externalEnabled));
+    (f.credit_card_reminders||[]).filter(r=>[1,2].includes(Number(r.days_until||0))&&Number(r.amount||0)>0).forEach(r=>{
+      const h=Number(r.days_until||0);
+      notifyOnce(`credit_card_due_${Number(r.wallet_id||0)}_${r.due_date}_h${h}`,`Pengingat Tagihan ${r.name}`,creditCardReminderMessage(r),externalEnabled);
+    });
+  }
+  if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0),externalEnabled);
+  const r=f.transaction_inbox?.reconciliation||{};
+  if(n.daily_reconciliation!==false&&r.prompt_due&&!r.completed)notifyOnce("reconciliation","Sudah lengkap transaksi hari ini?",`${Number(r.transaction_count||0)} transaksi tercatat${Number(r.pending_count||0)>0?` · ${Number(r.pending_count)} draf transaksi belum dirapikan`:""}.`,externalEnabled);
+  syncAndroidCreditCardReminders();
+}
 
 
 // ---------------- PUSAT PEMBERITAHUAN V39 ----------------
@@ -4629,19 +4834,23 @@ el("saveTransactionCreate")?.addEventListener("click", async () => {
 
   try {
     const wasInbox = activeInboxEditId > 0;
-    await featureAction(payload);
+    const createResult = await featureAction(payload);
     txCreateModal?.close();
     activeInboxEditId = 0;
     resetManualTransactionTitle();
     await load();
-    showFeatureToast(
-      wasInbox ? "Draf Transaksi berhasil dirapikan" :
-      type === "transfer"
-        ? "Transfer berhasil dicatat"
-        : type === "income"
-          ? "Pemasukan berhasil ditambahkan"
-          : "Pengeluaran berhasil ditambahkan"
-    );
+    if (createResult?.offline_queued) {
+      showOfflineToast("Transaksi tersimpan di perangkat dan menunggu sinkronisasi.");
+    } else {
+      showFeatureToast(
+        wasInbox ? "Draf Transaksi berhasil dirapikan" :
+        type === "transfer"
+          ? "Transfer berhasil dicatat"
+          : type === "income"
+            ? "Pemasukan berhasil ditambahkan"
+            : "Pengeluaran berhasil ditambahkan"
+      );
+    }
   } catch (e) {
     alert(e.message || "Transaksi gagal ditambahkan.");
   } finally {
@@ -4764,7 +4973,15 @@ el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())r
 // PWA install
 let deferredInstallPrompt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;el("installPwaBtn")?.classList.add("ready");});
 el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;}else alert("Jika tombol install tidak tersedia, gunakan menu browser → Tambahkan ke layar utama / Install app.");});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=59",{updateViaCache:"none"}).then(()=>navigator.serviceWorker.ready).then(reg=>{try{reg.active?.postMessage({type:"CACHE_CURRENT_SHELL",url:location.href});}catch(_){}}).catch(()=>{}));}
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("sw.js?v=60", { updateViaCache: "none" });
+      await navigator.serviceWorker.ready;
+      await cacheCurrentShellForOffline();
+    } catch (_) {}
+  });
+}
 
 // Admin
 async function adminPost(payload) {
@@ -5085,6 +5302,227 @@ window.addEventListener("focus",()=>{if(state.features)checkFinanceNotifications
 setInterval(()=>{if(state.features)checkFinanceNotifications();},60000);
 
 
+
+// ===== V52 - RESIZABLE MOBILE SHEETS + WALLET ORDER SYNC =====
+const CK_RESIZABLE_SHEET_IDS = [
+  "budgetModal", "notificationCenterModal", "financeCenter", "quickCaptureModal",
+  "transactionInboxModal", "transactionCreateModal", "transactionEditModal",
+  "helpFaqModal", "learningModal", "walletBalanceModal", "emailSecurityModal", "settingModal"
+];
+
+function ckSheetViewportHeight() {
+  return Math.max(320, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 640));
+}
+function ckSheetMaxHeight(dialog) {
+  const vh = ckSheetViewportHeight();
+  if (dialog?.id === "walletBalanceModal") {
+    // Rincian Saldo tidak boleh menutupi notch / camera island / status bar.
+    // Sisakan sekitar 7.5% viewport, minimal 52px dan maksimal 72px.
+    const topGap = Math.max(52, Math.min(72, Math.round(vh * .075)));
+    return Math.max(320, vh - topGap);
+  }
+  return vh;
+}
+function ckSheetStorageKey(dialog) { return `ck_sheet_height_${dialog.id || "sheet"}`; }
+function ckSheetSetHeight(dialog, px, remember = false) {
+  if (!dialog || !window.matchMedia("(max-width: 760px)").matches) return;
+  const maxHeight = ckSheetMaxHeight(dialog);
+  const min = Math.min(maxHeight, Math.max(280, Math.round(maxHeight * .42)));
+  const height = Math.max(min, Math.min(maxHeight, Math.round(px)));
+  dialog.classList.add("sheet-user-sized");
+  dialog.style.setProperty("--ck-sheet-height", `${height}px`);
+  dialog.style.height = `${height}px`;
+  const card = dialog.firstElementChild;
+  if (card) {
+    card.style.height = "100%";
+    card.style.maxHeight = "none";
+  }
+  if (remember) {
+    try { localStorage.setItem(ckSheetStorageKey(dialog), String(Math.max(.42, Math.min(1, height / maxHeight)))); } catch (_) {}
+  }
+}
+function ckSheetRestoreHeight(dialog) {
+  if (!dialog || !window.matchMedia("(max-width: 760px)").matches) return;
+  let ratio = 0;
+  try { ratio = Number(localStorage.getItem(ckSheetStorageKey(dialog)) || 0); } catch (_) {}
+  if (ratio >= .42 && ratio <= 1) ckSheetSetHeight(dialog, ckSheetMaxHeight(dialog) * ratio, false);
+}
+function ckSheetSnapHeight(dialog, currentPx, deltaY = 0) {
+  const maxHeight = ckSheetMaxHeight(dialog);
+  const current = Math.max(0, Math.min(maxHeight, currentPx));
+  const ratios = [.54, .76, 1];
+  if (deltaY < -70) {
+    const next = ratios.find(r => maxHeight * r > current + 24) || 1;
+    return maxHeight * next;
+  }
+  if (deltaY > 70) {
+    const lower = ratios.filter(r => maxHeight * r < current - 24);
+    return maxHeight * (lower.length ? lower[lower.length - 1] : ratios[0]);
+  }
+  let best = ratios[0], dist = Infinity;
+  for (const r of ratios) {
+    const d = Math.abs(maxHeight * r - current);
+    if (d < dist) { best = r; dist = d; }
+  }
+  return maxHeight * best;
+}
+function ckEnsureSheetHandle(dialog) {
+  const card = dialog?.firstElementChild;
+  if (!dialog || !card) return null;
+  let handle = card.querySelector(":scope > .ck-sheet-drag-handle, :scope > .wallet-balance-handle");
+  if (!handle) {
+    handle = document.createElement("div");
+    handle.className = "ck-sheet-drag-handle";
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-label", "Tarik untuk mengubah tinggi jendela");
+    handle.setAttribute("tabindex", "0");
+    card.insertBefore(handle, card.firstChild);
+  } else {
+    handle.classList.add("ck-sheet-drag-handle");
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-label", "Tarik untuk mengubah tinggi jendela");
+    if (!handle.hasAttribute("tabindex")) handle.setAttribute("tabindex", "0");
+  }
+  return handle;
+}
+function ckInitResizableSheet(dialog) {
+  if (!dialog || dialog.dataset.ckResizableReady === "1") return;
+  dialog.dataset.ckResizableReady = "1";
+  dialog.classList.add("ck-resizable-sheet");
+  const handle = ckEnsureSheetHandle(dialog);
+  if (!handle) return;
+
+  let dragging = false, startY = 0, startHeight = 0, latestHeight = 0;
+  const finish = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    dialog.classList.remove("is-sheet-dragging");
+    const dy = Number(event?.clientY ?? startY) - startY;
+    ckSheetSetHeight(dialog, ckSheetSnapHeight(dialog, latestHeight || startHeight, dy), true);
+    try { if (event?.pointerId != null) handle.releasePointerCapture(event.pointerId); } catch (_) {}
+  };
+  handle.addEventListener("pointerdown", (event) => {
+    if (!window.matchMedia("(max-width: 760px)").matches || event.button > 0) return;
+    dragging = true;
+    startY = event.clientY;
+    startHeight = Math.max(280, Math.round(dialog.getBoundingClientRect().height || dialog.firstElementChild?.getBoundingClientRect().height || ckSheetMaxHeight(dialog) * .54));
+    latestHeight = startHeight;
+    dialog.classList.add("is-sheet-dragging", "sheet-user-sized");
+    try { handle.setPointerCapture(event.pointerId); } catch (_) {}
+    event.preventDefault();
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    latestHeight = startHeight - (event.clientY - startY);
+    ckSheetSetHeight(dialog, latestHeight, false);
+    event.preventDefault();
+  });
+  handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
+  handle.addEventListener("dblclick", () => {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const maxHeight = ckSheetMaxHeight(dialog);
+    const current = dialog.getBoundingClientRect().height;
+    ckSheetSetHeight(dialog, current > maxHeight * .9 ? maxHeight * .54 : maxHeight, true);
+  });
+  handle.addEventListener("keydown", (event) => {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    if (!["ArrowUp","ArrowDown","Home","End"].includes(event.key)) return;
+    event.preventDefault();
+    const maxHeight = ckSheetMaxHeight(dialog);
+    const current = Math.max(280, dialog.getBoundingClientRect().height || maxHeight * .54);
+    const next = event.key === "Home" ? maxHeight * .54 : event.key === "End" ? maxHeight : current + (event.key === "ArrowUp" ? 70 : -70);
+    ckSheetSetHeight(dialog, ckSheetSnapHeight(dialog, next, 0), true);
+  });
+
+  const observer = new MutationObserver(() => {
+    if (dialog.hasAttribute("open")) requestAnimationFrame(() => ckSheetRestoreHeight(dialog));
+  });
+  observer.observe(dialog, { attributes:true, attributeFilter:["open"] });
+}
+function initResizableSheets() {
+  CK_RESIZABLE_SHEET_IDS.forEach(id => ckInitResizableSheet(document.getElementById(id)));
+}
+
+let walletSortSaveTimer = 0;
+let walletSortSaving = false;
+function walletActiveIdsFromState() {
+  return ((state.features || {}).wallets || []).filter(w => !w.archived).map(w => Number(w.id));
+}
+function applyWalletOrderLocally(ids) {
+  const wanted = new Map(ids.map((id, index) => [Number(id), index]));
+  const all = [...((state.features || {}).wallets || [])];
+  all.sort((a,b) => {
+    const ai = wanted.has(Number(a.id)) ? wanted.get(Number(a.id)) : 100000 + Number(a.sort_order ?? a.id ?? 0);
+    const bi = wanted.has(Number(b.id)) ? wanted.get(Number(b.id)) : 100000 + Number(b.sort_order ?? b.id ?? 0);
+    return ai - bi;
+  });
+  all.forEach((w,index) => { if (wanted.has(Number(w.id))) w.sort_order = (index + 1) * 10; });
+  state.features = state.features || {};
+  state.features.wallets = all;
+}
+async function persistWalletOrder(ids) {
+  ids = (ids || []).map(Number).filter(id => id > 0);
+  if (!ids.length || walletSortSaving) return;
+  const current = walletActiveIdsFromState();
+  if (current.length === ids.length && current.every((id,i) => id === ids[i])) return;
+  const backup = [...((state.features || {}).wallets || [])].map(w => ({...w}));
+  applyWalletOrderLocally(ids);
+  walletSortSaving = true;
+  try {
+    await featureAction({ action:"wallet_reorder", wallet_ids:ids }, "Urutan dompet disimpan");
+    if (document.getElementById("walletBalanceModal")?.open) renderWalletBalanceDetails();
+  } catch (error) {
+    state.features.wallets = backup;
+    renderFinanceCenter();
+    if (document.getElementById("walletBalanceModal")?.open) renderWalletBalanceDetails();
+    showFeatureToast(error?.message || "Urutan dompet gagal disimpan", "error");
+  } finally {
+    walletSortSaving = false;
+  }
+}
+function setupWalletSortList(container) {
+  if (!container || container.dataset.walletSortReady === "1") return;
+  container.dataset.walletSortReady = "1";
+  let row = null, pointerId = null, moved = false;
+  const finish = () => {
+    if (!row) return;
+    row.classList.remove("is-wallet-dragging");
+    container.classList.remove("is-wallet-sorting");
+    const ids = [...container.querySelectorAll("[data-wallet-sort-row]")].map(el => Number(el.dataset.walletSortId)).filter(Boolean);
+    row = null; pointerId = null;
+    if (moved) {
+      clearTimeout(walletSortSaveTimer);
+      walletSortSaveTimer = setTimeout(() => persistWalletOrder(ids), 60);
+    }
+  };
+  container.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest("[data-wallet-sort-handle]");
+    if (!handle || !container.contains(handle) || walletSortSaving) return;
+    const candidate = handle.closest("[data-wallet-sort-row]");
+    if (!candidate) return;
+    row = candidate; pointerId = event.pointerId; moved = false;
+    row.classList.add("is-wallet-dragging");
+    container.classList.add("is-wallet-sorting");
+    try { handle.setPointerCapture(pointerId); } catch (_) {}
+    event.preventDefault();
+  });
+  container.addEventListener("pointermove", (event) => {
+    if (!row || event.pointerId !== pointerId) return;
+    const hit = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-wallet-sort-row]");
+    if (!hit || hit === row || !container.contains(hit)) return;
+    const rect = hit.getBoundingClientRect();
+    if (event.clientY < rect.top + rect.height / 2) container.insertBefore(row, hit);
+    else container.insertBefore(row, hit.nextSibling);
+    moved = true;
+    event.preventDefault();
+  });
+  container.addEventListener("pointerup", finish);
+  container.addEventListener("pointercancel", finish);
+}
+
+initResizableSheets();
+
 // V45 - konfirmasi restore backup dari panel Maintenance.
 document.querySelectorAll("[data-backup-restore-form]").forEach(form=>{
   form.addEventListener("submit",event=>{
@@ -5094,3 +5532,6 @@ document.querySelectorAll("[data-backup-restore-form]").forEach(form=>{
     if(!confirm(message))event.preventDefault();
   });
 });
+
+// V48: sinkronkan field form wallet saat halaman pertama dibuka.
+syncWalletTypeFields();

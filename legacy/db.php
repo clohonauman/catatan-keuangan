@@ -175,9 +175,21 @@ function transactionSpendingKind(array $t): string {
     return 'daily';
 }
 
+function walletRecordFromData($d,$walletId) {
+    foreach((array)($d['wallets']??[]) as $w) if((int)($w['id']??0)===(int)$walletId) return $w;
+    return null;
+}
+function walletIsCreditCardRecord($w): bool {
+    return is_array($w) && strtolower((string)($w['type']??''))==='credit_card';
+}
 function walletBalancesFromData($d,$excludeTransactionId=0) {
     $balances=[];
-    foreach((array)($d['wallets']??[]) as $w) $balances[(int)($w['id']??0)]=(int)($w['initial_balance']??0);
+    foreach((array)($d['wallets']??[]) as $w) {
+        $id=(int)($w['id']??0);
+        $balances[$id]=walletIsCreditCardRecord($w)
+            ? -max(0,(int)($w['opening_debt']??0))
+            : (int)($w['initial_balance']??0);
+    }
     foreach((array)($d['transactions']??[]) as $t){
         if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId)continue;
         $type=(string)($t['type']??'');$amount=(int)($t['amount']??0);
@@ -194,9 +206,36 @@ function walletProtectionFromData($d,$walletId) {
     foreach((array)($d['wallets']??[]) as $w)if((int)($w['id']??0)===(int)$walletId){
         $reserved=max(0,(int)($w['reserved_balance']??0));
         $minimum=max(0,(int)($w['minimum_balance']??0));
-        return ['name'=>(string)($w['name']??'Dompet'),'reserved'=>$reserved,'minimum'=>$minimum,'protected'=>$reserved+$minimum];
+        return [
+            'name'=>(string)($w['name']??'Dompet'),
+            'type'=>(string)($w['type']??'cash'),
+            'reserved'=>$reserved,
+            'minimum'=>$minimum,
+            'protected'=>$reserved+$minimum,
+            'credit_limit'=>max(0,(int)($w['credit_limit']??0)),
+            'opening_debt'=>max(0,(int)($w['opening_debt']??0)),
+        ];
     }
     throw new InvalidArgumentException('Dompet transaksi tidak ditemukan.');
+}
+function walletCreditCardStatusFromData($d,$walletId,$excludeTransactionId=0) {
+    $info=walletProtectionFromData($d,$walletId);
+    if(strtolower((string)$info['type'])!=='credit_card') return null;
+    $balances=walletBalancesFromData($d,(int)$excludeTransactionId);
+    $raw=(int)($balances[(int)$walletId]??0);
+    $debt=max(0,-$raw);
+    $limit=max(0,(int)$info['credit_limit']);
+    return ['name'=>$info['name'],'limit'=>$limit,'debt'=>$debt,'available'=>max(0,$limit-$debt)];
+}
+function assertWalletCreditPaymentAllowedData($d,$walletId,$amount,$excludeTransactionId=0) {
+    $status=walletCreditCardStatusFromData($d,$walletId,$excludeTransactionId);
+    if(!$status) return true;
+    $amount=max(0,(int)$amount);
+    if($amount>$status['debt']){
+        $fmt=function($n){return 'Rp'.number_format((int)$n,0,',','.');};
+        throw new InvalidArgumentException('Tagihan kartu '.$status['name'].' saat ini hanya '.$fmt($status['debt']).'. Pembayaran tidak boleh melebihi tagihan.');
+    }
+    return true;
 }
 function assertWalletSpendAllowedData($d,$walletId,$amount,$excludeTransactionId=0) {
     $walletId=(int)$walletId;$amount=max(0,(int)$amount);
@@ -205,6 +244,15 @@ function assertWalletSpendAllowedData($d,$walletId,$amount,$excludeTransactionId
     $protection=walletProtectionFromData($d,$walletId);
     $balances=walletBalancesFromData($d,(int)$excludeTransactionId);
     $gross=(int)($balances[$walletId]??0);
+    if(strtolower((string)$protection['type'])==='credit_card'){
+        $debt=max(0,-$gross);
+        $available=max(0,(int)$protection['credit_limit']-$debt);
+        if($amount>$available){
+            $fmt=function($n){return 'Rp'.number_format((int)$n,0,',','.');};
+            throw new InvalidArgumentException('Sisa limit '.$protection['name'].' hanya '.$fmt($available).' dari limit '.$fmt($protection['credit_limit']).'.');
+        }
+        return true;
+    }
     $available=max(0,$gross-(int)$protection['protected']);
     if($amount>$available){
         $fmt=function($n){return 'Rp'.number_format((int)$n,0,',','.');};
@@ -224,7 +272,7 @@ function summary() {
         elseif(($t['type']??'')==='expense')$expense+=(int)$t['amount'];
     }
 
-    $initial=0;$reserved=0;$minimum=0;$available=0;$gross=0;
+    $initial=0;$reserved=0;$minimum=0;$available=0;$gross=0;$creditLimit=0;$creditDebt=0;$creditAvailable=0;
     if (isset($d['wallets']) && is_array($d['wallets']) && count($d['wallets'])) {
         // Saldo tersedia harus dihitung per dompet terlebih dahulu.
         // Dengan begitu, dompet yang saldonya berada di bawah saldo minimum
@@ -234,6 +282,14 @@ function summary() {
         foreach($d['wallets'] as $w) if(empty($w['archived'])) {
             $wid=(int)($w['id']??0);
             $walletGross=(int)($balances[$wid]??0);
+            if(walletIsCreditCardRecord($w)){
+                $limit=max(0,(int)($w['credit_limit']??0));
+                $debt=max(0,-$walletGross);
+                $creditLimit+=$limit;
+                $creditDebt+=$debt;
+                $creditAvailable+=max(0,$limit-$debt);
+                continue;
+            }
             $walletReserved=max(0,(int)($w['reserved_balance']??0));
             $walletMinimum=max(0,(int)($w['minimum_balance']??0));
             $walletProtected=$walletReserved+$walletMinimum;
@@ -251,7 +307,7 @@ function summary() {
     }
 
     $protected=$reserved+$minimum;
-    return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'minimum_balance'=>$minimum,'protected_balance'=>$protected,'available_balance'=>$available,'balance'=>$available];
+    return ['initial'=>$initial,'income'=>$income,'expense'=>$expense,'gross_balance'=>$gross,'reserved'=>$reserved,'minimum_balance'=>$minimum,'protected_balance'=>$protected,'available_balance'=>$available,'balance'=>$available,'credit_card_limit'=>$creditLimit,'credit_card_debt'=>$creditDebt,'credit_card_available_limit'=>$creditAvailable];
 }
 function addChat($role,$message,$attachment=null) {
     $u=authCurrentUser();if(!$u)throw new RuntimeException('User belum login.');
@@ -261,7 +317,9 @@ function addTransaction($t) {
     $u=authCurrentUser();if(!$u)throw new RuntimeException('User belum login.');
     $type=(string)($t['type']??'expense');
     if($type!=='transfer')$t['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));
-    return FinanceRepository::appendTransaction((int)$u['id'],(array)$t);
+    $saved=FinanceRepository::appendTransaction((int)$u['id'],(array)$t);
+    if(function_exists('financeSyncCreditCardBills')) financeSyncCreditCardBills();
+    return $saved;
 }
 
 function updateTransaction($id, $patch) {
@@ -290,7 +348,10 @@ function updateTransaction($id, $patch) {
                 unset($t['from_wallet_id'],$t['to_wallet_id']);
             }
             if(($t['type']??'')==='expense')assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),(int)($t['amount']??0),$id);
-            elseif(($t['type']??'')==='transfer')assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),(int)($t['amount']??0),$id);
+            elseif(($t['type']??'')==='transfer'){
+                assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),(int)($t['amount']??0),$id);
+                assertWalletCreditPaymentAllowedData($d,(int)($t['to_wallet_id']??0),(int)($t['amount']??0),$id);
+            }
             $t['updated_at']=date('Y-m-d H:i:s');
             auditAdd($d,'update','transaction',$id,$before,$t,true,'Transaksi diperbarui');
             return $t;
@@ -298,6 +359,7 @@ function updateTransaction($id, $patch) {
         unset($t);
         throw new InvalidArgumentException('Transaksi tidak ditemukan.');
     });
+    if(function_exists('financeSyncCreditCardBills')) financeSyncCreditCardBills();
     return $r['result'];
 }
 function transactionById($id){foreach(allTransactions() as $t)if((int)($t['id']??0)===(int)$id)return $t;return null;}
@@ -323,6 +385,7 @@ function deleteTransaction($id,$expectedVersion='') {
         auditAdd($d,'delete','transaction',$id,$deleted,null,true,'Transaksi dihapus');
         return $deleted;
     });
+    if(function_exists('financeSyncCreditCardBills')) financeSyncCreditCardBills();
     return $r['result'];
 }
 function allTransactions(){ return readData()['transactions']; }

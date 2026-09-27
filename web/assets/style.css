@@ -3057,3 +3057,280 @@ dialog[open]>.feature-toast.in-dialog{
 
 /* V45 - Backup & Restore pada Maintenance */
 .maintenance-backup-zone{display:grid;gap:14px;border-top:1px solid var(--border,#e5e7eb);padding-top:18px}.maintenance-backup-head>div{display:grid;gap:4px}.maintenance-backup-head small,.maintenance-backup-card small,.maintenance-backup-note{color:var(--muted,#667085);font-size:12px;line-height:1.55}.maintenance-backup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.maintenance-backup-card{display:grid;gap:12px;border:1px solid var(--border,#e5e7eb);background:var(--card,#fff);border-radius:16px;padding:16px}.maintenance-backup-card>div{display:grid;gap:4px}.maintenance-backup-card form{display:grid;gap:9px}.maintenance-backup-card input[type=file]{width:100%;border:1px dashed var(--border,#d0d5dd);border-radius:12px;padding:10px;background:var(--bg-soft,#f8fafc);color:inherit}.maintenance-backup-card .btn{text-align:center;justify-content:center}.danger-outline{border:1px solid #e5484d!important;background:transparent!important;color:#c9343a!important}.danger-outline:hover{background:rgba(229,72,77,.08)!important}.maintenance-backup-note{padding:11px 13px;border-radius:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22)}@media(max-width:780px){.maintenance-backup-grid{grid-template-columns:1fr}}
+
+/* =========================================================
+   V51 - MOBILE BILL / CREDIT CARD BILL LAYOUT
+   ========================================================= */
+.bill-row-summary{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:0 0 auto}
+.bill-row-amount{font-size:12px;white-space:nowrap;text-align:right}
+.bill-row-amount .money-caption{margin-top:2px}
+.bill-row-actions{align-items:center;flex-wrap:nowrap}
+.bill-pay-wallet{min-width:180px;max-width:240px;height:36px;border:1px solid #d7dee8;border-radius:9px;background:#fff;padding:0 30px 0 10px;font:inherit;font-size:11px;color:#27364a;outline:none}
+.bill-pay-wallet:focus{border-color:#78a3e9;box-shadow:0 0 0 3px rgba(23,92,211,.08)}
+
+@media(max-width:760px){
+  .feature-list-row.bill-row{
+    display:grid;
+    grid-template-columns:48px minmax(0,1fr);
+    gap:10px 12px;
+    align-items:start;
+    padding:14px;
+  }
+  .bill-row .bill-row-icon{
+    grid-column:1;
+    grid-row:1;
+    width:48px;
+    height:48px;
+    flex-basis:48px;
+    border-radius:14px;
+  }
+  .bill-row .bill-row-main{
+    grid-column:2;
+    grid-row:1;
+    min-width:0;
+    padding-top:1px;
+  }
+  .bill-row .bill-row-main b{
+    font-size:14px;
+    line-height:1.35;
+  }
+  .bill-row .bill-row-main small{
+    margin-top:4px;
+    font-size:10px;
+    line-height:1.45;
+    white-space:normal;
+    overflow:visible;
+    text-overflow:clip;
+    overflow-wrap:anywhere;
+  }
+  .bill-row-summary{
+    grid-column:1/-1;
+    width:100%;
+    min-width:0;
+    justify-content:space-between;
+    gap:10px;
+    padding-top:2px;
+  }
+  .bill-row-amount{
+    font-size:17px;
+    line-height:1.25;
+    text-align:left;
+    min-width:0;
+  }
+  .bill-row-amount .money-caption{
+    font-size:8px;
+    text-align:left;
+    white-space:normal;
+  }
+  .bill-row-status{
+    flex:0 0 auto;
+    padding:5px 9px;
+    font-size:9px;
+  }
+  .feature-list-row.bill-row .bill-row-actions{
+    grid-column:1/-1;
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(92px,1fr));
+    gap:8px;
+    justify-content:stretch;
+  }
+  .bill-row-actions .bill-pay-wallet{
+    grid-column:1/-1;
+    width:100%;
+    min-width:0;
+    max-width:none;
+    height:42px;
+    font-size:12px;
+    border-radius:11px;
+  }
+  .bill-row-actions button{
+    width:100%;
+    min-height:40px;
+    padding:9px 10px;
+    border-radius:10px;
+    font-size:10px;
+  }
+  .credit-card-bill-row .bill-pay-button{
+    grid-column:1/-1;
+  }
+}
+
+@media(max-width:380px){
+  .feature-list-row.bill-row{grid-template-columns:42px minmax(0,1fr);gap:9px 10px;padding:12px}
+  .bill-row .bill-row-icon{width:42px;height:42px;flex-basis:42px;border-radius:12px}
+  .bill-row .bill-row-main b{font-size:13px}
+  .bill-row .bill-row-main small{font-size:9px}
+  .bill-row-amount{font-size:16px}
+}
+
+
+
+/* ===== V52 - resizable mobile sheets + drag order dompet ===== */
+.wallet-sort-handle{
+  width:24px;height:36px;min-width:24px;padding:7px 5px;border:0;border-radius:9px;background:transparent;color:#98a2b3;
+  display:grid;grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);gap:3px;place-content:center;cursor:grab;touch-action:none;
+}
+.wallet-sort-handle:hover{background:#f2f5f9;color:#667085}.wallet-sort-handle:active{cursor:grabbing;background:#eaf1fb}
+.wallet-sort-handle span{display:block;width:3px;height:3px;border-radius:50%;background:currentColor}
+[data-wallet-sort-row]{transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease,background .12s ease}
+[data-wallet-sort-row].is-wallet-dragging{z-index:5;border-color:#9fc0f4!important;background:#f7faff!important;box-shadow:0 10px 26px rgba(23,92,211,.14)!important}
+.is-wallet-sorting [data-wallet-sort-row]{user-select:none;-webkit-user-select:none}
+.wallet-manage-row{grid-template-columns:auto auto minmax(0,1fr) auto auto!important;display:grid!important}.wallet-manage-row .feature-row-main{min-width:0}.wallet-manage-row .wallet-sort-handle{align-self:center}
+
+@media(max-width:760px){
+  dialog.ck-resizable-sheet{width:100%!important;max-width:none!important;margin:auto 0 0!important;inset:auto 0 0!important;border-radius:24px 24px 0 0!important;overflow:hidden!important;transition:height .18s ease}
+  dialog.ck-resizable-sheet.is-sheet-dragging{transition:none!important}
+  dialog.ck-resizable-sheet.sheet-user-sized{height:var(--ck-sheet-height)!important;max-height:100dvh!important}
+  dialog.ck-resizable-sheet.sheet-user-sized>:first-child{height:100%!important;max-height:none!important;overflow:auto!important;border-radius:24px 24px 0 0!important}
+  .ck-sheet-drag-handle{display:block!important;position:relative;z-index:20;width:100%;height:20px;min-height:20px;margin:0!important;padding:0!important;background:transparent!important;border:0!important;cursor:ns-resize;touch-action:none;flex:0 0 20px}
+  .ck-sheet-drag-handle::after{content:"";position:absolute;left:50%;top:7px;width:42px;height:4px;transform:translateX(-50%);border-radius:999px;background:#d2d8e1}
+  .ck-sheet-drag-handle:focus-visible{outline:2px solid rgba(23,92,211,.32);outline-offset:-2px}
+  .wallet-balance-dialog{width:calc(100vw - 18px);max-width:none}
+  .wallet-balance-card{padding:16px 14px calc(16px + env(safe-area-inset-bottom))}
+  .wallet-balance-list{gap:10px;max-height:none}
+  .wallet-balance-row{
+    grid-template-columns:24px 38px minmax(0,1fr)!important;
+    grid-template-areas:
+      "sort icon name"
+      "sort icon amount";
+    align-items:center;
+    gap:8px 10px;
+    padding:12px 10px;
+  }
+  .wallet-balance-row>.wallet-sort-handle{grid-area:sort;align-self:center;justify-self:center}
+  .wallet-balance-row>.wallet-balance-icon{grid-area:icon}
+  .wallet-balance-row>.wallet-balance-name{grid-area:name;align-self:end}
+  .wallet-balance-row>.wallet-balance-name b{font-size:14px;line-height:1.3}
+  .wallet-balance-row>.wallet-balance-name small{margin-top:3px;font-size:10px;line-height:1.45;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .wallet-balance-row>strong{grid-area:amount;justify-self:end;align-self:start;text-align:right;font-size:15px;line-height:1.15;display:block}
+  .wallet-balance-row>strong .money-caption{margin-top:3px}
+  .wallet-manage-row{grid-template-columns:24px 36px minmax(0,1fr) auto!important;gap:8px!important}
+  .wallet-manage-row>strong{grid-column:3/5;justify-self:end;margin-top:-2px}.wallet-manage-row .row-actions{grid-column:3/5;justify-content:flex-end}
+  .wallet-sort-handle{width:22px;min-width:22px;height:38px;padding:8px 4px}
+}
+
+
+/* ===== V55 - Rincian Saldo layout stabilization =====
+   V52 menambahkan handle urutan sehingga baris sekarang memiliki 4 anak:
+   handle, ikon, info, nominal. Layout ini sengaja dibuat 1 baris stabil
+   pada desktop maupun mobile agar nominal tidak jatuh ke baris kiri. */
+.wallet-balance-row{
+  display:grid!important;
+  grid-template-columns:24px 40px minmax(0,1fr) auto!important;
+  grid-template-areas:none!important;
+  align-items:center!important;
+  gap:10px!important;
+  min-width:0;
+}
+.wallet-balance-row>.wallet-sort-handle{
+  grid-area:auto!important;
+  grid-column:auto!important;
+  grid-row:auto!important;
+  justify-self:center;
+  align-self:center;
+}
+.wallet-balance-row>.wallet-balance-icon{
+  grid-area:auto!important;
+  grid-column:auto!important;
+  grid-row:auto!important;
+  justify-self:center;
+}
+.wallet-balance-row>.wallet-balance-name{
+  grid-area:auto!important;
+  grid-column:auto!important;
+  grid-row:auto!important;
+  min-width:0;
+  text-align:left!important;
+  align-self:center!important;
+}
+.wallet-balance-row>.wallet-balance-name b{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.wallet-balance-row>.wallet-balance-name small{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.wallet-balance-row>strong{
+  grid-area:auto!important;
+  grid-column:auto!important;
+  grid-row:auto!important;
+  justify-self:end!important;
+  align-self:center!important;
+  min-width:max-content;
+  max-width:none;
+  margin:0!important;
+  text-align:right!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+.wallet-balance-row>strong .money-caption{
+  display:block;
+  margin-top:2px;
+  text-align:right;
+  white-space:nowrap;
+}
+
+@media(max-width:760px){
+  .wallet-balance-dialog{
+    width:calc(100vw - 18px)!important;
+  }
+  .wallet-balance-card{
+    padding:15px 13px calc(15px + env(safe-area-inset-bottom))!important;
+  }
+  .wallet-balance-row{
+    grid-template-columns:22px 36px minmax(0,1fr) auto!important;
+    gap:8px!important;
+    padding:11px 10px!important;
+    border-radius:14px;
+  }
+  .wallet-balance-row>.wallet-balance-icon{
+    width:34px!important;
+    height:34px!important;
+    border-radius:10px!important;
+  }
+  .wallet-balance-row>.wallet-balance-name b{
+    font-size:12px!important;
+    line-height:1.25!important;
+  }
+  .wallet-balance-row>.wallet-balance-name small{
+    margin-top:2px!important;
+    font-size:9px!important;
+    line-height:1.3!important;
+  }
+  .wallet-balance-row>strong{
+    font-size:12px!important;
+    line-height:1.2!important;
+  }
+  .wallet-balance-row>strong .money-caption{
+    font-size:7px!important;
+  }
+  .wallet-balance-row>.wallet-sort-handle{
+    width:20px!important;
+    min-width:20px!important;
+    height:34px!important;
+    padding:7px 3px!important;
+  }
+}
+
+@media(max-width:390px){
+  .wallet-balance-row{
+    grid-template-columns:20px 32px minmax(0,1fr) auto!important;
+    gap:7px!important;
+    padding:10px 8px!important;
+  }
+  .wallet-balance-row>.wallet-balance-icon{
+    width:32px!important;
+    height:32px!important;
+  }
+  .wallet-balance-row>.wallet-balance-name b{font-size:11.5px!important}
+  .wallet-balance-row>.wallet-balance-name small{font-size:8.5px!important}
+  .wallet-balance-row>strong{font-size:11px!important}
+}

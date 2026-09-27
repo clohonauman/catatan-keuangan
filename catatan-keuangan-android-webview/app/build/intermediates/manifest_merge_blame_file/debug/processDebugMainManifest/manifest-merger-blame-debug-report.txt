@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="com.charlie.finance"
-4    android:versionCode="4"
-5    android:versionName="1.3.0" >
+4    android:versionCode="5"
+5    android:versionName="1.4.0" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="24"
@@ -23,146 +23,157 @@
 16    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 16-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:7:5-79
 16-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:7:22-76
-17    <uses-permission
-17-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:5-108
-18        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-18-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:22-78
-19        android:maxSdkVersion="28" />
-19-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:79-105
-20
-21    <permission
-21-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
-22        android:name="com.charlie.finance.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-22-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
-23        android:protectionLevel="signature" />
-23-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
-24
-25    <uses-permission android:name="com.charlie.finance.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-25-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
-25-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
-26
-27    <application
-27-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:10:5-46:19
-28        android:allowBackup="false"
-28-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:9-36
-29        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-29-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
-30        android:debuggable="true"
-31        android:extractNativeLibs="false"
-32        android:icon="@mipmap/ic_launcher"
-32-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:12:9-43
-33        android:label="@string/app_name"
-33-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:13:9-41
-34        android:roundIcon="@mipmap/ic_launcher"
-34-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:14:9-48
-35        android:supportsRtl="true"
-35-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:15:9-35
-36        android:theme="@style/AppTheme"
-36-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:16:9-40
-37        android:usesCleartextTraffic="false" >
-37-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:17:9-45
-38        <provider
-39            android:name="androidx.core.content.FileProvider"
-39-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:20:13-62
-40            android:authorities="com.charlie.finance.fileprovider"
-40-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:21:13-64
-41            android:exported="false"
-41-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:22:13-37
-42            android:grantUriPermissions="true" >
-42-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:23:13-47
-43            <meta-data
-43-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:24:13-26:54
-44                android:name="android.support.FILE_PROVIDER_PATHS"
-44-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:25:17-67
-45                android:resource="@xml/file_paths" />
-45-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:26:17-51
-46        </provider>
-47
-48        <activity
-48-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:29:9-38:20
-49            android:name="com.charlie.finance.SplashActivity"
-49-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:30:13-43
-50            android:exported="true"
-50-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:31:13-36
-51            android:screenOrientation="unspecified"
-51-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:32:13-52
-52            android:theme="@style/SplashTheme" >
-52-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:33:13-47
-53            <intent-filter>
-53-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:34:13-37:29
-54                <action android:name="android.intent.action.MAIN" />
-54-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:17-69
-54-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:25-66
-55
-56                <category android:name="android.intent.category.LAUNCHER" />
-56-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:17-77
-56-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:27-74
-57            </intent-filter>
-58        </activity>
-59        <activity
-59-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:40:9-44:55
-60            android:name="com.charlie.finance.MainActivity"
-60-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:41:13-41
-61            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|uiMode"
-61-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:42:13-109
-62            android:exported="false"
-62-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:43:13-37
-63            android:screenOrientation="unspecified" />
-63-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:44:13-52
+17    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+17-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:5-77
+17-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:8:22-74
+18    <uses-permission
+18-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:5-108
+19        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+19-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:22-78
+20        android:maxSdkVersion="28" />
+20-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:9:79-105
+21
+22    <permission
+22-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+23        android:name="com.charlie.finance.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+23-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+24        android:protectionLevel="signature" />
+24-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+25
+26    <uses-permission android:name="com.charlie.finance.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+26-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+26-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+27
+28    <application
+28-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:5-51:19
+29        android:allowBackup="false"
+29-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:12:9-36
+30        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+30-->[androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+31        android:debuggable="true"
+32        android:extractNativeLibs="false"
+33        android:icon="@mipmap/ic_launcher"
+33-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:13:9-43
+34        android:label="@string/app_name"
+34-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:14:9-41
+35        android:roundIcon="@mipmap/ic_launcher"
+35-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:15:9-48
+36        android:supportsRtl="true"
+36-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:16:9-35
+37        android:theme="@style/AppTheme"
+37-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:17:9-40
+38        android:usesCleartextTraffic="false" >
+38-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:18:9-45
+39        <provider
+40            android:name="androidx.core.content.FileProvider"
+40-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:21:13-62
+41            android:authorities="com.charlie.finance.fileprovider"
+41-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:22:13-64
+42            android:exported="false"
+42-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:23:13-37
+43            android:grantUriPermissions="true" >
+43-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:24:13-47
+44            <meta-data
+44-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:25:13-27:54
+45                android:name="android.support.FILE_PROVIDER_PATHS"
+45-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:26:17-67
+46                android:resource="@xml/file_paths" />
+46-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:27:17-51
+47        </provider>
+48
+49        <activity
+49-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:30:9-39:20
+50            android:name="com.charlie.finance.SplashActivity"
+50-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:31:13-43
+51            android:exported="true"
+51-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:32:13-36
+52            android:screenOrientation="unspecified"
+52-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:33:13-52
+53            android:theme="@style/SplashTheme" >
+53-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:34:13-47
+54            <intent-filter>
+54-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:35:13-38:29
+55                <action android:name="android.intent.action.MAIN" />
+55-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:17-69
+55-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:36:25-66
+56
+57                <category android:name="android.intent.category.LAUNCHER" />
+57-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:37:17-77
+57-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:37:27-74
+58            </intent-filter>
+59        </activity>
+60
+61        <receiver
+61-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:41:9-43:40
+62            android:name="com.charlie.finance.CreditCardReminderReceiver"
+62-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:42:13-55
+63            android:exported="false" />
+63-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:43:13-37
 64
-65        <provider
-65-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
-66            android:name="androidx.startup.InitializationProvider"
-66-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:25:13-67
-67            android:authorities="com.charlie.finance.androidx-startup"
-67-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:26:13-68
-68            android:exported="false" >
-68-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:27:13-37
-69            <meta-data
-69-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
-70                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-70-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
-71                android:value="androidx.startup" />
-71-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
-72        </provider>
-73
-74        <receiver
-74-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
-75            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-75-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
-76            android:directBootAware="false"
-76-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
-77            android:enabled="true"
-77-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
-78            android:exported="true"
-78-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
-79            android:permission="android.permission.DUMP" >
-79-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
-80            <intent-filter>
-80-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
-81                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
-81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
-82            </intent-filter>
-83            <intent-filter>
-83-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
-84                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
-84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
-85            </intent-filter>
+65        <activity
+65-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:45:9-49:55
+66            android:name="com.charlie.finance.MainActivity"
+66-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:46:13-41
+67            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|uiMode"
+67-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:47:13-109
+68            android:exported="false"
+68-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:48:13-37
+69            android:screenOrientation="unspecified" />
+69-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:49:13-52
+70
+71        <provider
+71-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+72            android:name="androidx.startup.InitializationProvider"
+72-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:25:13-67
+73            android:authorities="com.charlie.finance.androidx-startup"
+73-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:26:13-68
+74            android:exported="false" >
+74-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:27:13-37
+75            <meta-data
+75-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+76                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+76-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+77                android:value="androidx.startup" />
+77-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+78        </provider>
+79
+80        <receiver
+80-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+81            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+82            android:directBootAware="false"
+82-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+83            android:enabled="true"
+83-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+84            android:exported="true"
+84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+85            android:permission="android.permission.DUMP" >
+85-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
 86            <intent-filter>
-86-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
-87                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
-87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+86-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+87                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
 88            </intent-filter>
 89            <intent-filter>
-89-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
-90                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
-90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+90                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
 91            </intent-filter>
-92        </receiver>
-93    </application>
-94
-95</manifest>
+92            <intent-filter>
+92-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+93                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+93-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+93-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+94            </intent-filter>
+95            <intent-filter>
+95-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+96                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+96-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+96-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+97            </intent-filter>
+98        </receiver>
+99    </application>
+100
+101</manifest>

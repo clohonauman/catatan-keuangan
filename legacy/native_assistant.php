@@ -1247,6 +1247,12 @@ function nativeReply(string $message, array $saved=[]): string {
         $mentionedWallet = walletMentionForText($message);
         if ($mentionedWallet && function_exists('financeWalletBalances')) {
             $wid = (int)($mentionedWallet['id'] ?? 0);
+            if(strtolower((string)($mentionedWallet['type']??''))==='credit_card' && function_exists('financeWalletsWithBalances')){
+                foreach(financeWalletsWithBalances() as $cw) if((int)($cw['id']??0)===$wid){
+                    $name=trim((string)($cw['name']??'Kartu Kredit'))?:'Kartu Kredit';
+                    return 'Kartu kredit '.$name.' memiliki tagihan '.rupiah((int)($cw['credit_used']??0)).', sisa limit '.rupiah((int)($cw['available_limit']??0)).' dari limit '.rupiah((int)($cw['credit_limit']??0)).'.';
+                }
+            }
             $balances = financeWalletBalances();
             if ($wid > 0 && array_key_exists($wid, $balances)) {
                 $name = trim((string)($mentionedWallet['name'] ?? 'Dompet')) ?: 'Dompet';
@@ -1260,7 +1266,8 @@ function nativeReply(string $message, array $saved=[]): string {
             $parts = [];
             foreach ($wallets as $wallet) {
                 $name = trim((string)($wallet['name'] ?? 'Dompet'));
-                $parts[] = $name.' '.rupiah((int)($wallet['balance'] ?? 0));
+                if(strtolower((string)($wallet['type']??''))==='credit_card') $parts[]=$name.' tagihan '.rupiah((int)($wallet['credit_used']??0)).' / sisa limit '.rupiah((int)($wallet['available_limit']??0));
+                else $parts[] = $name.' '.rupiah((int)($wallet['balance'] ?? 0));
             }
             if ($parts) $walletText = ' Rincian saldo: '.implode(' • ', $parts).'.';
         }

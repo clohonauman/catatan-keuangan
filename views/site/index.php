@@ -80,8 +80,8 @@ if (!function_exists('ck_icon')) {
         padding: 0 !important;
         background: transparent !important;
         box-shadow: none !important;
-        width: min(94vw, 430px) !important;
-        max-width: 430px !important;
+        width: min(94vw, 570px) !important;
+        max-width: 570px !important;
         border-radius: 28px !important;
         overflow: visible !important;
     }
@@ -231,6 +231,8 @@ if (!function_exists('ck_icon')) {
         color: rgba(255, 255, 255, .76) !important;
         font-size: 11px !important;
         font-weight: 700;
+        line-height: 1.4 !important;
+        padding: 1px 0 2px;
     }
 
     #walletBalanceModal .wallet-balance-total-badge {
@@ -289,7 +291,7 @@ if (!function_exists('ck_icon')) {
 
     #walletBalanceModal .wallet-balance-row {
         display: grid !important;
-        grid-template-columns: 42px minmax(0, 1fr) auto !important;
+        grid-template-columns: 24px 42px minmax(0, 1fr) auto !important;
         align-items: center !important;
         gap: 11px !important;
         min-height: 64px;
@@ -304,6 +306,27 @@ if (!function_exists('ck_icon')) {
         border-color: #dbe6f7 !important;
         background: #fbfdff !important;
     }
+
+    #walletBalanceModal .wallet-balance-row>.wallet-sort-handle {
+        grid-column: 1 !important;
+        justify-self: center;
+        align-self: center;
+    }
+
+    #walletBalanceModal .wallet-balance-row>.wallet-balance-icon {
+        grid-column: 2 !important;
+    }
+
+    #walletBalanceModal .wallet-balance-row>.wallet-balance-name {
+        grid-column: 3 !important;
+    }
+
+    #walletBalanceModal .wallet-balance-row>strong {
+        grid-column: 4 !important;
+        justify-self: end;
+        align-self: center;
+    }
+
 
     #walletBalanceModal .wallet-balance-icon {
         width: 42px !important;
@@ -338,10 +361,12 @@ if (!function_exists('ck_icon')) {
     }
 
     #walletBalanceModal .wallet-balance-row>strong {
-        max-width: 145px;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        max-width: none;
+        min-width: max-content;
+        overflow: visible;
+        text-overflow: clip;
         white-space: nowrap !important;
+        text-align: right;
         color: #101828 !important;
         font-size: 13px !important;
         font-weight: 800;
@@ -426,12 +451,25 @@ if (!function_exists('ck_icon')) {
 
         #walletBalanceModal .wallet-balance-total {
             margin-bottom: 15px !important;
-            padding: 16px !important;
+            padding: 17px 16px 18px !important;
             border-radius: 18px !important
         }
 
         #walletBalanceModal .wallet-balance-total strong {
             font-size: 27px !important
+        }
+
+        #walletBalanceModal .wallet-balance-total-label {
+            min-height: 20px;
+            align-items: center;
+            margin-bottom: 7px;
+            overflow: visible;
+        }
+
+        #walletBalanceModal .wallet-balance-total-label small {
+            line-height: 1.45 !important;
+            padding: 1px 0 2px !important;
+            overflow: visible;
         }
 
         #walletBalanceModal .wallet-balance-list {
@@ -443,8 +481,8 @@ if (!function_exists('ck_icon')) {
             min-height: 60px;
             padding: 9px 10px !important;
             border-radius: 15px !important;
-            grid-template-columns: 38px minmax(0, 1fr) auto !important;
-            gap: 9px !important
+            grid-template-columns: 22px 36px minmax(0, 1fr) auto !important;
+            gap: 8px !important
         }
 
         #walletBalanceModal .wallet-balance-icon {
@@ -460,7 +498,8 @@ if (!function_exists('ck_icon')) {
 
         #walletBalanceModal .wallet-balance-row>strong {
             font-size: 12.5px !important;
-            max-width: 125px
+            max-width: none;
+            min-width: max-content
         }
     }
 
@@ -474,8 +513,81 @@ if (!function_exists('ck_icon')) {
         }
 
         #walletBalanceModal .wallet-balance-row>strong {
-            max-width: 105px;
+            max-width: none;
+            min-width: max-content;
             font-size: 12px !important
+        }
+    }
+
+    /* V52: sheet dapat ditarik sampai full screen tanpa membatasi daftar dompet. */
+    @media(max-width:760px) {
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized {
+            height: var(--ck-sheet-height) !important;
+            /* V54: jangan sampai menutup notch/camera island + status bar. */
+            max-height: calc(100dvh - max(52px, calc(env(safe-area-inset-top) + 18px))) !important;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-card {
+            height: 100% !important;
+            max-height: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+        #walletBalanceModal.ck-resizable-sheet .wallet-balance-handle {
+            width: 100% !important;
+            height: 20px !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            flex: 0 0 20px;
+        }
+        #walletBalanceModal.ck-resizable-sheet .wallet-balance-handle::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 7px;
+            width: 42px;
+            height: 4px;
+            transform: translateX(-50%);
+            border-radius: 999px;
+            background: #d2d8e1;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-head,
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-total,
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-section-head,
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-footnote {
+            flex: 0 0 auto !important;
+            min-height: max-content;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-total {
+            height: auto !important;
+            min-height: 92px !important;
+            overflow: hidden;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-total strong {
+            min-height: 34px;
+            overflow: visible !important;
+        }
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-list {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            overscroll-behavior: contain;
+        }
+        #walletBalanceModal .wallet-balance-row {
+            grid-template-columns: 22px 36px minmax(0, 1fr) auto !important;
+        }
+        #walletBalanceModal .wallet-balance-section-head span {
+            text-align: right;
         }
     }
     </style>
@@ -808,7 +920,7 @@ if (!function_exists('ck_icon')) {
             <button type="button" class="sidebar-menu-item premium-feature-link" data-premium-required="1"
                 data-finance-open="wallets">
                 <span class="sidebar-menu-icon"><?= ck_icon('wallet') ?></span>
-                <span><b>Dompet & Rekening</b><small>Cash, bank, e-wallet & transfer</small></span><span
+                <span><b>Dompet & Rekening</b><small>Cash, bank, e-wallet, kartu kredit & transfer</small></span><span
                     class="sidebar-arrow">›</span>
             </button>
             <button type="button" class="sidebar-menu-item premium-feature-link" data-premium-required="1"
@@ -1507,11 +1619,17 @@ if (!function_exists('ck_icon')) {
                                     <option value="bank">Bank</option>
                                     <option value="ewallet">E-Wallet</option>
                                     <option value="savings">Tabungan</option>
-                                </select></label><label>Saldo awal<input type="number" id="walletInitial" min="0"
+                                    <option value="credit_card">Kartu Kredit</option>
+                                </select></label><div id="walletStandardFields"><label>Saldo awal<input type="number" id="walletInitial" min="0"
                                     step="1000"></label><label>Dana disisihkan<input type="number" id="walletReserved"
                                     min="0" step="1000" placeholder="0"></label><label>Saldo minimum<input type="number"
                                     id="walletMinimum" min="0" step="1000" placeholder="Contoh: 50000"><small>Saldo yang
-                                    wajib tetap tersisa dan tidak dapat dipakai.</small></label><button
+                                    wajib tetap tersisa dan tidak dapat dipakai.</small></label></div><div id="walletCreditFields" hidden>
+                                    <label>Limit kartu kredit<input type="number" id="walletCreditLimit" min="1" step="1000" placeholder="Contoh: 10000000"><small>Total limit yang diberikan penerbit kartu.</small></label>
+                                    <label>Saldo / tagihan terpakai awal<input type="number" id="walletOpeningDebt" min="0" step="1000" placeholder="0"><small>Isi tagihan yang sudah terpakai sebelum kartu ditambahkan ke aplikasi.</small></label>
+                                    <label>Tanggal penagihan rutin tiap bulan (opsional)<input type="number" id="walletBillingDay" min="1" max="31" step="1" placeholder="Contoh: 25"><small>Jika diisi, aplikasi mengingatkan pada H-2 dan H-1. Untuk bulan yang lebih pendek, tanggal otomatis disesuaikan ke hari terakhir bulan.</small></label>
+                                    <div class="muted" style="margin:-4px 0 12px">Pengeluaran dengan kartu akan menambah tagihan. Transfer dari bank/dompet ke kartu kredit dianggap pembayaran tagihan.</div>
+                                </div><button
                                 class="btn primary" type="button" id="saveWallet">Simpan
                                 Dompet</button>
                         </div>
@@ -2188,7 +2306,7 @@ if (!function_exists('ck_icon')) {
                 </span>
                 <div class="wallet-balance-title">
                     <h3>Rincian Saldo</h3>
-                    <p>Saldo tersedia dihitung per dompet. Saldo di bawah batas minimum dihitung Rp0, bukan minus.</p>
+                    <p>Saldo kas tersedia dihitung dari cash/bank/e-wallet/tabungan. Kartu kredit ditampilkan terpisah sebagai tagihan dan sisa limit.</p>
                 </div>
                 <button class="icon-btn" type="button" id="closeWalletBalanceModal" aria-label="Tutup">×</button>
             </div>
@@ -2202,7 +2320,7 @@ if (!function_exists('ck_icon')) {
                 </div>
                 <div class="wallet-balance-section-head">
                     <b>Dompet & Rekening</b>
-                    <span>Saldo tersedia</span>
+                    <span>Tarik ↕ untuk urutkan · Saldo / sisa limit</span>
                 </div>
                 <div class="wallet-balance-list" id="walletBalanceList">
                     <div class="empty">Belum ada dompet atau rekening.</div>
@@ -2212,8 +2330,7 @@ if (!function_exists('ck_icon')) {
                         <circle cx="12" cy="12" r="9" />
                         <path d="M12 10v6M12 7h.01" />
                     </svg>
-                    <span>Saldo aktual tetap mengikuti transaksi. Dompet yang berada di bawah saldo minimum tidak
-                        mengurangi saldo tersedia dompet lain; kontribusinya ke total tersedia dihitung Rp0.</span>
+                    <span>Saldo aktual tetap mengikuti transaksi. Kartu kredit tidak menambah total saldo kas tersedia; pengeluaran kartu menambah tagihan dan mengurangi sisa limit.</span>
                 </div>
             </div>
         </div>
@@ -2790,7 +2907,7 @@ if (!function_exists('ck_icon')) {
         username: <?= json_encode((string)$user['username'], JSON_UNESCAPED_UNICODE) ?>,
         isSuperAdmin: <?= authIsSuperAdmin($user) ? 'true' : 'false' ?>,
         syncBase: <?= json_encode($publicBase, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) ?>,
-        appVersion: "offline-sync-v1"
+        appVersion: "credit-card-billing-v50"
     };
     </script>
     <script src="assets/offline-store.js?v=<?= h($assetVersion) ?>"></script>

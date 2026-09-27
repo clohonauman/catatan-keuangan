@@ -18,7 +18,7 @@ try {
     $cached=offlineOpCachedResponse($input); if($cached){echo json_encode($cached,JSON_UNESCAPED_UNICODE);exit;}
     $action=(string)($input['action']??''); $result=null;
     $premiumActions = [
-        'wallet_save','wallet_archive','wallet_transfer',
+        'wallet_save','wallet_archive','wallet_transfer','wallet_reorder',
         'category_save','category_archive','monthly_budget_set',
         'bill_save','bill_delete','bill_pay',
         'recurring_save','recurring_delete','recurring_run',
@@ -58,12 +58,13 @@ try {
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;
         case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??'')); break;
+        case 'wallet_reorder': $result=financeReorderWallets((array)($input['wallet_ids']??[])); break;
         case 'category_save': $result=financeSaveCategory($input); break;
         case 'category_archive': $result=financeArchiveCategory((int)($input['id']??0)); break;
         case 'monthly_budget_set': financeSetMonthlyBudget((int)($input['category_id']??0),(int)($input['limit']??0),(string)($input['month']??'')); $result=true; break;
         case 'bill_save': $result=financeSaveBill($input); break;
         case 'bill_delete': financeDeleteBill((int)($input['id']??0)); $result=true; break;
-        case 'bill_pay': $result=financePayBill((int)($input['id']??0),(string)($input['date']??'')); break;
+        case 'bill_pay': $result=financePayBill((int)($input['id']??0),(string)($input['date']??''),(int)($input['wallet_id']??0)); break;
         case 'recurring_save': $result=financeSaveRecurring($input); break;
         case 'recurring_delete': financeDeleteRecurring((int)($input['id']??0)); $result=true; break;
         case 'recurring_run': $result=financeProcessRecurring(); break;

@@ -1,5 +1,7 @@
-const CACHE = 'finance-shell-v76';
+const CACHE = 'finance-shell-v87';
 const OFFLINE_SHELL_KEY = './__offline_shell__';
+const OFFLINE_ROOT_KEY = './';
+const OFFLINE_INDEX_KEY = './index.php';
 const STATIC_ASSETS = [
   './assets/icon.webp',
   './assets/style.css',
@@ -8,12 +10,19 @@ const STATIC_ASSETS = [
   './manifest.json'
 ];
 
+async function cacheStaticAsset(cache, path) {
+  try {
+    const request = new Request(path, { cache: 'reload', credentials: 'same-origin' });
+    const response = await fetch(request);
+    if (response && response.ok) await cache.put(path, response.clone());
+  } catch (_) {}
+}
+
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(STATIC_ASSETS.map(x => new Request(x, { cache: 'reload' }))))
-      .catch(() => null)
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(STATIC_ASSETS.map(path => cacheStaticAsset(cache, path)));
+  })());
   self.skipWaiting();
 });
 
@@ -27,18 +36,53 @@ self.addEventListener('activate', event => {
   );
 });
 
+function unlockedShellResponse(text, original) {
+  const headers = new Headers(original?.headers || {});
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('X-Finance-Offline-Shell', '1');
+  headers.set('Cache-Control', 'no-store');
+  return new Response(text, { status: 200, statusText: 'OK', headers });
+}
+
 async function cacheUnlockedShell(response) {
   try {
-    if (!response || !response.ok) return;
-    const clone = response.clone();
-    const text = await clone.text();
-    if (!text.includes('data-offline-shell="1"')) return;
-    const headers = new Headers(response.headers);
-    headers.set('X-Finance-Offline-Shell', '1');
-    const cached = new Response(text, { status: 200, statusText: 'OK', headers });
+    if (!response || !response.ok) return false;
+    const text = await response.clone().text();
+    if (!text.includes('data-offline-shell="1"')) return false;
     const cache = await caches.open(CACHE);
-    await cache.put(OFFLINE_SHELL_KEY, cached);
-  } catch (_) {}
+    const cached = unlockedShellResponse(text, response);
+    // Simpan satu shell sintetis dan dua URL navigasi umum. Ini membuat cold-start
+    // Android lebih tahan ketika WebView dibuka tanpa jaringan.
+    await Promise.all([
+      cache.put(OFFLINE_SHELL_KEY, cached.clone()),
+      cache.put(OFFLINE_ROOT_KEY, cached.clone()),
+      cache.put(OFFLINE_INDEX_KEY, cached.clone()),
+    ]);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function clearOfflineShell() {
+  try {
+    const cache = await caches.open(CACHE);
+    await Promise.all([
+      cache.delete(OFFLINE_SHELL_KEY),
+      cache.delete(OFFLINE_ROOT_KEY),
+      cache.delete(OFFLINE_INDEX_KEY),
+    ]);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function cachedOfflineShell() {
+  const cache = await caches.open(CACHE);
+  return (await cache.match(OFFLINE_SHELL_KEY))
+    || (await cache.match(OFFLINE_ROOT_KEY))
+    || (await cache.match(OFFLINE_INDEX_KEY));
 }
 
 self.addEventListener('fetch', event => {
@@ -68,36 +112,34 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== self.location.origin) return;
 
-  // Navigasi: network-first. Saat offline gunakan halaman aplikasi terakhir yang berhasil dibuka dalam keadaan unlocked.
+  // Navigasi: network-first. Bila perangkat benar-benar offline, kembalikan shell
+  // akun terakhir yang sudah berhasil login + unlock dan pernah dimuat online.
   if (request.method === 'GET' && request.mode === 'navigate') {
     event.respondWith((async () => {
       try {
         const response = await fetch(request, { cache: 'no-store' });
-        cacheUnlockedShell(response.clone());
+        if (response && response.ok) await cacheUnlockedShell(response.clone());
         return response;
       } catch (_) {
-        const cache = await caches.open(CACHE);
-        const shell = await cache.match(OFFLINE_SHELL_KEY);
+        const shell = await cachedOfflineShell();
         if (shell) return shell;
-        const fallback = await cache.match('./index.php') || await cache.match('./');
-        if (fallback) return fallback;
         return new Response(
-          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title></head><body style="font-family:system-ui;padding:30px"><h2>Aplikasi belum siap offline</h2><p>Buka dan login ke aplikasi minimal satu kali saat terhubung internet, lalu coba lagi.</p></body></html>',
-          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title></head><body style="font-family:system-ui;padding:30px"><h2>Aplikasi belum siap offline</h2><p>Hubungkan internet dan login ke aplikasi minimal satu kali pada perangkat ini. Setelah data tersimpan, aplikasi dapat dibuka kembali tanpa jaringan.</p></body></html>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
         );
       }
     })());
     return;
   }
 
-  // AJAX/API ditangani langsung oleh aplikasi/IndexedDB. Jangan pernah cache response API.
+  // AJAX/API ditangani oleh aplikasi + IndexedDB. Response API tidak dicache.
   const route = String(url.searchParams.get('r') || '').toLowerCase();
   const isLegacyApiRoute = route === 'legacy-api/bridge' || route.startsWith('legacy-api/');
   if (url.pathname.includes('/ajax/') || isLegacyApiRoute) return;
 
   if (request.method !== 'GET') return;
 
-  // CSS/JS network-first supaya update langsung terbaca, namun tetap punya fallback offline.
+  // CSS/JS network-first agar update terbaca, namun fallback ke cache saat offline.
   if (url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
@@ -129,15 +171,30 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+
   if (event.data?.type === 'CACHE_CURRENT_SHELL' && event.data.url) {
     event.waitUntil((async () => {
+      let ok = false;
       try {
         const response = await fetch(event.data.url, { credentials: 'include', cache: 'no-store' });
-        await cacheUnlockedShell(response);
+        ok = await cacheUnlockedShell(response);
       } catch (_) {}
+      try { event.ports?.[0]?.postMessage({ ok }); } catch (_) {}
     })());
   }
+
+  if (event.data?.type === 'HAS_OFFLINE_SHELL') {
+    event.waitUntil((async () => {
+      let ok = false;
+      try { ok = !!(await cachedOfflineShell()); } catch (_) {}
+      try { event.ports?.[0]?.postMessage({ ok }); } catch (_) {}
+    })());
+  }
+
   if (event.data?.type === 'CLEAR_OFFLINE_SHELL') {
-    event.waitUntil(caches.open(CACHE).then(cache => cache.delete(OFFLINE_SHELL_KEY)).catch(() => false));
+    event.waitUntil((async () => {
+      const ok = await clearOfflineShell();
+      try { event.ports?.[0]?.postMessage({ ok }); } catch (_) {}
+    })());
   }
 });
