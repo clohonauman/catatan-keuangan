@@ -305,7 +305,8 @@ function authResolveDevice(){ $hash=authCurrentDeviceHash(); if($hash==='')retur
 
 function authClearLocalSession()
 {
-    setcookie(DEVICE_COOKIE, '', ['expires' => time() - 3600, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']);
+    $secure = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+    setcookie(DEVICE_COOKIE, '', ['expires' => time() - 3600, 'path' => '/', 'secure' => $secure, 'httponly' => true, 'samesite' => 'Lax']);
     unset($_COOKIE[DEVICE_COOKIE]);
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
@@ -526,10 +527,100 @@ function authRegister($username, $email, $password)
     return $user;
 }
 
+
+/**
+ * V64 — lightweight brute-force protection backed by Yii cache.
+ * Tidak memerlukan tabel/migration baru dan bekerja di shared hosting.
+ */
+function authLoginThrottleKey($scope, $username = '')
+{
+    $scope = preg_replace('/[^a-z0-9_-]/i', '', (string)$scope) ?: 'login';
+    $username = strtolower(trim((string)$username));
+    $ip = authClientIp();
+    return 'auth-throttle:' . $scope . ':' . hash('sha256', $username . '|' . $ip);
+}
+
+function authLoginThrottleRead($key)
+{
+    try {
+        $value = Yii::$app->cache->get($key);
+        return is_array($value) ? $value : ['count'=>0,'first_at'=>0,'locked_until'=>0];
+    } catch (Throwable $e) {
+        return ['count'=>0,'first_at'=>0,'locked_until'=>0];
+    }
+}
+
+function authLoginThrottleWrite($key, array $state, $ttl = 1800)
+{
+    try { Yii::$app->cache->set($key, $state, max(60, (int)$ttl)); } catch (Throwable $e) {}
+}
+
+function authLoginThrottleDelete($key)
+{
+    try { Yii::$app->cache->delete($key); } catch (Throwable $e) {}
+}
+
+function authLoginThrottleAssert($username)
+{
+    $now = time();
+    $checks = [
+        [authLoginThrottleKey('combo', $username), 8, 900],
+        [authLoginThrottleKey('ip', ''), 30, 900],
+    ];
+    foreach ($checks as [$key, $limit, $window]) {
+        $state = authLoginThrottleRead($key);
+        $lockedUntil = (int)($state['locked_until'] ?? 0);
+        if ($lockedUntil > $now) {
+            $seconds = max(1, $lockedUntil - $now);
+            $minutes = max(1, (int)ceil($seconds / 60));
+            throw new RuntimeException('Terlalu banyak percobaan login. Coba lagi sekitar ' . $minutes . ' menit.');
+        }
+        $firstAt = (int)($state['first_at'] ?? 0);
+        if ($firstAt > 0 && ($now - $firstAt) > $window) {
+            authLoginThrottleDelete($key);
+        }
+    }
+}
+
+function authLoginThrottleFailure($username)
+{
+    $now = time();
+    $configs = [
+        [authLoginThrottleKey('combo', $username), 8, 900],
+        [authLoginThrottleKey('ip', ''), 30, 900],
+    ];
+    foreach ($configs as [$key, $limit, $window]) {
+        $state = authLoginThrottleRead($key);
+        $firstAt = (int)($state['first_at'] ?? 0);
+        if ($firstAt <= 0 || ($now - $firstAt) > $window) {
+            $state = ['count'=>0,'first_at'=>$now,'locked_until'=>0];
+        }
+        $state['count'] = (int)($state['count'] ?? 0) + 1;
+        if ($state['count'] >= $limit) {
+            $state['locked_until'] = $now + 900;
+        }
+        authLoginThrottleWrite($key, $state, max($window, 1800));
+    }
+}
+
+function authLoginThrottleSuccess($username)
+{
+    // Reset hanya pasangan username+IP. Counter IP global dibiarkan agar serangan ke banyak akun tetap terdeteksi.
+    authLoginThrottleDelete(authLoginThrottleKey('combo', $username));
+}
+
 function authLogin($username, $password)
 {
+    $username = trim((string)$username);
+    authLoginThrottleAssert($username);
+
     $user = authFindUserByUsername($username);
-    if (!$user || !password_verify($password, $user['password_hash'])) throw new RuntimeException('Username atau password salah.');
+    if (!$user || empty($user['password_hash']) || !password_verify((string)$password, (string)$user['password_hash'])) {
+        authLoginThrottleFailure($username);
+        throw new RuntimeException('Username atau password salah.');
+    }
+
+    authLoginThrottleSuccess($username);
     session_regenerate_id(true);
     $_SESSION['user_id'] = (int)$user['id'];
     $_SESSION['pin_verified'] = empty($user['pin_hash']);
@@ -680,7 +771,8 @@ function authLogout()
             }
         });
     }
-    setcookie(DEVICE_COOKIE, '', time() - 3600, '/', '', false, true);
+    $secure = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+    setcookie(DEVICE_COOKIE, '', ['expires'=>time()-3600,'path'=>'/','secure'=>$secure,'httponly'=>true,'samesite'=>'Lax']);
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();

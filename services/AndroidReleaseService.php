@@ -161,6 +161,27 @@ class AndroidReleaseService
                 }
             }
 
+
+            // V64: extension + ZIP signature saja belum cukup. APK normal wajib memiliki
+            // AndroidManifest.xml dan setidaknya satu classes*.dex.
+            if (class_exists(\ZipArchive::class)) {
+                $apk = new \ZipArchive();
+                if ($apk->open($tmp) !== true) throw new \InvalidArgumentException('Paket APK tidak dapat dibuka.');
+                try {
+                    if ($apk->locateName('AndroidManifest.xml', \ZipArchive::FL_NODIR) === false) {
+                        throw new \InvalidArgumentException('APK tidak memiliki AndroidManifest.xml.');
+                    }
+                    $hasDex = false;
+                    for ($i = 0; $i < $apk->numFiles; $i++) {
+                        $name = (string)$apk->getNameIndex($i);
+                        if (preg_match('~^classes(?:[0-9]+)?\\.dex$~', $name)) { $hasDex = true; break; }
+                    }
+                    if (!$hasDex) throw new \InvalidArgumentException('APK tidak memiliki bytecode Android (classes.dex).');
+                } finally {
+                    $apk->close();
+                }
+            }
+
             if (is_file($final) && !@unlink($final)) throw new \RuntimeException('Versi APK tujuan sudah ada dan tidak dapat diganti.');
             if (!@rename($tmp, $final)) {
                 if (!@copy($tmp, $final)) throw new \RuntimeException('APK gagal dipindahkan ke lokasi publik.');
