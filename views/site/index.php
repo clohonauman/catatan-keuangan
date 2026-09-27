@@ -602,7 +602,18 @@ if (!function_exists('ck_icon')) {
             text-align: right;
         }
     }
-    </style>
+    
+    /* V61 - limit kartu kredit dipisahkan dari saldo kas pada kartu total. */
+    #walletBalanceModal .wallet-credit-total {
+        position: relative;
+        z-index: 1;
+    }
+    @media(max-width:760px) {
+        #walletBalanceModal.ck-resizable-sheet.sheet-user-sized .wallet-balance-total:has(.wallet-credit-total:not([hidden])) {
+            min-height: 138px !important;
+        }
+    }
+</style>
 
     <?php if (!$user || empty($user['pin_hash']) || !$unlocked): ?>
     <style>
@@ -1118,7 +1129,8 @@ if (!function_exists('ck_icon')) {
                 <div class="stat-icon"><?= ck_icon('circle-dollar') ?></div>
                 <div class="balance-stat-content">
                     <div class="balance-stat-copy"><small>Saldo tersedia</small><strong id="balance">Rp0</strong><span
-                            class="balance-detail-hint">Akumulatif seluruh bulan · lihat saldo tiap dompet</span></div>
+                            class="balance-detail-hint">Akumulatif seluruh bulan · lihat saldo tiap dompet</span>
+                    </div>
                     <div class="balance-stat-actions">
                         <button type="button" class="balance-visibility-toggle" id="balanceVisibilityToggle"
                             aria-label="Sembunyikan saldo, pemasukan, dan pengeluaran"
@@ -1130,6 +1142,10 @@ if (!function_exists('ck_icon')) {
                                 <path d="M20 12a8 8 0 1 0-2.3 5.7M20 7l-2.3-2.3" />
                             </svg>
                         </button>
+                    </div>
+                    <div class="balance-credit-summary" id="balanceCreditSummary" hidden>
+                        <span><em>Total limit kartu</em><b id="balanceCreditLimit">Rp0</b></span>
+                        <span><em>Sisa limit</em><b id="balanceCreditAvailable">Rp0</b></span>
                     </div>
                 </div>
             </article>
@@ -2423,6 +2439,10 @@ if (!function_exists('ck_icon')) {
                         <span class="wallet-balance-total-badge">SEMUA DOMPET</span>
                     </div>
                     <strong id="walletBalanceTotal">Rp0</strong>
+                    <div class="wallet-credit-total" id="walletCreditTotalSummary" hidden>
+                        <span><small>Total limit kartu kredit</small><b id="walletCreditLimitTotal">Rp0</b></span>
+                        <span><small>Sisa limit</small><b id="walletCreditAvailableTotal">Rp0</b></span>
+                    </div>
                 </div>
                 <div class="wallet-balance-section-head">
                     <b>Dompet & Rekening</b>

@@ -3349,3 +3349,115 @@ dialog[open]>.feature-toast.in-dialog{
 .android-release-admin-section{display:grid;gap:15px}.android-release-current{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center;gap:12px;padding:14px;border:1px solid #c9dcfb;border-radius:16px;background:#f6f9ff}.android-release-current-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:#e8f1ff;color:#175cd3}.android-release-current-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.android-release-current>div:last-child{display:grid;gap:2px}.android-release-current small{font-size:9px;color:#75849a;text-transform:uppercase;letter-spacing:.05em;font-weight:800}.android-release-current b{font-size:15px}.android-release-current span{font-size:10px;color:#667085}
 .android-release-form{display:grid;gap:13px;padding:16px;border:1px solid #e3e8ef;border-radius:17px;background:#fff}.android-release-form>label,.android-release-version-grid label{display:grid;gap:6px;font-size:11px;font-weight:800;color:#475467}.android-release-form input,.android-release-form textarea{width:100%;border:1px solid #d0d7e2;border-radius:11px;padding:10px 11px;background:#fff;color:#172235;font:inherit}.android-release-form input[type=file]{padding:9px;background:#f8fafc}.android-release-form textarea{resize:vertical;min-height:130px;line-height:1.55}.android-release-form label small{font-weight:500;color:#8a96a8;font-size:9px;line-height:1.45}.android-release-version-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.android-release-publish-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:3px}.android-release-publish-row>div{display:grid;gap:2px}.android-release-publish-row b{font-size:11px}.android-release-publish-row small{font-size:9px;color:#7b8798}.android-release-history{display:grid;gap:8px}.android-release-history-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid #e5eaf1;border-radius:13px;background:#fff}.android-release-history-row>div{display:grid;gap:2px;min-width:0}.android-release-history-row b{font-size:11px}.android-release-history-row small{font-size:9px;color:#7b8798}.android-release-history-row>span{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#98a2b3}
 @media(max-width:760px){.android-update-banner{grid-template-columns:40px minmax(0,1fr);padding:11px}.android-update-icon{width:40px;height:40px;border-radius:12px}.android-update-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr auto}.android-update-actions .btn{text-align:center}.android-release-version-grid{grid-template-columns:1fr}.android-release-publish-row{align-items:stretch;flex-direction:column}.android-release-publish-row .btn{width:100%}.android-release-history-row{align-items:flex-start;flex-direction:column}.android-release-history-row>span{max-width:100%}}
+
+/* ===== V60 - safe top limit Pemberitahuan ===== */
+@media(max-width:760px){
+  #notificationCenterModal.ck-resizable-sheet.sheet-user-sized{
+    max-height:calc(100dvh - max(52px, env(safe-area-inset-top)))!important;
+  }
+}
+
+/* ===== V61 - Saldo tersedia + limit kartu kredit terpisah ===== */
+.balance-credit-summary{
+  display:flex;align-items:center;gap:14px;margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.18)
+}
+.balance-credit-summary[hidden]{display:none!important}
+.balance-credit-summary>span{display:grid;gap:1px;min-width:0}
+.balance-credit-summary em{font-style:normal;font-size:8px;font-weight:700;color:rgba(255,255,255,.66);white-space:nowrap}
+.balance-credit-summary b{font-size:11px;line-height:1.25;color:#fff;white-space:nowrap}
+
+.wallet-credit-total{position:relative;z-index:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.20)}
+.wallet-credit-total[hidden]{display:none!important}
+.wallet-credit-total>span{display:grid;gap:2px;min-width:0}
+.wallet-credit-total small{margin:0!important;color:rgba(255,255,255,.66)!important;font-size:8px!important;font-weight:700!important;line-height:1.25!important}
+.wallet-credit-total b{font-size:13px;line-height:1.25;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:760px){
+  .balance-stat.has-credit-card{min-height:106px!important}
+  .balance-credit-summary{gap:12px;margin-top:7px;padding-top:7px}
+  .balance-credit-summary em{font-size:7.5px}
+  .balance-credit-summary b{font-size:10px}
+  .wallet-credit-total{margin-top:10px;padding-top:9px;gap:10px}
+  .wallet-credit-total b{font-size:12px}
+}
+@media(max-width:390px){
+  .balance-stat.has-credit-card{min-height:102px!important}
+  .balance-credit-summary{gap:9px}
+  .balance-credit-summary em{font-size:7px}
+  .balance-credit-summary b{font-size:9px}
+}
+
+
+/* ===== V62 - desktop balance credit summary layout ===== */
+.balance-stat-content{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-areas:
+    "copy actions"
+    "credit credit";
+  align-items:center!important;
+  column-gap:10px!important;
+  row-gap:0!important;
+}
+.balance-stat-copy{grid-area:copy;min-width:0}
+.balance-stat-actions{grid-area:actions}
+.balance-credit-summary{
+  grid-area:credit;
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:9px;
+  padding-top:8px;
+  border-top:1px solid rgba(255,255,255,.18);
+}
+.balance-credit-summary[hidden]{display:none!important}
+.balance-credit-summary>span{
+  min-width:0;
+  display:grid;
+  gap:2px;
+  padding:6px 8px;
+  border-radius:9px;
+  background:rgba(255,255,255,.08);
+}
+.balance-credit-summary em{
+  display:block;
+  min-width:0;
+  font-style:normal;
+  font-size:8px;
+  line-height:1.2;
+  font-weight:700;
+  color:rgba(255,255,255,.68);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.balance-credit-summary b{
+  display:block;
+  min-width:0;
+  font-size:11px;
+  line-height:1.25;
+  color:#fff;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+@media(min-width:1121px){
+  .balance-stat.has-credit-card{min-height:118px!important}
+  .balance-credit-summary{gap:9px}
+  .balance-credit-summary>span{padding:6px 9px}
+  .balance-credit-summary b{font-size:11.5px}
+}
+
+@media(max-width:760px){
+  .balance-stat.has-credit-card{min-height:118px!important}
+  .balance-credit-summary{
+    gap:6px;
+    margin-top:7px;
+    padding-top:7px;
+  }
+  .balance-credit-summary>span{padding:5px 6px;border-radius:8px}
+  .balance-credit-summary em{font-size:7px}
+  .balance-credit-summary b{font-size:9.5px}
+}

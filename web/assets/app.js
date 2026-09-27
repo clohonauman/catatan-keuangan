@@ -323,6 +323,20 @@ function totalAvailableFromWallets() {
     return sum + available;
   }, 0);
 }
+function totalCreditCardLimits() {
+  const cards = ((state.features || {}).wallets || []).filter(w => !w.archived && String(w.type || "") === "credit_card");
+  return cards.reduce((acc, w) => {
+    const limit = Math.max(0, Number(w.credit_limit || 0));
+    const used = Math.max(0, Number(w.credit_used ?? w.outstanding_balance ?? 0));
+    const availableRaw = Number(w.available_limit ?? w.available_balance);
+    const available = Number.isFinite(availableRaw) ? Math.max(0, availableRaw) : Math.max(0, limit - used);
+    acc.count += 1;
+    acc.limit += limit;
+    acc.used += used;
+    acc.available += available;
+    return acc;
+  }, { count: 0, limit: 0, used: 0, available: 0 });
+}
 function summaryDisplayValue(key) {
   if (key === "balance") {
     const walletTotal = totalAvailableFromWallets();
@@ -345,6 +359,17 @@ function applyBalanceVisibility() {
     const value = document.getElementById(key);
     if (value) value.textContent = hidden ? "Rp ••••••" : rupiah(summaryDisplayValue(key));
   });
+
+  const credit = totalCreditCardLimits();
+  const creditSummary = document.getElementById("balanceCreditSummary");
+  const creditLimit = document.getElementById("balanceCreditLimit");
+  const creditAvailable = document.getElementById("balanceCreditAvailable");
+  const balanceCard = document.getElementById("balanceStatCard");
+  if (creditSummary) creditSummary.hidden = credit.count < 1;
+  if (balanceCard) balanceCard.classList.toggle("has-credit-card", credit.count > 0);
+  if (creditLimit) creditLimit.textContent = hidden ? "Rp ••••••" : rupiah(credit.limit);
+  if (creditAvailable) creditAvailable.textContent = hidden ? "Rp ••••••" : rupiah(credit.available);
+
   if (btn) {
     btn.innerHTML = balanceEyeSvg(hidden);
     btn.setAttribute("aria-label", hidden ? "Tampilkan saldo, pemasukan, pengeluaran, dan saldo awal" : "Sembunyikan saldo, pemasukan, pengeluaran, dan saldo awal");
@@ -391,7 +416,16 @@ function renderWalletBalanceDetails() {
 
   const wallets = ((state.features || {}).wallets || []).filter((w) => !w.archived);
   const walletTotal = totalAvailableFromWallets();
-  total.textContent = rupiah(walletTotal !== null ? walletTotal : (state.summary?.balance || 0));
+  const credit = totalCreditCardLimits();
+  const hidden = balanceIsHidden();
+  total.textContent = hidden ? "Rp ••••••" : rupiah(walletTotal !== null ? walletTotal : (state.summary?.balance || 0));
+
+  const creditSummary = document.getElementById("walletCreditTotalSummary");
+  const creditLimit = document.getElementById("walletCreditLimitTotal");
+  const creditAvailable = document.getElementById("walletCreditAvailableTotal");
+  if (creditSummary) creditSummary.hidden = credit.count < 1;
+  if (creditLimit) creditLimit.textContent = hidden ? "Rp ••••••" : rupiah(credit.limit);
+  if (creditAvailable) creditAvailable.textContent = hidden ? "Rp ••••••" : rupiah(credit.available);
 
   if (!wallets.length) {
     list.innerHTML = '<div class="empty">Belum ada dompet atau rekening.</div>';
@@ -1757,6 +1791,7 @@ document.getElementById("balanceVisibilityToggle")?.addEventListener("click", (e
   event.stopPropagation();
   localStorage.setItem(BALANCE_VISIBILITY_KEY, balanceIsHidden() ? "0" : "1");
   applyBalanceVisibility();
+  if (document.getElementById("walletBalanceModal")?.open) renderWalletBalanceDetails();
 });
 document.getElementById("balanceRefresh")?.addEventListener("click", async (event) => {
   event.stopPropagation();
@@ -5315,8 +5350,9 @@ function ckSheetViewportHeight() {
 }
 function ckSheetMaxHeight(dialog) {
   const vh = ckSheetViewportHeight();
-  if (dialog?.id === "walletBalanceModal") {
-    // Rincian Saldo tidak boleh menutupi notch / camera island / status bar.
+  const safeTopSheetIds = new Set(["walletBalanceModal", "notificationCenterModal"]);
+  if (safeTopSheetIds.has(dialog?.id)) {
+    // Rincian Saldo dan Pemberitahuan tidak boleh menutupi notch / camera island / status bar.
     // Sisakan sekitar 7.5% viewport, minimal 52px dan maksimal 72px.
     const topGap = Math.max(52, Math.min(72, Math.round(vh * .075)));
     return Math.max(320, vh - topGap);
