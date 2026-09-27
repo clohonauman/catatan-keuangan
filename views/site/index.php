@@ -3,6 +3,18 @@ require_once __DIR__.'/../../legacy/faq_helper.php';
 $faqCategories = faqCategoryLabels();
 $faqEntries = faqKnowledgeBase();
 $publicBase=rtrim((string)(Yii::$app->params['appUrl'] ?: Yii::$app->request->hostInfo),'/');
+$androidReleaseSnapshot = \app\services\AndroidReleaseService::snapshot();
+$androidRelease = \app\services\AndroidReleaseService::latestPublic();
+$androidReleaseHistory = is_array($androidReleaseSnapshot['history'] ?? null) ? $androidReleaseSnapshot['history'] : [];
+$androidDownloadPage = $publicBase . '/android-download.php';
+if (!function_exists('ck_format_bytes')) {
+    function ck_format_bytes($bytes): string {
+        $bytes = max(0, (int)$bytes);
+        if ($bytes < 1024) return $bytes . ' B';
+        if ($bytes < 1024 * 1024) return number_format($bytes / 1024, 1, ',', '.') . ' KB';
+        return number_format($bytes / (1024 * 1024), 1, ',', '.') . ' MB';
+    }
+}
 if (!function_exists('ck_icon')) {
     function ck_icon(string $name): string {
         $icons = [
@@ -1027,6 +1039,11 @@ if (!function_exists('ck_icon')) {
                 <span><b>Rekening Pembayaran</b><small>Kelola rekening tujuan</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
+            <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-android">
+                <span class="sidebar-menu-icon"><?= ck_icon('smartphone') ?></span>
+                <span><b>Aplikasi Android</b><small>Upload APK & catatan pembaruan</small></span>
+                <span class="sidebar-arrow">›</span>
+            </button>
             <button type="button" class="sidebar-menu-item sidebar-admin-item" data-finance-open="admin-maintenance">
                 <span class="sidebar-menu-icon"><?= ck_icon('settings') ?></span>
                 <span><b>Mode Maintenance</b><small>Atur akses saat pemeliharaan</small></span>
@@ -1057,6 +1074,23 @@ if (!function_exists('ck_icon')) {
         <div class="app-flash-message error"><?= h($error) ?></div>
         <?php elseif ($notice): ?>
         <div class="app-flash-message success"><?= h($notice) ?></div>
+        <?php endif; ?>
+
+        <?php if ($androidRelease): ?>
+        <section class="android-update-banner" id="androidUpdateBanner" hidden
+            data-version-name="<?= h((string)$androidRelease['version_name']) ?>"
+            data-version-code="<?= (int)$androidRelease['version_code'] ?>">
+            <div class="android-update-icon"><?= ck_icon('smartphone') ?></div>
+            <div class="android-update-copy">
+                <b>Pembaruan Android v<?= h((string)$androidRelease['version_name']) ?> tersedia</b>
+                <p><?= h((string)($androidRelease['notes'] ?: 'Versi terbaru aplikasi Android Catatan Keuangan sudah tersedia.')) ?></p>
+                <small>Build <?= (int)$androidRelease['version_code'] ?> · <?= h(ck_format_bytes((int)$androidRelease['size'])) ?></small>
+            </div>
+            <div class="android-update-actions">
+                <a class="btn primary" href="<?= h($androidDownloadPage) ?>">Lihat & Update</a>
+                <button type="button" class="btn secondary" id="androidUpdateLater">Nanti</button>
+            </div>
+        </section>
         <?php endif; ?>
 
         <?php if (!$emailStatus['verified']): ?>
@@ -1748,11 +1782,17 @@ if (!function_exists('ck_icon')) {
                             <div id="androidInstallArea" hidden>
                                 <p>Gunakan aplikasi Android untuk akses yang lebih praktis langsung dari perangkat Anda.
                                 </p>
+                                <?php if ($androidRelease): ?>
+                                <div class="android-release-user-card">
+                                    <div><b>Versi terbaru v<?= h((string)$androidRelease['version_name']) ?></b><small>Build <?= (int)$androidRelease['version_code'] ?> · <?= h(ck_format_bytes((int)$androidRelease['size'])) ?></small></div>
+                                    <?php if (trim((string)$androidRelease['notes']) !== ''): ?>
+                                    <p><?= nl2br(h((string)$androidRelease['notes'])) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                                <?php endif; ?>
                                 <a class="btn primary feature-link-btn" id="downloadAndroidApk"
-                                    href="<?= h($publicBase) ?>/apks/Catatan%20Keuangan-v1.0.0.apk"
-                                    download>Unduh APK Android</a><br>
-                                <small>Setelah selesai diunduh, buka file APK untuk memasang aplikasi. Android mungkin
-                                    meminta izin instalasi dari sumber ini.</small>
+                                    href="<?= h($androidDownloadPage) ?>">Lihat & Unduh APK Android</a><br>
+                                <small>Halaman unduhan selalu menampilkan versi Android terbaru beserta detail pembaruannya.</small>
                             </div>
 
                             <div id="iosInstallArea" hidden>
@@ -1778,8 +1818,7 @@ if (!function_exists('ck_icon')) {
                                 <p><b>Android:</b> unduh APK <b>iPhone/iPad:</b> buka website ini di Safari
                                     lalu tambahkan ke Home Screen.</p>
                                 <a class="btn primary feature-link-btn"
-                                    href="<?= h($publicBase) ?>/apks/Catatan%20Keuangan-v1.0.0.apk"
-                                    download>Unduh APK Android</a>
+                                    href="<?= h($androidDownloadPage) ?>">Lihat APK Android Terbaru</a>
                                 <button class="btn secondary" id="installPwaBtn" type="button">Install Web App</button>
                             </div>
 
@@ -1932,6 +1971,73 @@ if (!function_exists('ck_icon')) {
                                 id="adminAddBank">+ Tambah Bank</button>
                         </div>
                         <div class="feature-list" id="adminBankList"></div>
+                    </div>
+                </section>
+                <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-android" hidden>
+                    <div class="admin-premium-section android-release-admin-section">
+                        <div class="feature-toolbar">
+                            <div><b>Aplikasi Android</b><small>Publikasikan APK terbaru. Pengguna Android akan otomatis melihat pemberitahuan versi baru beserta catatan pembaruannya.</small></div>
+                            <a class="btn secondary" href="<?= h($androidDownloadPage) ?>" target="_blank" rel="noopener">Lihat Halaman Unduh</a>
+                        </div>
+
+                        <?php if ($androidRelease): ?>
+                        <div class="android-release-current">
+                            <div class="android-release-current-icon"><?= ck_icon('smartphone') ?></div>
+                            <div>
+                                <small>Rilis aktif</small>
+                                <b>Catatan Keuangan v<?= h((string)$androidRelease['version_name']) ?></b>
+                                <span>Build <?= (int)$androidRelease['version_code'] ?> · <?= h(ck_format_bytes((int)$androidRelease['size'])) ?><?= !empty($androidRelease['published_at']) ? ' · ' . h(date('d/m/Y H:i', strtotime((string)$androidRelease['published_at']))) : '' ?></span>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <form method="post" action="<?= \yii\helpers\Url::to(['admin/upload-android-release']) ?>"
+                            enctype="multipart/form-data" class="android-release-form" id="androidReleaseUploadForm">
+                            <input type="hidden" name="<?= Yii::$app->request->csrfParam ?>" value="<?= Yii::$app->request->csrfToken ?>">
+
+                            <label>File APK
+                                <input type="file" name="android_apk" accept=".apk,application/vnd.android.package-archive" required>
+                                <small>Upload file APK hasil build release. Maksimal aplikasi 250 MB, namun batas hosting PHP dapat lebih kecil.</small>
+                            </label>
+
+                            <div class="android-release-version-grid">
+                                <label>Versi aplikasi
+                                    <input type="text" name="version_name" maxlength="40" placeholder="Contoh: 1.5.0" required>
+                                </label>
+                                <label>Version Code / Build
+                                    <input type="number" name="version_code" min="<?= max(1, ((int)($androidRelease['version_code'] ?? 0)) + 1) ?>"
+                                        value="<?= max(1, ((int)($androidRelease['version_code'] ?? 0)) + 1) ?>" required>
+                                    <small>Harus lebih besar dari build rilis sebelumnya.</small>
+                                </label>
+                            </div>
+
+                            <label>Apa saja yang diperbarui?
+                                <textarea name="release_notes" rows="7" maxlength="12000"
+                                    placeholder="- Perbaikan tampilan&#10;- Sinkronisasi lebih stabil&#10;- Fitur baru ..." required></textarea>
+                            </label>
+
+                            <div class="android-release-publish-row">
+                                <div><b>Setelah dipublikasikan</b><small>Versi ini langsung menjadi APK terbaru pada halaman unduhan dan notifikasi update Android.</small></div>
+                                <button type="submit" class="btn primary">Upload & Publikasikan APK</button>
+                            </div>
+                        </form>
+
+                        <?php if ($androidReleaseHistory): ?>
+                        <div class="android-release-history">
+                            <div class="feature-toolbar"><div><b>Riwayat Rilis</b><small>Maksimal 20 metadata rilis terakhir disimpan.</small></div></div>
+                            <div class="feature-list">
+                                <?php foreach (array_slice($androidReleaseHistory, 0, 10) as $releaseRow): ?>
+                                <div class="android-release-history-row">
+                                    <div>
+                                        <b>v<?= h((string)($releaseRow['version_name'] ?? '-')) ?></b>
+                                        <small>Build <?= (int)($releaseRow['version_code'] ?? 0) ?> · <?= h(ck_format_bytes((int)($releaseRow['size'] ?? 0))) ?><?= !empty($releaseRow['published_at']) ? ' · ' . h(date('d/m/Y H:i', strtotime((string)$releaseRow['published_at']))) : '' ?></small>
+                                    </div>
+                                    <span><?= h(basename((string)($releaseRow['file_name'] ?? ''))) ?></span>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </section>
                 <section class="finance-tab-panel admin-standalone-panel" data-finance-panel="admin-maintenance" hidden>
@@ -2907,8 +3013,72 @@ if (!function_exists('ck_icon')) {
         username: <?= json_encode((string)$user['username'], JSON_UNESCAPED_UNICODE) ?>,
         isSuperAdmin: <?= authIsSuperAdmin($user) ? 'true' : 'false' ?>,
         syncBase: <?= json_encode($publicBase, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) ?>,
-        appVersion: "credit-card-billing-v50"
+        androidRelease: <?= json_encode($androidRelease, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) ?>,
+        appVersion: "android-release-manager-v58"
     };
+    </script>
+    <script>
+    (function(){
+        var release = window.FINANCE_APP && window.FINANCE_APP.androidRelease;
+        var banner = document.getElementById('androidUpdateBanner');
+        if (!release || !banner) return;
+
+        function versionParts(value) {
+            var main = String(value || '').split(/[-+]/)[0];
+            return main.split('.').map(function(v){ return parseInt(v,10) || 0; });
+        }
+        function compareVersions(a,b) {
+            var aa=versionParts(a), bb=versionParts(b), n=Math.max(aa.length,bb.length,3);
+            for(var i=0;i<n;i++){var x=aa[i]||0,y=bb[i]||0;if(x>y)return 1;if(x<y)return -1;}
+            return 0;
+        }
+        function installedInfo() {
+            try {
+                if (window.AndroidApp && typeof window.AndroidApp.getVersionInfo === 'function') {
+                    var raw=window.AndroidApp.getVersionInfo();
+                    var data=typeof raw==='string'?JSON.parse(raw):raw;
+                    if(data) return {native:true,name:String(data.version_name||''),code:Number(data.version_code||0)};
+                }
+            } catch(_) {}
+            var m=(navigator.userAgent||'').match(/CatatanKeuanganAndroid\\/([0-9.]+)/i);
+            if(m) return {native:true,name:m[1],code:0};
+            return {native:false,name:'',code:0};
+        }
+
+        var installed=installedInfo();
+        var isAndroid=/Android/i.test(navigator.userAgent||'');
+        var newer = installed.native
+            ? ((installed.code>0 && Number(release.version_code||0)>0)
+                ? Number(release.version_code)>installed.code
+                : compareVersions(release.version_name, installed.name)>0)
+            : isAndroid;
+
+        if (!newer) return;
+        var dismissKey='finance_android_release_later_'+String(release.version_code||release.version_name||'latest');
+        try { if (sessionStorage.getItem(dismissKey)==='1') return; } catch(_) {}
+        banner.hidden=false;
+
+        var later=document.getElementById('androidUpdateLater');
+        if(later) later.addEventListener('click',function(){
+            banner.hidden=true;
+            try{sessionStorage.setItem(dismissKey,'1');}catch(_){}
+        });
+    })();
+
+    (function(){
+        try{
+            var requested=(new URLSearchParams(location.search)).get('tab');
+            if(requested && document.querySelector('[data-finance-panel="'+CSS.escape(requested)+'"]')){
+                setTimeout(function(){
+                    if(typeof window.openFinanceCenter==='function') window.openFinanceCenter(requested);
+                    else {
+                        var trigger=document.querySelector('[data-finance-open="'+CSS.escape(requested)+'"]');
+                        if(trigger) trigger.click();
+                    }
+                },180);
+            }
+        }catch(_){}
+    })();
     </script>
     <script src="assets/offline-store.js?v=<?= h($assetVersion) ?>"></script>
     <script>

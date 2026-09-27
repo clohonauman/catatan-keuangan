@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -169,7 +170,7 @@ public class MainActivity extends FragmentActivity {
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
         settings.setUserAgentString(
-                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.4");
+                settings.getUserAgentString() + " CatatanKeuanganAndroid/" + getAppVersionName());
 
         // Cookie/session login tetap tersimpan
         CookieManager cookieManager = CookieManager.getInstance();
@@ -185,6 +186,7 @@ public class MainActivity extends FragmentActivity {
         webView.addJavascriptInterface(new BiometricBridge(), "AndroidBiometric");
         webView.addJavascriptInterface(new OfflineBridge(), "AndroidOffline");
         webView.addJavascriptInterface(new ReminderBridge(), "AndroidReminders");
+        webView.addJavascriptInterface(new AppInfoBridge(), "AndroidApp");
 
         // Debug WebView hanya aktif pada debug build
         boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
@@ -275,6 +277,32 @@ public class MainActivity extends FragmentActivity {
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
+    }
+
+    /**
+     * Ambil versi aplikasi langsung dari PackageManager agar tidak bergantung
+     * pada generated version constants dari Gradle.
+     */
+    private String getAppVersionName() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return info.versionName != null ? info.versionName : "0.0.0";
+        } catch (PackageManager.NameNotFoundException e) {
+            return "0.0.0";
+        }
+    }
+
+    private long getAppVersionCode() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return info.getLongVersionCode();
+            }
+            //noinspection deprecation
+            return info.versionCode;
+        } catch (PackageManager.NameNotFoundException e) {
+            return 0L;
+        }
     }
 
     private void notifyWebBiometricStatus() {
@@ -401,6 +429,18 @@ public class MainActivity extends FragmentActivity {
         biometricPromptVisible = true;
         prompt.authenticate(promptBuilder.build());
     }
+
+    public class AppInfoBridge {
+        @JavascriptInterface
+        public String getVersionInfo() {
+            return "{" +
+                    "\"version_name\":\"" + jsonEscape(getAppVersionName()) + "\"," +
+                    "\"version_code\":" + getAppVersionCode() +
+                    "}";
+        }
+    }
+
+
 
     private class BiometricBridge {
         @JavascriptInterface

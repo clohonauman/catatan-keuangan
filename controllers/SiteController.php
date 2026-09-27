@@ -37,6 +37,7 @@ class SiteController extends Controller
             ? 'Password/PIN berhasil diperbarui. Silakan login kembali.'
             : ((Yii::$app->request->get('device_logout') === '1') ? 'Perangkat ini telah dikeluarkan dari akun. Silakan login kembali jika ingin masuk lagi.' : '');
         if (!empty($_SESSION['flash_notice'])) { $notice=(string)$_SESSION['flash_notice']; unset($_SESSION['flash_notice']); }
+        if (!empty($_SESSION['flash_error'])) { $error=(string)$_SESSION['flash_error']; unset($_SESSION['flash_error']); }
         $mode=(string)Yii::$app->request->get('mode','login');
 
         if (Yii::$app->request->isPost) {

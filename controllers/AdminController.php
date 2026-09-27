@@ -10,6 +10,7 @@ use app\services\LegacyBackupService;
 use app\services\LegacyMigrationService;
 use app\services\AppDataBackupService;
 use app\services\DatabaseBackupService;
+use app\services\AndroidReleaseService;
 use yii\db\Query;
 
 class AdminController extends Controller
@@ -69,6 +70,28 @@ class AdminController extends Controller
         }
         authClearLocalSession();
         return $this->render('restore-complete', ['summary' => $summary]);
+    }
+
+
+    public function actionUploadAndroidRelease()
+    {
+        $u = $this->requireSuperAdmin();
+        try {
+            $file = UploadedFile::getInstanceByName('android_apk');
+            if (!$file) {
+                throw new \RuntimeException('Pilih file APK. Jika file sudah dipilih tetapi tetap gagal, periksa upload_max_filesize dan post_max_size server.');
+            }
+
+            $versionName = trim((string)Yii::$app->request->post('version_name', ''));
+            $versionCode = (int)Yii::$app->request->post('version_code', 0);
+            $notes = trim((string)Yii::$app->request->post('release_notes', ''));
+
+            $release = AndroidReleaseService::publish($file, $versionName, $versionCode, $notes, $u);
+            $_SESSION['flash_notice'] = 'Aplikasi Android v' . $release['version_name'] . ' (build ' . $release['version_code'] . ') berhasil dipublikasikan.';
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = 'Upload aplikasi Android gagal: ' . $e->getMessage();
+        }
+        return $this->redirect(['site/index', 'tab' => 'admin-android']);
     }
 
     public function actionBackupAppData()
