@@ -3461,3 +3461,18 @@ dialog[open]>.feature-toast.in-dialog{
   .balance-credit-summary em{font-size:7px}
   .balance-credit-summary b{font-size:9.5px}
 }
+
+/* ===== V63 - Login loading + anti double submit ===== */
+.login-submit-button{position:relative;display:flex!important;align-items:center;justify-content:center;min-height:44px;overflow:hidden}
+.login-submit-label,.login-submit-loading{transition:opacity .14s ease,transform .14s ease}
+.login-submit-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:9px;opacity:0;transform:translateY(4px);pointer-events:none}
+.login-submit-spinner{width:17px;height:17px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:login-submit-spin .72s linear infinite;flex:0 0 17px}
+.login-submit-button.is-loading .login-submit-label{opacity:0;transform:translateY(-4px)}
+.login-submit-button.is-loading .login-submit-loading{opacity:1;transform:translateY(0)}
+.login-submit-button:disabled{cursor:wait!important;opacity:1!important;filter:none!important}
+.auth-form.is-login-submitting input:not([type=hidden]){cursor:wait;background:#f8fafc;color:#667085}
+.auth-form.is-login-submitting .secret-toggle{pointer-events:none;opacity:.48}
+.auth-form.is-login-submitting .forgot-password-row{pointer-events:none;opacity:.6}
+@keyframes login-submit-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.login-submit-spinner{animation-duration:1.35s}.login-submit-label,.login-submit-loading{transition:none}}
+

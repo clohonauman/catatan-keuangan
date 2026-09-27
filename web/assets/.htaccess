@@ -1,0 +1,16 @@
+Options -Indexes
+
+# Folder ini publik hanya untuk file statis. Script server-side dilarang.
+<FilesMatch "(?i)\.(?:php[0-9]?|phtml|pht|phar|cgi|pl|py|sh|shtml)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
