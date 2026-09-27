@@ -1,10 +1,10 @@
-com.charlie.finance.app-pngs-0 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/generated/res/pngs/debug
-com.charlie.finance.app-resValues-1 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/generated/res/resValues/debug
-com.charlie.finance.app-packageDebugResources-2 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
-com.charlie.finance.app-packageDebugResources-3 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
-com.charlie.finance.app-debug-4 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/build/intermediates/merged_res/debug/mergeDebugResources
-com.charlie.finance.app-debug-5 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/src/debug/res
-com.charlie.finance.app-main-6 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview-android/app/src/main/res
+com.charlie.finance.app-pngs-0 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/build/generated/res/pngs/debug
+com.charlie.finance.app-resValues-1 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/build/generated/res/resValues/debug
+com.charlie.finance.app-packageDebugResources-2 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+com.charlie.finance.app-packageDebugResources-3 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+com.charlie.finance.app-debug-4 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/build/intermediates/merged_res/debug/mergeDebugResources
+com.charlie.finance.app-debug-5 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/debug/res
+com.charlie.finance.app-main-6 /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/res
 com.charlie.finance.app-core-runtime-2.2.0-7 /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/09558f1b9b56a339611f1f3ff5685123/transformed/core-runtime-2.2.0/res
 com.charlie.finance.app-core-ktx-1.15.0-8 /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/0b5c1e5c4c6f6561acb96dc963b2ccbe/transformed/core-ktx-1.15.0/res
 com.charlie.finance.app-lifecycle-viewmodel-ktx-2.6.2-9 /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1c5e27c2a66d1c0846db20e772dabbe6/transformed/lifecycle-viewmodel-ktx-2.6.2/res

@@ -53,6 +53,10 @@ public class MainActivity extends FragmentActivity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final String SECURITY_PREFS = "catatan_keuangan_security";
     private static final String PREF_BIOMETRIC_ENABLED = "biometric_enabled";
+    private static final String OFFLINE_PREFS = "catatan_keuangan_offline";
+    private static final String PREF_OFFLINE_READY = "offline_ready";
+    private static final String PREF_OFFLINE_USER_ID = "offline_user_id";
+    private static final String PREF_OFFLINE_READY_AT = "offline_ready_at";
     private static final long BIOMETRIC_RELOCK_AFTER_MS = 30_000L;
     private static final int BIOMETRIC_MODE_UNLOCK = 1;
     private static final int BIOMETRIC_MODE_ENABLE = 2;
@@ -66,6 +70,8 @@ public class MainActivity extends FragmentActivity {
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
     private SharedPreferences securityPrefs;
+    private SharedPreferences offlinePrefs;
+    private boolean offlineBootRetryAttempted = false;
     private FrameLayout biometricLockOverlay;
     private TextView biometricLockMessage;
     private Button biometricRetryButton;
@@ -85,6 +91,7 @@ public class MainActivity extends FragmentActivity {
         biometricRetryButton = findViewById(R.id.biometricRetryButton);
         biometricUsePinButton = findViewById(R.id.biometricUsePinButton);
         securityPrefs = getSharedPreferences(SECURITY_PREFS, MODE_PRIVATE);
+        offlinePrefs = getSharedPreferences(OFFLINE_PREFS, MODE_PRIVATE);
 
         configureWebView();
         configureBiometricGate();
@@ -94,7 +101,7 @@ public class MainActivity extends FragmentActivity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
-            webView.loadUrl(APP_URL);
+            loadInitialApp();
         }
     }
 
@@ -105,7 +112,9 @@ public class MainActivity extends FragmentActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setCacheMode(isConnected()
+                ? WebSettings.LOAD_DEFAULT
+                : WebSettings.LOAD_CACHE_ELSE_NETWORK);
         settings.setLoadsImagesAutomatically(true);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(false);
@@ -143,7 +152,7 @@ public class MainActivity extends FragmentActivity {
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
         settings.setUserAgentString(
-                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.2");
+                settings.getUserAgentString() + " CatatanKeuanganAndroid/1.3");
 
         // Cookie/session login tetap tersimpan
         CookieManager cookieManager = CookieManager.getInstance();
@@ -157,6 +166,7 @@ public class MainActivity extends FragmentActivity {
         webView.setWebChromeClient(new FinanceWebChromeClient());
         webView.setDownloadListener(new FinanceDownloadListener());
         webView.addJavascriptInterface(new BiometricBridge(), "AndroidBiometric");
+        webView.addJavascriptInterface(new OfflineBridge(), "AndroidOffline");
 
         // Debug WebView hanya aktif pada debug build
         boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
@@ -397,13 +407,75 @@ public class MainActivity extends FragmentActivity {
         }
     }
 
+    private class OfflineBridge {
+        @JavascriptInterface
+        public void markReady(String userId) {
+            if (offlinePrefs == null)
+                return;
+            offlinePrefs.edit()
+                    .putBoolean(PREF_OFFLINE_READY, true)
+                    .putString(PREF_OFFLINE_USER_ID, userId == null ? "" : userId)
+                    .putLong(PREF_OFFLINE_READY_AT, System.currentTimeMillis())
+                    .apply();
+        }
+
+        @JavascriptInterface
+        public void clearReady() {
+            if (offlinePrefs == null)
+                return;
+            offlinePrefs.edit().clear().apply();
+        }
+
+        @JavascriptInterface
+        public boolean isReady() {
+            return isOfflineReady();
+        }
+    }
+
+    private boolean isOfflineReady() {
+        return offlinePrefs != null && offlinePrefs.getBoolean(PREF_OFFLINE_READY, false);
+    }
+
+    private void setOfflineAwareCacheMode(boolean online) {
+        if (webView != null) {
+            webView.getSettings().setCacheMode(
+                    online ? WebSettings.LOAD_DEFAULT : WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                ServiceWorkerController.getInstance()
+                        .getServiceWorkerWebSettings()
+                        .setCacheMode(online ? WebSettings.LOAD_DEFAULT : WebSettings.LOAD_CACHE_ELSE_NETWORK);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void loadInitialApp() {
+        boolean online = isConnected();
+        setOfflineAwareCacheMode(online);
+        offlineBootRetryAttempted = false;
+
+        if (!online && !isOfflineReady()) {
+            showOfflineFallback();
+            return;
+        }
+
+        // Tetap gunakan origin HTTPS saat offline. Service Worker + Cache Storage
+        // kemudian dapat membuka shell akun dan IndexedDB yang sama seperti saat online.
+        showingLocalOfflinePage = false;
+        webView.loadUrl(APP_URL);
+    }
+
     private void configureServiceWorker() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             ServiceWorkerWebSettings sw = ServiceWorkerController
                     .getInstance()
                     .getServiceWorkerWebSettings();
 
-            sw.setCacheMode(WebSettings.LOAD_DEFAULT);
+            sw.setCacheMode(isConnected()
+                    ? WebSettings.LOAD_DEFAULT
+                    : WebSettings.LOAD_CACHE_ELSE_NETWORK);
             sw.setAllowContentAccess(true);
             sw.setAllowFileAccess(false);
             sw.setBlockNetworkLoads(false);
@@ -422,16 +494,27 @@ public class MainActivity extends FragmentActivity {
             @Override
             public void onAvailable(Network network) {
                 runOnUiThread(() -> {
+                    setOfflineAwareCacheMode(true);
+                    offlineBootRetryAttempted = false;
                     if (showingLocalOfflinePage) {
                         showingLocalOfflinePage = false;
                         webView.loadUrl(APP_URL);
                     } else {
-                        // Trigger event online pada aplikasi web agar antrean
-                        // IndexedDB/offline sync segera diproses.
+                        // Trigger event online agar queue IndexedDB langsung diproses.
                         webView.evaluateJavascript(
                                 "window.dispatchEvent(new Event('online'));",
                                 null);
                     }
+                });
+            }
+
+            @Override
+            public void onLost(Network network) {
+                runOnUiThread(() -> {
+                    setOfflineAwareCacheMode(false);
+                    webView.evaluateJavascript(
+                            "window.dispatchEvent(new Event('offline'));",
+                            null);
                 });
             }
         };
@@ -476,6 +559,11 @@ public class MainActivity extends FragmentActivity {
 
             progressBar.setVisibility(View.GONE);
 
+            if (url != null && url.startsWith(APP_URL)) {
+                offlineBootRetryAttempted = false;
+                showingLocalOfflinePage = false;
+            }
+
             // Pastikan cookie/session tersimpan ke disk
             CookieManager.getInstance().flush();
             notifyWebBiometricStatus();
@@ -489,8 +577,17 @@ public class MainActivity extends FragmentActivity {
             super.onReceivedError(view, request, error);
 
             if (request.isForMainFrame() && !isConnected()) {
-                // Service Worker mendapat kesempatan lebih dulu.
-                // Fallback lokal dipakai bila halaman domain tidak tersedia.
+                setOfflineAwareCacheMode(false);
+
+                if (isOfflineReady() && !offlineBootRetryAttempted) {
+                    // Beri Service Worker/WebView cache satu kesempatan lagi sebelum
+                    // meninggalkan origin HTTPS. Origin harus dipertahankan agar IndexedDB
+                    // akun tetap dapat dibaca pada cold-start offline.
+                    offlineBootRetryAttempted = true;
+                    view.postDelayed(() -> view.loadUrl(APP_URL), 180);
+                    return;
+                }
+
                 showOfflineFallback();
             }
         }
@@ -829,18 +926,21 @@ public class MainActivity extends FragmentActivity {
         }
         backgroundedAt = 0L;
 
-        if (isConnected()
-                && showingLocalOfflinePage) {
+        boolean online = isConnected();
+        setOfflineAwareCacheMode(online);
 
+        if (online && showingLocalOfflinePage) {
             showingLocalOfflinePage = false;
+            offlineBootRetryAttempted = false;
             webView.loadUrl(APP_URL);
-
-        } else if (isConnected()) {
-
-            // Membantu queue IndexedDB memicu auto-sync
-            // setelah aplikasi kembali aktif.
+        } else if (online) {
+            // Membantu queue IndexedDB memicu auto-sync setelah aplikasi kembali aktif.
             webView.evaluateJavascript(
                     "window.dispatchEvent(new Event('online'));",
+                    null);
+        } else if (!showingLocalOfflinePage && isOfflineReady()) {
+            webView.evaluateJavascript(
+                    "window.dispatchEvent(new Event('offline'));",
                     null);
         }
     }
