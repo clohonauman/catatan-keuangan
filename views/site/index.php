@@ -779,7 +779,7 @@ if (!function_exists('ck_icon')) {
             <?php else: ?>
             <h2>Login</h2>
             <p class="muted">Masuk dengan username dan password. Setelah itu perangkat ini bisa menggunakan PIN.</p>
-            <form method="post" class="auth-form"><?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?><input type="hidden" name="action" value="login">
+            <form method="post" class="auth-form" id="loginForm" data-login-form><?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?><input type="hidden" name="action" value="login">
                 <label>Username</label><input name="username" required autocomplete="username">
                 <label>Password</label>
                 <div class="secret-field">
@@ -788,7 +788,10 @@ if (!function_exists('ck_icon')) {
                         title="Lihat password"></button>
                 </div>
                 <div class="forgot-password-row"><a href="?mode=forgot">Lupa password / PIN?</a></div>
-                <button class="btn primary wide">Login</button>
+                <button class="btn primary wide login-submit-button" id="loginSubmitButton" type="submit">
+                    <span class="login-submit-label">Login</span>
+                    <span class="login-submit-loading" aria-hidden="true"><span class="login-submit-spinner"></span><span>Memproses...</span></span>
+                </button>
             </form>
             <p class="auth-switch">Belum punya akun? <a href="?mode=register">Buat akun</a></p>
             <?php endif; ?>
@@ -3300,6 +3303,54 @@ if (!function_exists('ck_icon')) {
                 sync();
             });
             sync();
+        });
+    })();
+    </script>
+
+
+
+    <script>
+    (function() {
+        var form = document.querySelector('[data-login-form]');
+        if (!form) return;
+
+        var button = form.querySelector('#loginSubmitButton');
+        var submitted = false;
+
+        function setSubmitting(active) {
+            submitted = !!active;
+            form.classList.toggle('is-login-submitting', submitted);
+            form.setAttribute('aria-busy', submitted ? 'true' : 'false');
+
+            if (button) {
+                button.disabled = submitted;
+                button.classList.toggle('is-loading', submitted);
+                button.setAttribute('aria-disabled', submitted ? 'true' : 'false');
+            }
+
+            form.querySelectorAll('input:not([type="hidden"])').forEach(function(input) {
+                input.readOnly = submitted;
+            });
+            form.querySelectorAll('[data-secret-toggle]').forEach(function(toggle) {
+                toggle.disabled = submitted;
+            });
+        }
+
+        form.addEventListener('submit', function(event) {
+            if (submitted) {
+                event.preventDefault();
+                return false;
+            }
+
+            // Submit event berjalan setelah validasi native browser lolos.
+            // Kunci langsung sebelum request navigasi agar klik / Enter berulang
+            // pada jaringan lambat tidak membuat request login ganda.
+            setSubmitting(true);
+        });
+
+        // Saat kembali melalui back/forward cache, jangan biarkan tombol tetap terkunci.
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) setSubmitting(false);
         });
     })();
     </script>
