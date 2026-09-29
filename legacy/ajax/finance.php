@@ -12,10 +12,23 @@ function financeFail($msg,$code=400){http_response_code($code);echo json_encode(
 function financeConfirmationReply(array $pending): string {
     $lines=['Periksa dulu sebelum disimpan:'];
     foreach((array)($pending['drafts']??[]) as $i=>$t){
-        $type=(string)($t['type']??'expense');
-        $label=['expense'=>'Pengeluaran','income'=>'Pemasukan','transfer'=>'Transfer Antar Dompet'][$type]??'Transaksi';
+        $receivableAction=(string)($t['receivable_action']??'');
         $prefix=count($pending['drafts'])>1?($i+1).'. ':'';
         $date=date('d/m/Y',strtotime((string)($t['transaction_date']??date('Y-m-d'))));
+        if(in_array($receivableAction,['lend','repayment'],true)){
+            $name=(string)($t['receivable_borrower_name']??'Peminjam');
+            $wallet=financeWalletById((int)($t['wallet_id']??0));
+            if($receivableAction==='lend'){
+                $lines[]=$prefix.'Piutang · '.$name.' meminjam '.rupiah((int)($t['amount']??0)).' · '.$date.' · dari '.($wallet['name']??'Pilih dompet').'.';
+            } else {
+                $target=(int)($t['receivable_lend_id']??0)>0?'hutang tertentu':'akumulasi hutang (FIFO)';
+                $lines[]=$prefix.'Pelunasan · '.$name.' membayar '.rupiah((int)($t['amount']??0)).' · '.$date.' · masuk ke '.($wallet['name']??'Pilih dompet').' · '.$target.'.';
+            }
+            continue;
+        }
+
+        $type=(string)($t['type']??'expense');
+        $label=['expense'=>'Pengeluaran','income'=>'Pemasukan','transfer'=>'Transfer Antar Dompet'][$type]??'Transaksi';
         if($type==='transfer'){
             $from=financeWalletById((int)($t['from_wallet_id']??$t['wallet_id']??0));
             $to=financeWalletById((int)($t['to_wallet_id']??0));
@@ -33,9 +46,10 @@ function financeConfirmationReply(array $pending): string {
         }
     }
     if(!empty($pending['warning']))$lines[]='⚠️ '.$pending['warning'];
-    $lines[]='Jenis transaksi, nominal, dan dompet masih bisa diubah pada kartu konfirmasi sebelum disimpan.';
+    $lines[]='Periksa detail pada kartu konfirmasi sebelum menyimpan. Untuk pelunasan, Anda dapat memilih hutang tertentu atau Akumulasi semua hutang.';
     return implode("\n",$lines);
 }
+
 function financeAdaptiveLearningAck(): string {
     if(!function_exists('adaptiveLearningLastResult')) return '';
     $r=adaptiveLearningLastResult();
@@ -119,6 +133,21 @@ try {
     if(!$attachment && $pendingBefore && preg_match('/^(?:batal|batalkan|jangan|tidak jadi|gak jadi|nda jadi|nyanda jadi)[.!]?$/u',norm($message))){
         financeClearPendingChatConfirmation();$reply='Baik, transaksi dibatalkan dan tidak mengubah saldo.';addChat('assistant',$reply);
         $response=financeResponse($reply,[],[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
+    }
+
+    // V68: perintah piutang lewat Asisten Keuangan selalu masuk kartu konfirmasi khusus.
+    if($message!==''){
+        $receivableDraft=financeReceivableParseChatDraft($rawMessage!==''?$rawMessage:$message);
+        if(is_array($receivableDraft)){
+            if(!empty($receivableDraft['error'])){
+                $reply='Piutang belum dicatat. '.(string)$receivableDraft['error'];addChat('assistant',$reply);
+                $response=financeResponse($reply,[],[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
+            }
+            if($attachment)$receivableDraft['attachment']=$attachment;
+            $pending=financeSetPendingChatConfirmation([$receivableDraft],$message,'');
+            $reply=financeConfirmationReply($pending);addChat('assistant',$reply);
+            $response=financeResponse($reply,[],[],['normalized_message'=>$message]);offlineOpRemember($input,$response);echo json_encode($response,JSON_UNESCAPED_UNICODE);exit;
+        }
     }
 
     if(!$attachment&&$message!==''){

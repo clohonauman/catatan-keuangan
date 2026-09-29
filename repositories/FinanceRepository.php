@@ -248,11 +248,17 @@ final class FinanceRepository
             foreach(['source','bill_id'] as $k)if(isset($t[$k])&&$t[$k]!==''&&$t[$k]!==null)$x[$k]=$k==='bill_id'?(int)$t[$k]:$t[$k];
             if(isset($t['attachment'])&&is_array($t['attachment'])&&!empty($t['attachment']['file']))$x['attachment']=$t['attachment'];
             if(isset($t['ocr'])&&is_array($t['ocr']))$x['ocr']=$t['ocr'];
+            // V67: metadata piutang disimpan di extra_json transaksi agar transfer
+            // tetap menjadi transfer murni (tidak mengubah total income/expense).
+            $extraTx=[];
+            foreach(['receivable_borrower_key','receivable_borrower_name','receivable_action','receivable_due_date','receivable_lend_id'] as $k){
+                if(array_key_exists($k,$t) && $t[$k]!=='' && $t[$k]!==null){$extraTx[$k]=$t[$k];$x[$k]=$t[$k];}
+            }
             self::db()->createCommand()->insert('{{%finance_transaction}}',[
                 'user_id'=>$userId,'legacy_id'=>$id,'type'=>$type,'category'=>$x['category'],'amount'=>$amount,'note'=>$x['note'],'transaction_date'=>$x['transaction_date'],
                 'wallet_id'=>$x['wallet_id']??null,'from_wallet_id'=>$x['from_wallet_id']??null,'to_wallet_id'=>$x['to_wallet_id']??null,'spending_kind'=>$x['spending_kind']??null,
                 'bill_id'=>$x['bill_id']??null,'source'=>$x['source']??null,'attachment_json'=>isset($x['attachment'])?self::jenc($x['attachment']):null,'ocr_json'=>isset($x['ocr'])?self::jenc($x['ocr']):null,
-                'created_at'=>$now,'updated_at'=>null,'extra_json'=>null
+                'created_at'=>$now,'updated_at'=>null,'extra_json'=>$extraTx?self::jenc($extraTx):null
             ])->execute();
             self::db()->createCommand()->insert('{{%audit_log}}',[
                 'user_id'=>$userId,'legacy_id'=>$auditId,'action'=>'create','entity_type'=>'transaction','entity_id'=>$id,'label'=>'Transaksi dibuat','before_json'=>null,'after_json'=>self::jenc($x),'undoable'=>0,'undone_at'=>null,'created_at'=>$now,'extra_json'=>null

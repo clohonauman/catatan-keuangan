@@ -910,6 +910,11 @@ if (!function_exists('ck_icon')) {
                 <span><b>Pemberitahuan</b><small>Login, pengumuman & peringatan aplikasi</small></span>
                 <span class="user-notification-badge" id="sidebarNotificationBadge" hidden>0</span>
             </button>
+            <button type="button" class="sidebar-menu-item" id="openNotificationSettings">
+                <span class="sidebar-menu-icon"><?= ck_icon('settings') ?></span>
+                <span><b>Pengaturan Notifikasi</b><small>Pilih aplikasi saja atau aplikasi + email</small></span>
+                <span class="sidebar-arrow">›</span>
+            </button>
             <button type="button" class="sidebar-menu-item" id="openBudget">
                 <span class="sidebar-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 3a9 9 0 1 0 9 9" />
@@ -926,6 +931,11 @@ if (!function_exists('ck_icon')) {
                         <path d="M16 12h5M17.5 12h.01" />
                     </svg></span>
                 <span><b>Atur saldo awal</b><small>Ubah saldo dasar akun</small></span>
+                <span class="sidebar-arrow">›</span>
+            </button>
+            <button type="button" class="sidebar-menu-item" data-finance-open="receivables">
+                <span class="sidebar-menu-icon"><?= ck_icon('users') ?></span>
+                <span><b>Piutang / Memberi Hutang</b><small>Catat pinjaman, pelunasan & rekap per orang</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
             <button type="button" class="sidebar-menu-item" id="openEmailSecurity">
@@ -1207,7 +1217,7 @@ if (!function_exists('ck_icon')) {
         <section class="grid">
             <article class="panel chat-card mobile-view active" id="chatPanel">
                 <div class="panel-head chat-panel-head">
-                    <b>Asisten Keuangan Online</b>
+                    <div class="chat-title-wrap"><b>Asisten Keuangan</b></div>
                     <div class="chat-head-actions">
                         <button type="button" class="clear-chat-btn" id="clearChatsBtn" hidden
                             aria-label="Hapus semua chat" title="Hapus semua chat">
@@ -1262,13 +1272,13 @@ if (!function_exists('ck_icon')) {
                             </button>
                             <input type="file" id="galleryPhoto" accept="image/jpeg,image/png,image/webp" hidden>
                             <input type="file" id="cameraPhoto" accept="image/*" capture="environment" hidden>
-                            <input id="message" placeholder="Tulis transaksi atau keterangan foto..." autocomplete="off"
+                            <input id="message" placeholder="Tulis transaksi, pertanyaan, atau cerita..." autocomplete="off"
                                 enterkeyhint="send">
                             <button class="btn primary send-btn" id="sendBtn" aria-label="Kirim"><span
                                     class="send-label">Kirim</span><span class="send-icon"><?= ck_icon('send') ?></span></button>
                         </form>
                     </div>
-                    <small>Foto nota dipindai di perangkat menggunakan OCR gratis. Data akun
+                    <small>Foto nota dipindai di perangkat menggunakan OCR gratis. Percakapan natural diproses lokal tanpa GPT/API AI berbayar. Data akun
                         <b><?= h($user['username']) ?></b> tetap tersimpan terpisah dan terenkripsi.</small>
                 </div>
             </article>
@@ -1536,7 +1546,7 @@ if (!function_exists('ck_icon')) {
             <div class="modal-head finance-center-head">
                 <div>
                     <h3 id="financeCenterTitle">Pusat Keuangan</h3>
-                    <p class="modal-subtitle" id="financeCenterSubtitle">Kelola dompet, budget, tagihan, target, analitik, backup dan aplikasi.</p>
+                    <p class="modal-subtitle" id="financeCenterSubtitle">Kelola piutang, dompet, budget, tagihan, target, analitik, backup dan aplikasi.</p>
                 </div>
                 <button class="icon-btn" type="button" id="closeFinanceCenter" aria-label="Tutup">×</button>
             </div>
@@ -1544,6 +1554,7 @@ if (!function_exists('ck_icon')) {
                 <button data-finance-tab="premium"><span class="premium-tab-icon"><?= ck_icon('crown') ?></span>Premium</button>
                 <button data-finance-tab="analytics" data-premium-tab="1">Analitik</button>
                 <button data-finance-tab="wallets" data-premium-tab="1">Dompet</button>
+                <button data-finance-tab="receivables">Piutang</button>
                 <button data-finance-tab="budgets" data-premium-tab="1">Budget</button>
                 <button data-finance-tab="bills" data-premium-tab="1">Tagihan</button>
                 <button data-finance-tab="recurring" data-premium-tab="1">Berulang</button>
@@ -1637,7 +1648,7 @@ if (!function_exists('ck_icon')) {
 
                     <div class="premium-basic-note">
                         <b>Akun Free tetap dapat menggunakan fitur dasar.</b> Chat pencatatan transaksi, kalkulator,
-                        saldo, transaksi, batas harian, foto nota, dan akses aplikasi tetap tersedia. Fitur lanjutan
+                        saldo, transaksi, batas harian, piutang/memberi hutang, foto nota, dan akses aplikasi tetap tersedia. Fitur lanjutan
                         seperti analitik, banyak dompet, budget kategori, tagihan, transaksi berulang, target menabung,
                         export, dan backup memerlukan Premium. Edit transaksi dasar tetap tersedia untuk semua akun.
                     </div>
@@ -1696,6 +1707,109 @@ if (!function_exists('ck_icon')) {
                         </div>
                     </div>
                     <div class="feature-list" id="walletList"></div>
+                </section>
+                <section class="finance-tab-panel receivable-panel" data-finance-panel="receivables" hidden>
+                    <div class="receivable-hero">
+                        <div>
+                            <span class="receivable-kicker">PIUTANG PRIBADI</span>
+                            <h3>Memberi Hutang & Pelunasan</h3>
+                            <p>Uang yang dipinjamkan mengurangi saldo dompet, tetapi tidak dihitung sebagai pengeluaran. Pelunasan menambah saldo kembali tanpa dianggap pemasukan baru.</p>
+                        </div>
+                        <div class="receivable-hero-actions">
+                            <button type="button" class="btn secondary" id="downloadReceivableCsv">CSV</button>
+                            <button type="button" class="btn primary" id="downloadReceivablePdf">Unduh PDF</button>
+                        </div>
+                    </div>
+
+                    <div class="receivable-summary-grid" id="receivableSummaryGrid">
+                        <div class="receivable-summary-card"><span>Total diberikan</span><b>Rp0</b></div>
+                        <div class="receivable-summary-card"><span>Total dibayar</span><b>Rp0</b></div>
+                        <div class="receivable-summary-card emphasis"><span>Sisa piutang</span><b>Rp0</b></div>
+                        <div class="receivable-summary-card"><span>Peminjam aktif</span><b>0 orang</b></div>
+                    </div>
+
+                    <div class="receivable-mobile-mode" role="tablist" aria-label="Mode pencatatan piutang">
+                        <button type="button" class="is-active" data-receivable-form-mode="lend">Beri Hutang</button>
+                        <button type="button" data-receivable-form-mode="repayment">Pelunasan</button>
+                    </div>
+                    <div class="two-col-feature receivable-form-grid">
+                        <div class="feature-card receivable-form-card" data-receivable-form="lend">
+                            <div class="feature-toolbar">
+                                <div><b>Berikan Hutang</b><small>Catat dana yang keluar ke peminjam.</small></div>
+                            </div>
+                            <label>Peminjam
+                                <select id="receivableLendBorrowerSelect">
+                                    <option value="__new__">+ Tambah orang baru</option>
+                                </select>
+                                <small>Pilih orang yang sudah pernah meminjam agar seluruh hutangnya tetap tergabung dalam satu rekap.</small>
+                            </label>
+                            <label id="receivableLendNewBorrowerWrap">Nama orang baru
+                                <input id="receivableLendBorrower" maxlength="80" placeholder="Masukkan nama peminjam" autocomplete="off">
+                                <small>Jika nama ini ternyata sudah pernah ada, sistem otomatis memakai data peminjam lama.</small>
+                            </label>
+                            <label>Nominal<input type="number" id="receivableLendAmount" min="1" step="1000" placeholder="100000" inputmode="numeric"></label>
+                            <label>Dari dompet / rekening<select id="receivableLendWallet"></select></label>
+                            <div class="receivable-date-grid">
+                                <label>Tanggal<input type="date" id="receivableLendDate"></label>
+                                <label>Jatuh tempo <small>(opsional)</small><input type="date" id="receivableLendDueDate"></label>
+                            </div>
+                            <label>Keterangan<textarea id="receivableLendNote" rows="2" maxlength="500" placeholder="Opsional, mis. kebutuhan mendesak"></textarea></label>
+                            <label class="receivable-photo-field">Bukti foto <small>(opsional, JPG/PNG/WebP maks. 8 MB)</small>
+                                <input type="file" id="receivableLendPhoto" accept="image/jpeg,image/png,image/webp">
+                            </label>
+                            <button type="button" class="btn primary wide" id="saveReceivableLend">Catat Pemberian Hutang</button>
+                        </div>
+
+                        <div class="feature-card receivable-form-card" data-receivable-form="repayment">
+                            <div class="feature-toolbar">
+                                <div><b>Catat Pelunasan</b><small>Bisa sebagian atau langsung lunas.</small></div>
+                            </div>
+                            <label>Peminjam<select id="receivableRepayBorrower"><option value="">Pilih peminjam</option></select></label>
+                            <div class="receivable-outstanding-hint" id="receivableRepayOutstanding">Pilih peminjam untuk melihat sisa hutang.</div>
+                            <label>Pelunasan untuk
+                                <select id="receivableRepayLend"><option value="0">Akumulasi semua hutang (FIFO)</option></select>
+                                <small>Pilih hutang tertentu atau gunakan akumulasi agar pembayaran dialokasikan ke hutang tertua.</small>
+                            </label>
+                            <label>Nominal pelunasan<input type="number" id="receivableRepayAmount" min="1" step="1000" placeholder="50000" inputmode="numeric"></label>
+                            <label>Masuk ke dompet / rekening<select id="receivableRepayWallet"></select></label>
+                            <label>Tanggal pelunasan<input type="date" id="receivableRepayDate"></label>
+                            <label>Keterangan<textarea id="receivableRepayNote" rows="2" maxlength="500" placeholder="Opsional"></textarea></label>
+                            <label class="receivable-photo-field">Bukti foto <small>(opsional, JPG/PNG/WebP maks. 8 MB)</small>
+                                <input type="file" id="receivableRepayPhoto" accept="image/jpeg,image/png,image/webp">
+                            </label>
+                            <button type="button" class="btn primary wide" id="saveReceivableRepay">Catat Pelunasan</button>
+                        </div>
+                    </div>
+
+                    <div class="feature-card receivable-filter-card">
+                        <div class="feature-toolbar">
+                            <div><b>Filter Rekap & PDF</b><small>Filter yang sama dipakai untuk tampilan riwayat dan file PDF.</small></div>
+                            <button type="button" class="secondary-btn" id="resetReceivableFilters">Reset</button>
+                        </div>
+                        <div class="receivable-filter-grid">
+                            <label>Peminjam<select id="receivableFilterBorrower"><option value="">Semua peminjam</option></select></label>
+                            <label>Status<select id="receivableFilterStatus"><option value="all">Semua status</option><option value="active">Belum lunas</option><option value="overdue">Lewat jatuh tempo</option><option value="paid">Sudah lunas</option></select></label>
+                            <label>Jenis<select id="receivableFilterAction"><option value="all">Semua transaksi</option><option value="lend">Pemberian hutang</option><option value="repayment">Pelunasan</option></select></label>
+                            <label>Dari tanggal<input type="date" id="receivableFilterFrom"></label>
+                            <label>Sampai tanggal<input type="date" id="receivableFilterTo"></label>
+                            <label>Dompet<select id="receivableFilterWallet"><option value="0">Semua dompet</option></select></label>
+                        </div>
+                        <div class="receivable-filter-status" id="receivableFilterStatusText">Menampilkan seluruh data piutang.</div>
+                    </div>
+
+                    <div class="feature-card receivable-recap-card">
+                        <div class="feature-toolbar receivable-list-toolbar">
+                            <div><b>Rekap per Peminjam</b><small>Total pinjaman, pelunasan, sisa hutang, dan rincian hutang yang masih terbuka.</small></div>
+                        </div>
+                        <div class="receivable-people-list" id="receivablePeopleList"><div class="empty compact">Belum ada data piutang.</div></div>
+                    </div>
+
+                    <div class="feature-card receivable-history-card">
+                        <div class="feature-toolbar receivable-list-toolbar">
+                            <div><b>Riwayat Piutang</b><small>Riwayat mengikuti filter Rekap & PDF di atas.</small></div>
+                        </div>
+                        <div class="receivable-history-list" id="receivableHistoryList"><div class="empty compact">Belum ada riwayat.</div></div>
+                    </div>
                 </section>
                 <section class="finance-tab-panel" data-finance-panel="budgets" hidden>
                     <div class="two-col-feature">
@@ -1843,25 +1957,10 @@ if (!function_exists('ck_icon')) {
 
                             <hr style="margin:18px 0;border:0;border-top:1px solid rgba(127,127,127,.2)">
 
-                            <h4>Notifikasi</h4>
-                            <button class="btn secondary" id="requestNotifyBtn" type="button">Izinkan
-                                Notifikasi</button>
-                            <label class="toggle-line"><input type="checkbox" id="notifyEnabled"> Aktifkan peringatan
-                                browser</label>
-                            <label class="toggle-line"><input type="checkbox" id="notifyDaily"> Batas harian</label>
-                            <label class="toggle-line"><input type="checkbox" id="notifyBills"> Tagihan jatuh
-                                tempo</label>
-                            <label class="toggle-line"><input type="checkbox" id="notifyLow"> Saldo rendah</label>
-                            <label class="toggle-line"><input type="checkbox" id="notifyReconciliation"> Rekonsiliasi transaksi harian</label>
-                            <label class="toggle-line"><input type="checkbox" id="notifyEmailEnabled"> Kirim notifikasi
-                                juga ke email terverifikasi</label>
-                            <label>Ambang saldo rendah<input type="number" id="notifyLowThreshold" min="0"
-                                    step="1000"></label>
-                            <button class="btn primary" id="saveNotificationSettings" type="button">Simpan
-                                Notifikasi</button>
-                            <small>Peringatan browser bekerja saat aplikasi sedang dibuka/aktif. Jika email diaktifkan,
-                                peringatan yang sama juga dikirim ke email terverifikasi dan dideduplikasi agar tidak
-                                terkirim berulang kali.</small>
+                            <div class="notification-settings-shortcut">
+                                <div><b>Pengaturan Notifikasi</b><small>Atur peringatan dan pilih apakah notifikasi cukup melalui aplikasi atau juga dikirim ke email.</small></div>
+                                <button class="btn secondary" id="openNotificationSettingsFromBackup" type="button">Atur Notifikasi</button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -2697,6 +2796,62 @@ if (!function_exists('ck_icon')) {
                         tersebut lalu ubah password untuk keamanan tambahan.</div>
                 </div>
             </section>
+        </div>
+    </dialog>
+
+    <dialog id="notificationSettingsModal" class="notification-settings-dialog" aria-labelledby="notificationSettingsTitle">
+        <div class="modal-card notification-settings-card">
+            <div class="modal-head">
+                <div>
+                    <h3 id="notificationSettingsTitle">Pengaturan Notifikasi</h3>
+                    <p class="modal-subtitle">Atur peringatan otomatis khusus untuk akun Anda.</p>
+                </div>
+                <button class="icon-btn" type="button" id="closeNotificationSettings" aria-label="Tutup">×</button>
+            </div>
+
+            <div class="notification-master-row">
+                <div><b>Notifikasi otomatis</b><small>Peringatan batas harian, tagihan, saldo rendah, dan rekonsiliasi.</small></div>
+                <label class="switch-control"><input type="checkbox" id="notifyEnabled"><span></span></label>
+            </div>
+
+            <div class="notification-settings-section" id="notificationSettingsOptions">
+                <label>Saluran Notifikasi
+                    <select id="notificationDeliveryMode">
+                        <option value="app">Hanya melalui aplikasi</option>
+                        <option value="app_email" <?= $emailStatus['verified'] ? '' : 'disabled' ?>>Aplikasi + Email</option>
+                    </select>
+                </label>
+                <small class="notification-email-hint" id="notificationEmailHint">
+                    <?php if ($emailStatus['verified']): ?>Email terverifikasi: <b><?= h($emailStatus['masked']) ?></b>. Email notifikasi dapat diaktifkan atau dinonaktifkan kapan saja.
+                    <?php else: ?>Untuk memakai saluran email, verifikasi email terlebih dahulu melalui menu <b>Email &amp; Keamanan</b>.<?php endif; ?>
+                </small>
+
+                <div class="notification-channel-note">
+                    <b>Notifikasi aplikasi tetap menjadi saluran utama.</b>
+                    <small>Mode “Aplikasi + Email” mengirim salinan notifikasi ke email terverifikasi. Email OTP, verifikasi, dan pemulihan akun tidak terpengaruh pengaturan ini.</small>
+                </div>
+
+                <div class="notification-type-grid">
+                    <label class="toggle-line"><input type="checkbox" id="notifyDaily"> Batas harian</label>
+                    <label class="toggle-line"><input type="checkbox" id="notifyBills"> Tagihan jatuh tempo & kartu kredit</label>
+                    <label class="toggle-line"><input type="checkbox" id="notifyLow"> Saldo rendah</label>
+                    <label class="toggle-line"><input type="checkbox" id="notifyReconciliation"> Rekonsiliasi transaksi harian</label>
+                </div>
+
+                <label>Ambang saldo rendah
+                    <input type="number" id="notifyLowThreshold" min="0" step="1000" inputmode="numeric">
+                </label>
+
+                <div class="notification-device-row">
+                    <div><b>Notifikasi perangkat</b><small>Izinkan browser/PWA menampilkan notifikasi sistem ketika aplikasi aktif.</small></div>
+                    <button class="btn secondary" id="requestNotifyBtn" type="button">Izinkan Notifikasi</button>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn secondary" id="cancelNotificationSettings" type="button">Batal</button>
+                <button class="btn primary" id="saveNotificationSettings" type="button">Simpan Pengaturan</button>
+            </div>
         </div>
     </dialog>
 

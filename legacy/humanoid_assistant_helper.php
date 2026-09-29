@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__.'/local_conversation_helper.php';
+
 /**
  * Conversational layer for the native/rule-based finance assistant.
  *
@@ -486,7 +488,8 @@ function humanoidHelpReply(string $message): ?string {
         ."• Budget: “sisa budget makan berapa?”\n"
         ."• Dompet: “saldo BCA yang benar-benar bisa dipakai berapa?”\n"
         ."• Tagihan: “cicilan apa yang belum lunas?”\n"
-        ."• Target: “progress target tabungan saya”.";
+        ."• Target: “progress target tabungan saya”.\n"
+        ."• Ngobrol santai: ceritakan kegiatan, kerjaan, teman, rencana, atau hal yang lagi kepikiran. Saya menjaga konteks beberapa pesan terakhir secara lokal.";
 }
 
 function humanoidSmallTalkReply(string $message): ?string {
@@ -513,6 +516,20 @@ function humanoidSmallTalkReply(string $message): ?string {
  * transaction extractor, especially hypothetical purchase questions.
  */
 function humanoidDirectReply(string $message): ?string {
+    // V69: analitik personal sampai gajian harus mengalahkan FAQ statis.
+    // Sebelumnya "apakah aman sampai gajian?" dapat cocok ke FAQ dan hanya
+    // menjelaskan cara kerja fitur tanpa menghitung kondisi akun pengguna.
+    if(function_exists('smartPaydayAnalysisIntent') && smartPaydayAnalysisIntent($message)){
+        if(function_exists('smartPaydayScenarioReply')){
+            $scenario=smartPaydayScenarioReply($message);
+            if($scenario!==null)return $scenario;
+        }
+        if(function_exists('smartPaydayReply')){
+            $analysis=smartPaydayReply($message);
+            if($analysis!==null)return $analysis;
+        }
+    }
+
     if (function_exists('faqAssistantReply')) {
         $faqReply = faqAssistantReply($message);
         if ($faqReply !== null) return $faqReply;
@@ -522,6 +539,13 @@ function humanoidDirectReply(string $message): ?string {
         'humanoidPaydayWhenReply','smartPaydayScenarioReply','humanoidProtectedFundsReply','humanoidWalletRankingReply',
         'humanoidMonthlyAnalysisReply','humanoidBudgetReply','humanoidGoalReply','humanoidHypotheticalReply'
     ] as $fn){$reply=$fn($message);if($reply!==null)return $reply;}
+
+    // V72: fallback percakapan natural lokal. Diletakkan paling akhir agar
+    // intent keuangan/FAQ/analitik tetap selalu memiliki prioritas.
+    if(function_exists('localConversationReply')){
+        $conversation=localConversationReply($message);
+        if($conversation!==null)return $conversation;
+    }
     return null;
 }
 

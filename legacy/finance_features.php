@@ -2,6 +2,7 @@
 require_once __DIR__.'/db.php';
 require_once __DIR__.'/adaptive_learning_helper.php';
 require_once __DIR__.'/transaction_inbox_helper.php';
+require_once __DIR__.'/receivable_helper.php';
 
 /**
  * Fitur keuangan lanjutan tetap memakai file JSON per user.
@@ -37,11 +38,11 @@ function financeEnsureFeatureData(&$d) {
             'bills'=>true,
             'low_balance'=>false,
             'low_balance_threshold'=>100000,
-            'email_enabled'=>true,
+            'email_enabled'=>false,
             'daily_reconciliation'=>true,
         ];
     }
-    if (!array_key_exists('email_enabled', $d['settings']['notifications'])) $d['settings']['notifications']['email_enabled'] = true;
+    if (!array_key_exists('email_enabled', $d['settings']['notifications'])) $d['settings']['notifications']['email_enabled'] = false;
     if (!array_key_exists('daily_reconciliation', $d['settings']['notifications'])) $d['settings']['notifications']['daily_reconciliation'] = true;
 
     if (!isset($d['wallets']) || !is_array($d['wallets']) || count($d['wallets']) === 0) {
@@ -897,6 +898,65 @@ function financeForecastBills(array $bills, string $today, string $through): arr
     return $rows;
 }
 
+/**
+ * V65: ukur urgensi kartu kredit untuk analisis aman sampai gajian.
+ * - Sisa limit <= 20% dianggap urgent dan perlu ruang minimum 20%.
+ * - Sisa limit <= 10% dianggap critical.
+ * - Tagihan kartu yang memang jatuh tempo sebelum gajian sudah masuk billTotal,
+ *   sehingga hanya kekurangan pembayaran di luar tagihan tersebut yang menjadi
+ *   credit_limit_urgent_reserve. Ini mencegah double-counting.
+ */
+function financeCreditCardUrgencyForPrediction(array $billRows): array {
+    $cards=[];$totalLimit=0;$totalUsed=0;$totalAvailable=0;$urgentReserve=0;
+    $level='none';$dueBeforePayday=0;
+    $billByCard=[];
+    foreach($billRows as $b){
+        if(!financeIsAutoCreditCardBill((array)$b))continue;
+        $cid=(int)($b['credit_card_wallet_id']??0);
+        $amt=max(0,(int)($b['amount']??0));
+        if($cid>0)$billByCard[$cid]=($billByCard[$cid]??0)+$amt;
+        $dueBeforePayday+=$amt;
+    }
+    foreach(financeWalletsWithBalances() as $w){
+        if(strtolower((string)($w['type']??''))!=='credit_card')continue;
+        $limit=max(0,(int)($w['credit_limit']??0));if($limit<=0)continue;
+        $used=max(0,(int)($w['credit_used']??$w['outstanding_balance']??0));
+        $available=max(0,min($limit,(int)($w['available_limit']??($limit-$used))));
+        $utilPct=round(($used/$limit)*100,1);
+        $availPct=round(($available/$limit)*100,1);
+        $targetAvailable=(int)ceil($limit*.20);
+        $restoreNeeded=max(0,$targetAvailable-$available);
+        $coveredByUpcoming=max(0,(int)($billByCard[(int)$w['id']]??0));
+        $extraReserve=max(0,$restoreNeeded-$coveredByUpcoming);
+        $cardLevel=$availPct<=10?'critical':($availPct<=20?'urgent':($availPct<=30?'watch':'none'));
+        if($cardLevel==='critical')$level='critical';
+        elseif($cardLevel==='urgent'&&!in_array($level,['critical'],true))$level='urgent';
+        elseif($cardLevel==='watch'&&$level==='none')$level='watch';
+        $urgentReserve+=$extraReserve;$totalLimit+=$limit;$totalUsed+=$used;$totalAvailable+=$available;
+        $cards[]=[
+            'wallet_id'=>(int)$w['id'],'name'=>(string)($w['name']??'Kartu Kredit'),
+            'limit'=>$limit,'used'=>$used,'available_limit'=>$available,
+            'utilization_percent'=>$utilPct,'available_percent'=>$availPct,
+            'urgency_level'=>$cardLevel,'target_available_limit'=>$targetAvailable,
+            'restore_needed'=>$restoreNeeded,'due_before_payday'=>$coveredByUpcoming,
+            'urgent_extra_reserve'=>$extraReserve,
+        ];
+    }
+    usort($cards,function($a,$b){
+        $rank=['critical'=>3,'urgent'=>2,'watch'=>1,'none'=>0];
+        $c=($rank[$b['urgency_level']]??0)<=>($rank[$a['urgency_level']]??0);
+        return $c!==0?$c:((float)$b['utilization_percent']<=>(float)$a['utilization_percent']);
+    });
+    return [
+        'level'=>$level,'cards'=>$cards,'card_count'=>count($cards),
+        'urgent_count'=>count(array_filter($cards,function($c){return in_array($c['urgency_level'],['urgent','critical'],true);})),
+        'total_limit'=>$totalLimit,'total_used'=>$totalUsed,'total_available'=>$totalAvailable,
+        'utilization_percent'=>$totalLimit>0?round(($totalUsed/$totalLimit)*100,1):0,
+        'due_before_payday_total'=>$dueBeforePayday,'urgent_reserve'=>$urgentReserve,
+        'target_available_percent'=>20,
+    ];
+}
+
 function financePrediction(){
     $sum=summary();$payday=financeNextPaydayDate();$today=new DateTimeImmutable('today');
     $days=max(0,(int)$today->diff($payday)->days);
@@ -908,16 +968,33 @@ function financePrediction(){
     $beforePayday=$payday->modify('-1 day')->format('Y-m-d');
     $billRows=financeForecastBills(financeBills(),$today->format('Y-m-d'),$beforePayday);
     $billTotal=(int)array_sum(array_column($billRows,'amount'));
+    $credit=financeCreditCardUrgencyForPrediction($billRows);
+    $creditUrgentReserve=max(0,(int)($credit['urgent_reserve']??0));
     $rec=financeUpcomingRecurringUntil($beforePayday);
-    $pred=(int)$sum['balance']-$dailyEstimate-$billTotal+(int)$rec['income']-(int)$rec['expense'];
+    $predBeforeCreditUrgency=(int)$sum['balance']-$dailyEstimate-$billTotal+(int)$rec['income']-(int)$rec['expense'];
+    // V65: ruang limit yang sudah terlalu tipis diperlakukan sebagai kebutuhan urgent,
+    // tetapi hanya bagian yang belum tercakup oleh tagihan kartu sebelum gajian.
+    $pred=$predBeforeCreditUrgency-$creditUrgentReserve;
     $sufficient=$history['daily_expense_count']>0&&$history['history_days']>=7;
     $withoutIncome=$pred-(int)$rec['income'];
-    $status=$pred<0?'risk':(!$sufficient?'unknown':($withoutIncome<0?'conditional':($pred<max(100000,$avg*3)?'tight':'safe')));
+    $creditUrgent=in_array((string)($credit['level']??'none'),['urgent','critical'],true);
+    $status=$pred<0?'risk':(!$sufficient?'unknown':($withoutIncome<0?'conditional':($creditUrgent?'conditional':($pred<max(100000,$avg*3)?'tight':'safe'))));
     return array_merge($history,[
         'payday_date'=>$payday->format('Y-m-d'),'days_left'=>$days,'current_balance'=>(int)$sum['balance'],'gross_balance'=>(int)($sum['gross_balance']??$sum['balance']),'reserved_balance'=>(int)($sum['reserved']??0),'minimum_balance'=>(int)($sum['minimum_balance']??0),'protected_balance'=>(int)($sum['protected_balance']??0),
         'estimated_daily_spend'=>$dailyEstimate,'remaining_daily_spend_today'=>$remainingToday,
         'upcoming_bills'=>$billRows,'upcoming_bills_total'=>$billTotal,
         'recurring_income'=>(int)$rec['income'],'recurring_expense'=>(int)$rec['expense'],
+        'predicted_balance_before_credit_urgency'=>$predBeforeCreditUrgency,
+        'credit_limit_urgent_reserve'=>$creditUrgentReserve,
+        'credit_urgency_level'=>(string)($credit['level']??'none'),
+        'credit_urgent_count'=>(int)($credit['urgent_count']??0),
+        'credit_total_limit'=>(int)($credit['total_limit']??0),
+        'credit_total_used'=>(int)($credit['total_used']??0),
+        'credit_total_available'=>(int)($credit['total_available']??0),
+        'credit_utilization_percent'=>(float)($credit['utilization_percent']??0),
+        'credit_due_before_payday_total'=>(int)($credit['due_before_payday_total']??0),
+        'credit_target_available_percent'=>(int)($credit['target_available_percent']??20),
+        'credit_cards_urgency'=>(array)($credit['cards']??[]),
         'predicted_balance'=>$pred,'status'=>$status,'history_sufficient'=>$sufficient
     ]);
 }
@@ -970,8 +1047,15 @@ function financePendingChatConfirmation(){ $d=financeReadData(); return !empty($
 function financeSetPendingChatConfirmation(array $drafts,$sourceMessage='',$warning=''){
     $rows=[];
     foreach($drafts as $draft){
-        $draft['spending_kind']=transactionSpendingKind($draft);
-        $draft['bill_candidates']=financeBillCandidatesForTransaction($draft);
+        $receivableAction=(string)($draft['receivable_action']??'');
+        if(in_array($receivableAction,['lend','repayment'],true)){
+            $draft['type']='transfer';
+            $draft['spending_kind']='once';
+            $draft['bill_candidates']=[];
+        } else {
+            $draft['spending_kind']=transactionSpendingKind($draft);
+            $draft['bill_candidates']=financeBillCandidatesForTransaction($draft);
+        }
         $rows[]=$draft;
     }
     $r=financeMutate(function(&$d)use($rows,$sourceMessage,$warning){
@@ -980,6 +1064,7 @@ function financeSetPendingChatConfirmation(array $drafts,$sourceMessage='',$warn
         return $d['pending_chat_confirmation'];
     });return $r['result'];
 }
+
 function financeClearPendingChatConfirmation(){financeMutate(function(&$d){$d['pending_chat_confirmation']=[];});}
 function financeConfirmPendingChat($confirmationId,array $overrides=[]){
     $pending=financePendingChatConfirmation();
@@ -987,7 +1072,29 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
     $prepared=[];$billKeys=[];
     foreach((array)$pending['drafts'] as $i=>$draft){
         $ov=(array)($overrides[$i]??[]);
-        foreach(['type','amount','category','transaction_date','wallet_id','from_wallet_id','to_wallet_id','spending_kind','bill_id','note'] as $k)if(array_key_exists($k,$ov))$draft[$k]=$ov[$k];
+        foreach(['type','amount','category','transaction_date','wallet_id','from_wallet_id','to_wallet_id','spending_kind','bill_id','note','receivable_action','receivable_borrower_name','receivable_borrower_key','receivable_lend_id'] as $k)if(array_key_exists($k,$ov))$draft[$k]=$ov[$k];
+        $receivableAction=(string)($draft['receivable_action']??'');
+        if(in_array($receivableAction,['lend','repayment'],true)){
+            $draft['type']='transfer';
+            $draft['amount']=max(0,(int)($draft['amount']??0));
+            if($draft['amount']<=0)throw new InvalidArgumentException('Nominal konfirmasi piutang tidak valid.');
+            if(!financeIsValidDate((string)($draft['transaction_date']??'')))throw new InvalidArgumentException('Tanggal konfirmasi piutang tidak valid.');
+            $draft['wallet_id']=(int)($draft['wallet_id']??financeDefaultWalletId());
+            if(!financeReceivableWalletExists((int)$draft['wallet_id']))throw new InvalidArgumentException('Dompet piutang tidak valid.');
+            if($receivableAction==='lend'){
+                $name=trim((string)($draft['receivable_borrower_name']??''));
+                if($name==='')throw new InvalidArgumentException('Nama peminjam wajib diisi.');
+                $resolved=financeReceivableResolveBorrower($name,(string)($draft['receivable_borrower_key']??''));
+                $draft['receivable_borrower_name']=(string)$resolved['name'];
+                $draft['receivable_borrower_key']=(string)$resolved['key'];
+            } else {
+                $key=trim((string)($draft['receivable_borrower_key']??''));
+                if($key==='' || !financeReceivableFindPerson($key))throw new InvalidArgumentException('Peminjam untuk pelunasan tidak ditemukan.');
+                $draft['receivable_lend_id']=max(0,(int)($draft['receivable_lend_id']??0));
+            }
+            unset($draft['bill_candidates']);$prepared[]=$draft;continue;
+        }
+
         $type=strtolower(trim((string)($draft['type']??'expense')));
         if(!in_array($type,['expense','income','transfer'],true))throw new InvalidArgumentException('Jenis transaksi konfirmasi tidak valid.');
         $draft['type']=$type;
@@ -1021,13 +1128,18 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
         }
         $draft['bill_id']=$billId;$prepared[]=$draft;
     }
-    // Validasi seluruh draft lebih dulu agar konfirmasi multi-transaksi tidak tersimpan sebagian.
+    // Validasi saldo seluruh draft lebih dulu agar konfirmasi multi-transaksi tidak tersimpan sebagian.
     $requiredByWallet=[];
     foreach($prepared as $draft){
-        $type=(string)($draft['type']??'expense');
-        if($type==='expense')$wid=(int)($draft['wallet_id']??financeDefaultWalletId());
-        elseif($type==='transfer')$wid=(int)($draft['from_wallet_id']??0);
-        else continue;
+        $receivableAction=(string)($draft['receivable_action']??'');
+        if($receivableAction==='lend')$wid=(int)($draft['wallet_id']??0);
+        elseif($receivableAction==='repayment')continue;
+        else {
+            $type=(string)($draft['type']??'expense');
+            if($type==='expense')$wid=(int)($draft['wallet_id']??financeDefaultWalletId());
+            elseif($type==='transfer')$wid=(int)($draft['from_wallet_id']??0);
+            else continue;
+        }
         $requiredByWallet[$wid]=($requiredByWallet[$wid]??0)+(int)($draft['amount']??0);
     }
     if($requiredByWallet){
@@ -1036,14 +1148,30 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
     }
     $saved=[];
     foreach($prepared as $draft){
+        $receivableAction=(string)($draft['receivable_action']??'');
+        if($receivableAction==='lend'){
+            $tx=financeReceivableLend([
+                'borrower_name'=>(string)$draft['receivable_borrower_name'],'borrower_key'=>(string)($draft['receivable_borrower_key']??''),'amount'=>(int)$draft['amount'],'wallet_id'=>(int)$draft['wallet_id'],
+                'transaction_date'=>(string)$draft['transaction_date'],'due_date'=>(string)($draft['receivable_due_date']??''),'note'=>(string)($draft['note']??''),
+            ],isset($draft['attachment'])&&is_array($draft['attachment'])?$draft['attachment']:null);
+            $saved[]=$tx;continue;
+        }
+        if($receivableAction==='repayment'){
+            $tx=financeReceivableRepay([
+                'borrower_key'=>(string)$draft['receivable_borrower_key'],'amount'=>(int)$draft['amount'],'wallet_id'=>(int)$draft['wallet_id'],
+                'transaction_date'=>(string)$draft['transaction_date'],'lend_id'=>(int)($draft['receivable_lend_id']??0),'note'=>(string)($draft['note']??''),
+            ],isset($draft['attachment'])&&is_array($draft['attachment'])?$draft['attachment']:null);
+            $saved[]=$tx;continue;
+        }
         $billId=(int)($draft['bill_id']??0);$tx=addTransaction($draft);
         if($billId>0)$tx=financeLinkTransactionToBill((int)$tx['id'],$billId);
         $saved[]=$tx;
     }
-    // Pembelajaran adaptif bersifat best-effort. Transaksi yang sudah tersimpan
-    // tidak boleh dianggap gagal hanya karena modul learning sedang bermasalah.
-    try { adaptiveLearnFromConfirmation($pending,$prepared); }
-    catch(Throwable $e){ if(class_exists('Yii')) Yii::warning('Adaptive learning gagal: '.$e->getMessage(),'adaptive-learning'); }
+    $hasReceivableDraft=false;foreach($prepared as $x)if(!empty($x['receivable_action'])){$hasReceivableDraft=true;break;}
+    if(!$hasReceivableDraft){
+        try { adaptiveLearnFromConfirmation($pending,$prepared); }
+        catch(Throwable $e){ if(class_exists('Yii')) Yii::warning('Adaptive learning gagal: '.$e->getMessage(),'adaptive-learning'); }
+    }
     financeClearPendingChatConfirmation();return $saved;
 }
 
@@ -1186,13 +1314,29 @@ function financeCreditCardReminders(): array {
 }
 
 function financeNotificationSettings(){ $d=financeReadData();return $d['settings']['notifications']; }
-function financeSetNotificationSettings($input){$cfg=['enabled'=>!empty($input['enabled']),'daily_budget'=>!empty($input['daily_budget']),'bills'=>!empty($input['bills']),'low_balance'=>!empty($input['low_balance']),'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),'email_enabled'=>!array_key_exists('email_enabled',$input)||!empty($input['email_enabled']),'daily_reconciliation'=>!array_key_exists('daily_reconciliation',$input)||!empty($input['daily_reconciliation'])];setSetting('notifications',$cfg);return $cfg;}
+function financeSetNotificationSettings($input){
+    $enabled=!empty($input['enabled']);
+    $emailEnabled=$enabled&&!empty($input['email_enabled']);
+    if($emailEnabled){$emailStatus=authEmailStatus();$emailEnabled=!empty($emailStatus['verified']);}
+    $cfg=[
+        'enabled'=>$enabled,
+        'daily_budget'=>!empty($input['daily_budget']),
+        'bills'=>!empty($input['bills']),
+        'low_balance'=>!empty($input['low_balance']),
+        'low_balance_threshold'=>max(0,(int)($input['low_balance_threshold']??100000)),
+        'email_enabled'=>$emailEnabled,
+        'daily_reconciliation'=>!array_key_exists('daily_reconciliation',$input)||!empty($input['daily_reconciliation']),
+    ];
+    setSetting('notifications',$cfg);
+    return $cfg;
+}
 
 function financeFeatureSnapshot(){
     financeProcessRecurring();
     financeSyncCreditCardBills();
     return [
         'wallets'=>financeWalletsWithBalances(),
+        'receivables'=>financeReceivableSnapshot(),
         'categories'=>financeCategories(),
         'monthly_budgets'=>financeMonthlyBudgetStatus(),
         'bills'=>financeBillsStatus(),

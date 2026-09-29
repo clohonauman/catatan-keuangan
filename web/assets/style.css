@@ -289,6 +289,14 @@ body.sidebar-open{overflow:hidden}
 /* ===== HAPUS RIWAYAT CHAT ===== */
 .chat-panel-head{gap:12px}.chat-head-actions{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;margin-left:auto}.clear-chat-btn{height:32px;border:1px solid #f3d1ce;background:#fff8f7;color:#b42318;border-radius:10px;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:.16s ease}.clear-chat-btn[hidden]{display:none!important}.clear-chat-btn:hover{background:#fff1ef;border-color:#f2bdb8}.clear-chat-btn:active{transform:scale(.97)}.clear-chat-btn svg,.chat-delete-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .chat-row{width:100%;display:flex;align-items:flex-end;gap:6px}.chat-row.user{justify-content:flex-end}.chat-row.assistant{justify-content:flex-start}.chat-row .bubble{margin:7px 0}.chat-row.user .chat-delete-btn{order:-1}.chat-delete-btn{width:30px;height:30px;flex:0 0 30px;border:0;border-radius:9px;background:transparent;color:#98a2b3;display:grid;place-items:center;cursor:pointer;opacity:0;transform:scale(.9);transition:opacity .15s ease,background .15s ease,color .15s ease,transform .15s ease;margin-bottom:2px}.chat-row:hover .chat-delete-btn,.chat-delete-btn:focus-visible{opacity:1;transform:scale(1)}.chat-delete-btn:hover{background:#fff0ef;color:#b42318}.system-greeting .bubble{margin:7px 0}
+.system-greeting .chat-welcome{max-width:min(92%,760px);padding:16px 18px;background:linear-gradient(145deg,#f3f7fd,#eef3f9);border:1px solid rgba(33,102,216,.08);box-shadow:0 10px 26px rgba(31,55,91,.06)}
+.chat-welcome-title{display:block;font-size:16px;line-height:1.35;margin-bottom:6px;color:#182436}
+.chat-welcome-copy{display:block;color:#536176;line-height:1.55}
+.chat-welcome-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+.chat-welcome-suggestions button{appearance:none;border:1px solid #d9e3f2;background:#fff;color:#28415f;border-radius:999px;padding:7px 11px;font:inherit;font-size:12px;font-weight:700;line-height:1.2;cursor:pointer;box-shadow:0 2px 7px rgba(31,55,91,.04);transition:transform .15s ease,border-color .15s ease,background .15s ease}
+.chat-welcome-suggestions button:hover{border-color:#9ebcf0;background:#f9fbff;transform:translateY(-1px)}
+.chat-welcome-suggestions button:active{transform:translateY(0)}
+@media(max-width:760px){.system-greeting .chat-welcome{max-width:96%!important;padding:14px 14px!important}.chat-welcome-title{font-size:15px}.chat-welcome-copy{font-size:13px}.chat-welcome-suggestions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.chat-welcome-suggestions button{width:100%;padding:8px 9px;font-size:11px;text-align:center}}
 
 @media (max-width:760px){
   .chat-panel-head>b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chat-head-actions{gap:5px}.clear-chat-btn{width:32px;height:32px;padding:0;justify-content:center;border-color:#e7ebf1;background:#f7f8fa;color:#667085}.clear-chat-btn span{display:none}.clear-chat-btn svg{width:16px;height:16px}.offline{white-space:nowrap}
@@ -1464,7 +1472,7 @@ dialog.tx-detail-dialog{width:min(600px,calc(100% - 24px));max-height:calc(100dv
 .initial-wallet-heading{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;overflow-wrap:anywhere}.initial-wallet-heading b{font-size:15px;color:#1e3d6b}.initial-wallet-heading span{font-size:12px;color:#667891}
 .initial-wallet-row input:disabled{background:#eaf0f7;color:#7b8899}
 
-/* Smart Chat transaction confirmation */
+/* Asisten Keuangan transaction confirmation */
 .chat-confirm-wrap{max-width:100%;width:100%}
 .chat-confirm-card{width:min(720px,100%);background:#fff;border:1px solid #dce7f5;border-radius:18px;padding:14px;box-shadow:0 10px 28px rgba(22,55,102,.08)}
 .chat-confirm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}.chat-confirm-head b{display:block;font-size:13px;color:#173c70}.chat-confirm-head small{display:block;margin-top:3px;color:#728198;font-size:10px}.chat-confirm-head>span{font-size:9px;font-weight:800;background:#edf4ff;color:#245cae;padding:5px 8px;border-radius:999px;white-space:nowrap}
@@ -3476,3 +3484,121 @@ dialog[open]>.feature-toast.in-dialog{
 @keyframes login-submit-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.login-submit-spinner{animation-duration:1.35s}.login-submit-label,.login-submit-loading{transition:none}}
 
+
+/* ===== V66 - Pengaturan Notifikasi per User ===== */
+.notification-settings-shortcut{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface-2)}
+.notification-settings-shortcut>div{min-width:0}.notification-settings-shortcut b{display:block;font-size:14px}.notification-settings-shortcut small{display:block;margin-top:3px;color:var(--muted);line-height:1.45}
+.notification-settings-dialog{width:min(560px,calc(100% - 28px));max-width:560px}
+.notification-settings-card{padding:20px}
+.notification-settings-card .modal-subtitle{margin:5px 0 0;color:var(--muted);font-size:12px}
+.notification-master-row,.notification-device-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fff}
+.notification-master-row>div,.notification-device-row>div{min-width:0}.notification-master-row b,.notification-device-row b{display:block;font-size:14px}.notification-master-row small,.notification-device-row small{display:block;margin-top:3px;color:var(--muted);font-size:11px;line-height:1.45}
+.switch-control{position:relative!important;display:inline-flex!important;flex:0 0 auto;margin:0!important}.switch-control input{position:absolute;opacity:0;pointer-events:none}.switch-control span{display:block;width:46px;height:26px;border-radius:999px;background:#d0d5dd;position:relative;transition:.18s ease;cursor:pointer}.switch-control span::after{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(16,24,40,.2);transition:.18s ease}.switch-control input:checked+span{background:var(--primary)}.switch-control input:checked+span::after{transform:translateX(20px)}
+.notification-settings-section{display:grid;gap:13px;margin-top:14px;transition:.16s ease}.notification-settings-section.is-disabled{opacity:.52}.notification-settings-section label{margin:0}.notification-settings-section select,.notification-settings-section input[type=number]{width:100%;border:1px solid #d9dee8;border-radius:12px;padding:11px 12px;background:#fff;color:var(--text);font:inherit;outline:none}.notification-settings-section select:focus,.notification-settings-section input[type=number]:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(23,92,211,.10)}
+.notification-email-hint{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:-6px}.notification-channel-note{padding:12px 13px;border-radius:14px;background:var(--primary-soft);border:1px solid #cfe0ff}.notification-channel-note b{display:block;font-size:12px;color:#174ea6}.notification-channel-note small{display:block;margin-top:4px;font-size:11px;line-height:1.5;color:#475467}
+.notification-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.notification-type-grid .toggle-line{display:flex;align-items:center;gap:8px;padding:10px 11px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:12px;font-weight:700;margin:0}.notification-type-grid .toggle-line input{width:16px;height:16px;flex:0 0 16px;margin:0}
+.notification-device-row .btn{flex:0 0 auto;white-space:nowrap}
+@media(max-width:760px){
+  .notification-settings-dialog{width:100%;max-width:none;max-height:calc(100dvh - max(52px,calc(env(safe-area-inset-top) + 18px)));border-radius:24px 24px 0 0}
+  .notification-settings-card{max-height:inherit;overflow-y:auto;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+  .notification-settings-shortcut{align-items:flex-start;flex-direction:column}.notification-settings-shortcut .btn{width:100%}
+  .notification-type-grid{grid-template-columns:1fr}
+  .notification-device-row{align-items:flex-start;flex-direction:column}.notification-device-row .btn{width:100%}
+}
+
+/* ===== V67 - Piutang / Memberi Hutang ===== */
+.receivable-panel{display:grid;gap:14px}
+.receivable-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,var(--surface),var(--surface-2))}
+.receivable-hero>div{min-width:0}.receivable-hero h3{margin:4px 0 6px;font-size:20px;letter-spacing:-.3px}.receivable-hero p{margin:0;color:var(--muted);font-size:12px;line-height:1.55;max-width:720px}.receivable-kicker{display:block;font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--primary)}
+.receivable-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.receivable-summary-card{padding:14px 15px;border:1px solid var(--line);border-radius:16px;background:#fff;min-width:0}.receivable-summary-card span{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}.receivable-summary-card b{display:block;font-size:18px;letter-spacing:-.25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.receivable-summary-card.emphasis{background:var(--primary-soft);border-color:#cfe0ff}.receivable-summary-card.emphasis b{color:var(--primary)}
+.receivable-form-grid{align-items:start}.receivable-form-card{display:grid;gap:10px}.receivable-form-card .feature-toolbar{margin-bottom:0}.receivable-form-card label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#475467}.receivable-form-card label>small{font-weight:500;color:var(--muted)}.receivable-form-card input,.receivable-form-card select,.receivable-form-card textarea,.receivable-status-filter select,.receivable-history-filter select{width:100%;border:1px solid #d9dee8;border-radius:12px;padding:10px 11px;background:#fff;color:var(--text);font:inherit;outline:none}.receivable-form-card textarea{resize:vertical;min-height:72px}.receivable-form-card input:focus,.receivable-form-card select:focus,.receivable-form-card textarea:focus,.receivable-status-filter select:focus,.receivable-history-filter select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(23,92,211,.10)}
+.receivable-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.receivable-photo-field input{padding:8px;background:var(--surface-2)}.receivable-outstanding-hint{padding:10px 12px;border-radius:12px;background:var(--surface-2);border:1px dashed #d0d5dd;color:var(--muted);font-size:11px;line-height:1.45}.receivable-outstanding-hint strong{color:var(--text)}
+.receivable-recap-card,.receivable-history-card{padding:16px}.receivable-list-toolbar{align-items:end;gap:14px}.receivable-status-filter,.receivable-history-filter{display:grid;gap:5px;min-width:160px;font-size:11px;color:var(--muted)}
+.receivable-people-list,.receivable-history-list{display:grid;gap:9px;margin-top:12px}.receivable-person{border:1px solid var(--line);border-radius:15px;background:#fff;overflow:hidden}.receivable-person[open]{box-shadow:0 8px 24px rgba(16,24,40,.05)}.receivable-person>summary{list-style:none;cursor:pointer;padding:13px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px}.receivable-person>summary::-webkit-details-marker{display:none}.receivable-person-main{min-width:0;display:flex;align-items:center;gap:10px}.receivable-person-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:12px;background:var(--primary-soft);display:grid;place-items:center;color:var(--primary);font-weight:800}.receivable-person-copy{min-width:0}.receivable-person-copy b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.receivable-person-copy small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.receivable-person-amount{text-align:right}.receivable-person-amount span{display:block;color:var(--muted);font-size:9px}.receivable-person-amount b{display:block;font-size:14px;margin-top:2px}.receivable-person.is-paid .receivable-person-avatar{background:var(--success-soft);color:var(--success)}.receivable-person.is-overdue .receivable-person-avatar{background:var(--danger-soft);color:var(--danger)}
+.receivable-person-body{border-top:1px solid var(--line);padding:12px 14px;background:var(--surface-2)}.receivable-person-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.receivable-person-kpis div{padding:9px;border:1px solid var(--line);border-radius:11px;background:#fff}.receivable-person-kpis span{display:block;font-size:9px;color:var(--muted)}.receivable-person-kpis b{display:block;font-size:12px;margin-top:2px}.receivable-person-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.receivable-person-actions .btn{padding:8px 10px;font-size:11px}
+.receivable-entry{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:#fff}.receivable-entry-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:900;font-size:16px}.receivable-entry.lend .receivable-entry-icon{background:var(--danger-soft);color:var(--danger)}.receivable-entry.repayment .receivable-entry-icon{background:var(--success-soft);color:var(--success)}.receivable-entry-copy{min-width:0}.receivable-entry-copy b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.receivable-entry-copy small{display:block;color:var(--muted);font-size:10px;line-height:1.45;margin-top:2px}.receivable-entry-note{white-space:normal!important}.receivable-entry-side{text-align:right;white-space:nowrap}.receivable-entry-side b{display:block;font-size:12px}.receivable-entry-side .lend{color:var(--danger)}.receivable-entry-side .repayment{color:var(--success)}.receivable-entry-side button{margin-top:5px;border:0;background:none;color:var(--danger);font-size:10px;cursor:pointer;padding:2px}.receivable-proof-link{display:inline-flex;margin-top:4px;font-size:10px;font-weight:700;color:var(--primary);text-decoration:none}
+.receivable-history-list .empty,.receivable-people-list .empty{padding:26px 12px}
+
+@media(max-width:900px){
+  .receivable-summary-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+  .receivable-panel{gap:11px}.receivable-hero{align-items:flex-start;flex-direction:column;padding:15px}.receivable-hero .btn{width:100%}.receivable-summary-grid{gap:7px}.receivable-summary-card{padding:11px 12px}.receivable-summary-card b{font-size:14px}.receivable-date-grid{grid-template-columns:1fr}.receivable-recap-card,.receivable-history-card{padding:13px}.receivable-list-toolbar{align-items:stretch;flex-direction:column}.receivable-status-filter,.receivable-history-filter{min-width:0;width:100%}.receivable-person>summary{padding:11px}.receivable-person-kpis{grid-template-columns:1fr}.receivable-person-actions{display:grid;grid-template-columns:1fr}.receivable-person-actions .btn{width:100%}.receivable-entry{grid-template-columns:36px minmax(0,1fr);align-items:start}.receivable-entry-icon{width:36px;height:36px}.receivable-entry-side{grid-column:2;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px}.receivable-entry-side button{margin-top:0}
+}
+
+/* ===== V68 - Piutang PDF Filter, Mobile UX & Chat ===== */
+.receivable-hero-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.receivable-mobile-mode{display:none}
+.receivable-filter-card{padding:16px;display:grid;gap:12px}
+.receivable-filter-card .feature-toolbar{margin:0;align-items:center}
+.receivable-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.receivable-filter-grid label{display:grid;gap:5px;font-size:11px;font-weight:700;color:#475467;min-width:0}
+.receivable-filter-grid input,.receivable-filter-grid select{width:100%;min-width:0;border:1px solid #d9dee8;border-radius:12px;padding:10px 11px;background:#fff;color:var(--text);font:inherit;outline:none}
+.receivable-filter-grid input:focus,.receivable-filter-grid select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(23,92,211,.10)}
+.receivable-filter-status{padding:9px 11px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);font-size:10px;color:var(--muted);line-height:1.45}
+.receivable-loan-list{display:grid;gap:7px;margin-top:10px;padding-top:10px;border-top:1px dashed #d0d5dd}
+.receivable-loan-list>b{font-size:10px;color:#667085;text-transform:uppercase;letter-spacing:.04em}
+.receivable-loan-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.receivable-loan-item>div{min-width:0}.receivable-loan-item strong{display:block;font-size:12px}.receivable-loan-item small{display:block;margin-top:2px;color:var(--muted);font-size:9px;line-height:1.4}.receivable-loan-item button{flex:0 0 auto;padding:7px 9px;font-size:10px}
+.receivable-entry-allocation{display:block!important;color:#315c9b!important;font-weight:700;margin-top:3px}
+.receivable-confirm-badge{grid-column:2;justify-self:start;display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800;margin-bottom:6px}
+.receivable-confirm-badge.lend{background:var(--danger-soft);color:var(--danger)}.receivable-confirm-badge.repayment{background:var(--success-soft);color:var(--success)}
+.receivable-confirm-fields{grid-column:2}.receivable-confirm-allocation,.receivable-confirm-note{grid-column:1/-1!important}.receivable-confirm-allocation small{display:block;margin-top:4px;color:var(--muted);font-size:9px;line-height:1.4}
+.receivable-form-card select,.receivable-form-card input,.receivable-form-card textarea{min-height:43px}
+.receivable-form-card .btn.wide{min-height:44px;font-weight:800}
+
+@media(max-width:900px){.receivable-filter-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){
+  .receivable-hero-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.receivable-hero-actions .btn{width:100%!important}
+  .receivable-mobile-mode{display:grid;grid-template-columns:1fr 1fr;padding:4px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);position:sticky;top:0;z-index:4}
+  .receivable-mobile-mode button{border:0;background:transparent;border-radius:10px;padding:10px 8px;font:inherit;font-size:12px;font-weight:800;color:var(--muted)}
+  .receivable-mobile-mode button.is-active{background:#fff;color:var(--primary);box-shadow:0 2px 8px rgba(16,24,40,.08)}
+  .receivable-form-grid{display:block!important}.receivable-form-card{padding:14px!important;border-radius:16px!important}.receivable-form-card.mobile-form-hidden{display:none!important}
+  .receivable-form-card input,.receivable-form-card select,.receivable-form-card textarea{font-size:16px;min-height:48px;border-radius:13px}.receivable-form-card textarea{min-height:78px}
+  .receivable-form-card .btn.wide{position:sticky;bottom:max(8px,env(safe-area-inset-bottom));z-index:3;min-height:50px;border-radius:14px;box-shadow:0 8px 24px rgba(16,24,40,.14)}
+  .receivable-filter-card{padding:13px}.receivable-filter-grid{grid-template-columns:1fr}.receivable-filter-card .feature-toolbar{align-items:flex-start;gap:8px}.receivable-filter-card .feature-toolbar .secondary-btn{width:auto}
+  .receivable-loan-item{align-items:flex-start;flex-direction:column}.receivable-loan-item button{width:100%}
+  .receivable-confirm-fields{grid-template-columns:1fr!important}.receivable-confirm-badge{grid-column:1/-1}.receivable-confirm-fields{grid-column:1/-1}
+}
+
+/* ===== V70 - Master Data Peminjam ===== */
+#receivableLendBorrowerSelect{font-weight:700}
+#receivableLendNewBorrowerWrap[hidden]{display:none!important}
+#receivableLendNewBorrowerWrap{padding:11px 12px;border:1px dashed #cfd8e6;border-radius:14px;background:var(--surface-2)}
+@media(max-width:760px){
+  #receivableLendBorrowerSelect{min-height:52px!important}
+  #receivableLendNewBorrowerWrap{padding:12px;border-radius:15px}
+}
+
+
+/* ===== V71 - PDF Piutang download feedback ===== */
+.btn-inline-spinner{
+  display:inline-block;
+  width:14px;
+  height:14px;
+  margin-right:7px;
+  vertical-align:-2px;
+  border:2px solid currentColor;
+  border-right-color:transparent;
+  border-radius:50%;
+  animation:ck-btn-spin .7s linear infinite;
+}
+@keyframes ck-btn-spin{to{transform:rotate(360deg)}}
+
+/* V72 - Local conversational engine indicator */
+.chat-panel-head{align-items:center}
+.chat-title-wrap{display:flex;align-items:center;min-width:0;gap:7px}
+.chat-title-wrap>b{min-width:0}
+@media(max-width:760px){.chat-title-wrap{gap:5px}.chat-title-wrap>b{font-size:14px}}
+
+/* ===== V76 - Pusat Keuangan tab visibility fix ===== */
+/*
+ * Some feature panels (notably Piutang) define their own display mode such as
+ * display:grid. That author CSS can override the browser's default [hidden]
+ * behavior, causing a hidden panel to remain visible after switching tabs.
+ * Make hidden state authoritative for every Finance Center panel.
+ */
+#financeCenter [data-finance-panel][hidden]{
+  display:none!important;
+}

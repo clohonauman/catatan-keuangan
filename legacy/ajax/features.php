@@ -55,6 +55,27 @@ try {
         case 'inbox_confirm_all': $result=transactionInboxConfirmAll((array)($input['ids']??[])); break;
         case 'inbox_dismiss': $result=transactionInboxDismiss((int)($input['id']??0)); break;
         case 'reconciliation_complete': $result=transactionInboxMarkReconciled((string)($input['date']??'')); break;
+        case 'receivable_lend':
+            $attachment=null;
+            try{
+                if($multipart&&isset($_FILES['photo']))$attachment=saveReceiptUpload($_FILES['photo']);
+                $result=financeReceivableLend($input,$attachment);
+            }catch(Throwable $e){
+                if($attachment&&!empty($attachment['file']))deleteReceiptFileIfUnused((string)$attachment['file']);
+                throw $e;
+            }
+            break;
+        case 'receivable_repay':
+            $attachment=null;
+            try{
+                if($multipart&&isset($_FILES['photo']))$attachment=saveReceiptUpload($_FILES['photo']);
+                $result=financeReceivableRepay($input,$attachment);
+            }catch(Throwable $e){
+                if($attachment&&!empty($attachment['file']))deleteReceiptFileIfUnused((string)$attachment['file']);
+                throw $e;
+            }
+            break;
+        case 'receivable_delete': $result=financeReceivableDelete((int)($input['id']??0)); break;
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;
         case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??'')); break;

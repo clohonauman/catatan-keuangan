@@ -305,6 +305,9 @@ function subscriptionStartTrial(array $user, bool $confirmed): array {
 
     addChatForUser($userId, 'assistant', '🎁 Free Trial Premium 7 hari aktif. Anda dapat mencoba seluruh fitur Premium sampai '.date('d/m/Y H:i', strtotime($expiresAt)).'. Setelah masa trial berakhir, pilih paket Premium untuk melanjutkan akses.');
     try {
+        userNotificationCreate($userId, 'premium', 'Free Trial Premium Aktif', 'Free Trial Premium 7 hari Anda telah diaktifkan dan berlaku sampai '.date('d/m/Y H:i', strtotime($expiresAt)).'. Setelah trial berakhir, pilih paket berlangganan untuk melanjutkan akses Premium.', [], 'premium_trial_started:'.$userId.':'.$startAt);
+    } catch (Throwable $notificationError) { /* trial tetap aktif walau pusat pemberitahuan gagal */ }
+    try {
         emailNotifyAutomatic($userId, 'premium_trial_started_'.$userId.'_'.date('YmdHis'), 'premium', 'Free Trial Premium Aktif', 'Free Trial Premium 7 hari Anda telah diaktifkan dan berlaku sampai '.date('d/m/Y H:i', strtotime($expiresAt)).'. Setelah trial berakhir, pilih paket berlangganan untuk melanjutkan akses Premium.', ['action_url'=>(rtrim((string)(Yii::$app->params['appUrl'] ?: adminNotificationAppUrl()),'/').'/'),'action_label'=>'Buka Catatan Keuangan']);
     } catch (Throwable $mailError) { /* trial tetap aktif walau email gagal */ }
 
@@ -563,6 +566,9 @@ function subscriptionApproveOrder(int $orderId, array $admin): array {
     $invoiceChat .= "\nTotal: ".subscriptionFormatRupiah((int)$updated['amount'])."\nBank: {$updated['bank_name']}\nStatus: LUNAS\nTerima kasih telah menggunakan Catatan Keuangan Premium.";
     addChatForUser((int)$updated['user_id'], 'assistant', $invoiceChat);
     try {
+        userNotificationCreate((int)$updated['user_id'], 'premium', 'Pembayaran Premium Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' telah diverifikasi. Akun Anda sekarang Premium ('.$updated['plan_label'].') dan '.$expiryText.'.', [], 'premium_approved:'.(int)$updated['id']);
+    } catch (Throwable $notificationError) { /* approval tetap berhasil */ }
+    try {
         emailNotifyAutomatic((int)$updated['user_id'], 'premium_approved_'.(int)$updated['id'], 'premium', 'Pembayaran Premium Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' telah diverifikasi. Akun Anda sekarang Premium ('.$updated['plan_label'].') dan '.$expiryText.'.', ['action_url'=>(rtrim((string)(Yii::$app->params['appUrl'] ?: adminNotificationAppUrl()),'/').'/'),'action_label'=>'Buka Catatan Keuangan']);
     } catch (Throwable $mailError) { /* jangan gagalkan approval karena email */ }
 
@@ -593,6 +599,9 @@ function subscriptionRejectOrder(int $orderId, array $admin, string $reason=''):
     });
 
     addChatForUser((int)$updated['user_id'], 'assistant', 'Pembelian ditolak karena bukti bayar tidak valid. Jika ingin mengajukan pertanyaan seputar pembelian tersebut silahkan hubungi admin melalui Chat WA Only +6282259866048 (Senin - Sabtu 09.00 WITA - 17.00 WITA).');
+    try {
+        userNotificationCreate((int)$updated['user_id'], 'premium', 'Pembayaran Premium Belum Dapat Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' belum dapat disetujui. Alasan: '.$reason, [], 'premium_rejected:'.(int)$updated['id']);
+    } catch (Throwable $notificationError) { /* rejection tetap berhasil */ }
     try {
         emailNotifyAutomatic((int)$updated['user_id'], 'premium_rejected_'.(int)$updated['id'], 'premium', 'Pembayaran Premium Belum Dapat Disetujui', 'Pembayaran untuk invoice '.$updated['invoice_no'].' belum dapat disetujui. Alasan: '.$reason, ['action_url'=>(rtrim((string)(Yii::$app->params['appUrl'] ?: adminNotificationAppUrl()),'/').'/'),'action_label'=>'Buka Catatan Keuangan']);
     } catch (Throwable $mailError) { /* jangan gagalkan rejection karena email */ }

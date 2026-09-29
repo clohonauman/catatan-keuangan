@@ -24,7 +24,8 @@ function adminUsersSnapshot(): array
         $income=0;$expense=0;$initial=0;foreach(($d['wallets']??[]) as $w)if(empty($w['archived']))$initial+=(int)($w['initial_balance']??0);
         foreach(($d['transactions']??[]) as $t){if(($t['type']??'')==='income')$income+=(int)$t['amount'];elseif(($t['type']??'')==='expense')$expense+=(int)$t['amount'];}
         $plan=authPlan($u);if($plan['active'])$premium++;
-        $rows[]=['id'=>$id,'username'=>$u['username'],'email'=>(string)($u['email']??''),'email_verified'=>trim((string)($u['email_verified_at']??''))!=='','role'=>authUserRole($u),'plan'=>$plan,'stored_plan'=>(string)($u['plan']??'free'),'stored_expires_at'=>(string)($u['plan_expires_at']??''),'trial'=>authTrialStatus($u),'premium_type'=>(string)($u['premium_type']??''),'premium_last_invoice'=>(string)($u['premium_last_invoice']??''),'created_at'=>$u['created_at']??'','last_activity'=>$last,'transactions'=>$tx,'balance'=>$initial+$income-$expense];
+        $notifyPref=userNotificationPreferenceForUser($id);
+        $rows[]=['id'=>$id,'username'=>$u['username'],'email'=>(string)($u['email']??''),'email_verified'=>trim((string)($u['email_verified_at']??''))!=='','notification_enabled'=>!empty($notifyPref['enabled']),'notification_email'=>!empty($notifyPref['enabled'])&&!empty($notifyPref['email_enabled']),'role'=>authUserRole($u),'plan'=>$plan,'stored_plan'=>(string)($u['plan']??'free'),'stored_expires_at'=>(string)($u['plan_expires_at']??''),'trial'=>authTrialStatus($u),'premium_type'=>(string)($u['premium_type']??''),'premium_last_invoice'=>(string)($u['premium_last_invoice']??''),'created_at'=>$u['created_at']??'','last_activity'=>$last,'transactions'=>$tx,'balance'=>$initial+$income-$expense];
     }
     return ['users'=>$rows,'stats'=>['users'=>count($rows),'active_30d'=>$active,'premium'=>$premium,'transactions'=>$totalTx]];
 }
@@ -43,6 +44,7 @@ try {
                     $planLabel = ((string)($changedUser['plan'] ?? 'free') === 'premium') ? 'Premium' : 'Free';
                     $expiry = trim((string)($changedUser['plan_expires_at'] ?? ''));
                     $msg = 'Status paket akun Anda telah diperbarui oleh admin menjadi ' . $planLabel . '.' . ($expiry !== '' ? ' Masa aktif sampai ' . $expiry . '.' : '');
+                    userNotificationCreate((int)$changedUser['id'], 'premium', 'Status Paket Akun Diperbarui', $msg, [], 'admin_plan:'.(int)$changedUser['id'].':'.date('YmdHis'));
                     emailNotifyAutomatic((int)$changedUser['id'], 'admin_plan_' . date('YmdHis'), 'premium', 'Status Paket Akun Diperbarui', $msg, ['action_url' => (rtrim((string)(Yii::$app->params['appUrl'] ?: adminNotificationAppUrl()),'/').'/'), 'action_label' => 'Buka Catatan Keuangan']);
                 } catch (Throwable $mailError) { /* perubahan paket tetap berhasil walau email gagal */
                 }

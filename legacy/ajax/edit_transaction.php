@@ -17,6 +17,9 @@ try {
 
         $transaction = transactionById($id);
         if (!$transaction) throw new InvalidArgumentException('Transaksi tidak ditemukan.');
+        if (in_array((string)($transaction['source']??''), ['receivable_lend','receivable_repayment'], true)) {
+            throw new InvalidArgumentException('Transaksi piutang dikelola melalui menu Piutang / Memberi Hutang.');
+        }
 
         echo json_encode([
             'ok'=>true,
@@ -48,6 +51,9 @@ try {
 
     $existing = transactionById($id);
     if (!$existing) throw new InvalidArgumentException('Transaksi tidak ditemukan.');
+    if (in_array((string)($existing['source']??''), ['receivable_lend','receivable_repayment'], true)) {
+        throw new InvalidArgumentException('Transaksi piutang dikelola melalui menu Piutang / Memberi Hutang.');
+    }
 
     $type = strtolower(trim((string)($input['type'] ?? ($existing['type'] ?? 'expense'))));
     if (!in_array($type, ['income','expense','transfer'], true)) {

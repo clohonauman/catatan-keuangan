@@ -11,8 +11,8 @@ try {
     $in = json_decode(file_get_contents('php://input'), true);
     if (!is_array($in)) $in = [];
     $settings = financeNotificationSettings();
-    if (empty($settings['email_enabled'])) {
-        echo json_encode(['ok' => true, 'skipped' => true, 'reason' => 'Notifikasi email dinonaktifkan.'], JSON_UNESCAPED_UNICODE);
+    if (empty($settings['enabled']) || empty($settings['email_enabled'])) {
+        echo json_encode(['ok' => true, 'skipped' => true, 'reason' => 'Notifikasi email dinonaktifkan pada pengaturan akun.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 

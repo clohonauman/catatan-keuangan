@@ -2,7 +2,7 @@
 /**
  * User-facing FAQ knowledge base.
  *
- * This file is the single source used by both the FAQ modal and Smart Chat.
+ * This file is the single source used by both the FAQ modal and Asisten Keuangan.
  * Super Admin operational features are intentionally excluded.
  */
 function faqCategoryLabels(): array {
@@ -143,7 +143,7 @@ function faqKnowledgeBase(): array {
             'category' => 'saldo',
             'question' => 'Bagaimana prediksi “aman sampai gajian” dihitung?',
             'keywords' => 'aman sampai gajian prediksi analitik cukup tidak cukup harian',
-            'answer_html' => 'Prediksi memakai saldo yang benar-benar tersedia untuk dibelanjakan, jumlah hari menuju gajian, pola pengeluaran harian, serta kewajiban yang relevan. Dana disisihkan dan saldo minimum tidak dianggap uang belanja, sedangkan transaksi sekali bayar tidak otomatis dianggap pengeluaran harian berulang.',
+            'answer_html' => 'Prediksi memakai saldo yang benar-benar tersedia untuk dibelanjakan, jumlah hari menuju gajian, pola pengeluaran harian, kewajiban yang relevan, serta urgensi limit kartu kredit. Dana disisihkan dan saldo minimum tidak dianggap uang belanja. Limit kartu kredit juga bukan saldo tunai; bila sisa limit turun sampai 20% atau kurang, analisis menyisihkan dana tambahan untuk memulihkan minimal 20% ruang limit tanpa menghitung dua kali tagihan kartu yang sudah jatuh tempo sebelum gajian.',
         ],
         [
             'id' => 'faq-19',
@@ -262,7 +262,7 @@ function faqKnowledgeBase(): array {
             'category' => 'akun',
             'question' => 'Apakah notifikasi aplikasi bisa dikirim ke email?',
             'keywords' => 'email notifikasi pemberitahuan login keamanan broadcast pembaruan android tagihan saldo batas harian',
-            'answer_html' => 'Bisa. Aktifkan <b>Kirim notifikasi juga ke email terverifikasi</b> pada menu <b>Backup &amp; Aplikasi → Notifikasi</b>. Peringatan batas harian, tagihan jatuh tempo, saldo rendah, serta pemberitahuan penting dari aplikasi dapat dikirim ke email. Riwayat login baru, broadcast admin, dan peringatan aplikasi juga tersimpan di menu <b>Pemberitahuan</b>. Sistem melakukan deduplikasi agar peringatan yang sama tidak dibuat berulang pada hari yang sama.',
+            'answer_html' => 'Bisa. Buka menu <b>Pengaturan Notifikasi</b>, aktifkan notifikasi otomatis, lalu pilih <b>Hanya melalui aplikasi</b> atau <b>Aplikasi + Email</b>. Saluran email hanya tersedia jika email akun sudah terverifikasi. Peringatan batas harian, tagihan, saldo rendah, login baru, broadcast admin, dan status akun mengikuti pilihan saluran notifikasi. Email OTP, verifikasi, dan pemulihan akun tetap dikirim karena merupakan email keamanan/transaksional, bukan notifikasi opsional.',
         ],
         [
             'id' => 'faq-36',
@@ -390,6 +390,10 @@ function faqFindBestMatch(string $message): ?array {
 }
 
 function faqAssistantReply(string $message): ?string {
+    // V69: pertanyaan kondisi keuangan pribadi seperti "apakah aman sampai gajian?"
+    // harus masuk engine analitik, bukan FAQ statis tentang cara kerja prediksi.
+    if(function_exists('smartPaydayAnalysisIntent') && smartPaydayAnalysisIntent($message)) return null;
+
     $match = faqFindBestMatch($message);
     if (!$match) return null;
     $entry = $match['entry'];

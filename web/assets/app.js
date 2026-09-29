@@ -1184,6 +1184,22 @@ function pendingCategoryOptions(selected, type) {
   return rows.map(c => optionHtml(c.name, `${c.icon || ""} ${c.name}`.trim(), String(c.name) === String(selected))).join("");
 }
 
+function receivablePendingWalletOptions(selected) {
+  const wallets = (((state.features || {}).receivables || {}).wallets || []).filter(w => !w.archived);
+  return wallets.map(w => optionHtml(String(w.id), `${w.name} · tersedia ${rupiah(w.available_balance ?? w.balance ?? 0)}`, Number(w.id) === Number(selected))).join("");
+}
+
+function receivablePendingLoanOptions(d) {
+  const people = (((state.features || {}).receivables || {}).people || []);
+  const person = people.find(p => String(p.key) === String(d.receivable_borrower_key || ""));
+  const loans = Array.isArray(person?.loans) ? person.loans.filter(x => Number(x.remaining || 0) > 0) : (Array.isArray(d.receivable_loans) ? d.receivable_loans.filter(x => Number(x.remaining || 0) > 0) : []);
+  const selected = Number(d.receivable_lend_id || 0);
+  return `<option value="0"${selected===0?' selected':''}>Akumulasi semua hutang (FIFO)</option>` + loans.map(loan => {
+    const label = `${formatBillDate(loan.transaction_date || '')} · ${rupiah(loan.amount || 0)} · sisa ${rupiah(loan.remaining || 0)}${loan.wallet_name ? ` · ${loan.wallet_name}` : ''}`;
+    return optionHtml(String(loan.id), label, Number(loan.id) === selected);
+  }).join("");
+}
+
 function pendingConfirmationMarkup(pending) {
   const wallets = ((state.features || {}).wallets || []).filter(w => !w.archived);
   const allBills = (state.features || {}).bills || [];
@@ -1197,9 +1213,28 @@ function pendingConfirmationMarkup(pending) {
     return rows.map(b => optionHtml(String(b.id), `${b.suggested ? "Saran · " : ""}${b.name} · ${rupiah(b.amount)}${b.match_score ? ` · cocok ${b.match_score}%` : ""}`)).join("");
   };
   return `<div class="chat-confirm-card" data-confirmation-id="${Number(pending.id || 0)}">
-    <div class="chat-confirm-head"><div><b>Konfirmasi sebelum disimpan</b><small>Jenis transaksi, nominal, tanggal, dan dompet dapat diubah sebelum disimpan.</small></div><span>${drafts.length} draft</span></div>
+    <div class="chat-confirm-head"><div><b>Konfirmasi sebelum disimpan</b><small>Periksa nominal, tanggal, dompet, dan detail pencatatan sebelum saldo berubah.</small></div><span>${drafts.length} draft</span></div>
     ${pending.warning ? `<div class="chat-confirm-warning">⚠️ ${esc(pending.warning)}</div>` : ""}
     <div class="chat-confirm-list">${drafts.map((d, i) => {
+      const receivableAction = String(d.receivable_action || "");
+      if (["lend","repayment"].includes(receivableAction)) {
+        const isRepay = receivableAction === "repayment";
+        return `<div class="chat-confirm-row receivable-confirm-row" data-confirm-index="${i}" data-receivable-confirm="${receivableAction}">
+          <div class="chat-confirm-number">#${i+1}</div>
+          <div class="receivable-confirm-badge ${isRepay?'repayment':'lend'}">${isRepay?'Pelunasan Piutang':'Memberi Hutang'}</div>
+          <div class="chat-confirm-fields receivable-confirm-fields">
+            <label>Nama peminjam<input data-confirm-field="receivable_borrower_name" value="${esc(d.receivable_borrower_name || '')}" ${isRepay?'readonly':''}></label>
+            <input type="hidden" data-confirm-field="receivable_borrower_key" value="${esc(d.receivable_borrower_key || '')}">
+            <label>Nominal<input type="number" min="1" step="1000" data-confirm-field="amount" value="${Number(d.amount || 0)}"></label>
+            <label>Tanggal<input type="date" data-confirm-field="transaction_date" value="${esc(d.transaction_date || new Date().toISOString().slice(0,10))}"></label>
+            <label>${isRepay?'Masuk ke dompet':'Dari dompet'}<select data-confirm-field="wallet_id">${receivablePendingWalletOptions(Number(d.wallet_id || 0))}</select></label>
+            ${isRepay ? `<label class="receivable-confirm-allocation">Pelunasan untuk<select data-confirm-field="receivable_lend_id">${receivablePendingLoanOptions(d)}</select><small>Pilih satu hutang tertentu atau biarkan akumulasi agar dialokasikan ke hutang tertua.</small></label>` : ''}
+            <label class="receivable-confirm-note">Keterangan<input data-confirm-field="note" maxlength="255" value="${esc(d.note || '')}"></label>
+          </div>
+          ${d.attachment ? `<small class="chat-confirm-note">📎 Bukti foto ikut disimpan pada catatan piutang.</small>` : ''}
+        </div>`;
+      }
+
       const type = ["expense","income","transfer"].includes(String(d.type || "")) ? String(d.type) : "expense";
       const candidates = d.bill_candidates || [];
       const singleWallet = Number(d.wallet_id || d.from_wallet_id || wallets[0]?.id || 1);
@@ -1271,6 +1306,7 @@ function syncPendingConfirmationRow(row, resetCategory = false) {
 function wirePendingConfirmationCard(card) {
   if (!card) return;
   card.querySelectorAll('[data-confirm-index]').forEach(row => {
+    if (row.dataset.receivableConfirm) return;
     syncPendingConfirmationRow(row, false);
     row.querySelector('[data-confirm-field="type"]')?.addEventListener('change', () => syncPendingConfirmationRow(row, true));
     row.querySelector('[data-confirm-field="from_wallet_id"]')?.addEventListener('change', () => syncPendingConfirmationRow(row, false));
@@ -1280,29 +1316,26 @@ function wirePendingConfirmationCard(card) {
 function collectPendingOverrides(card) {
   return [...card.querySelectorAll('[data-confirm-index]')].map(row => {
     const get = name => row.querySelector(`[data-confirm-field="${name}"]`)?.value ?? "";
-    const type = get("type") || "expense";
-    const base = {
-      type,
-      amount: Number(get("amount") || 0),
-      transaction_date: get("transaction_date")
-    };
-    if (type === "transfer") {
+    const receivableAction = String(row.dataset.receivableConfirm || "");
+    if (["lend","repayment"].includes(receivableAction)) {
       return {
-        ...base,
-        category: "Transfer Antar Dompet",
-        from_wallet_id: Number(get("from_wallet_id") || 0),
-        to_wallet_id: Number(get("to_wallet_id") || 0),
-        spending_kind: "once",
-        bill_id: 0
+        type: "transfer",
+        receivable_action: receivableAction,
+        receivable_borrower_name: get("receivable_borrower_name").trim(),
+        receivable_borrower_key: get("receivable_borrower_key"),
+        receivable_lend_id: Number(get("receivable_lend_id") || 0),
+        amount: Number(get("amount") || 0),
+        transaction_date: get("transaction_date"),
+        wallet_id: Number(get("wallet_id") || 0),
+        note: get("note") || ""
       };
     }
-    return {
-      ...base,
-      category: get("category") || "Lainnya",
-      wallet_id: Number(get("wallet_id") || 0),
-      spending_kind: type === "expense" ? (get("spending_kind") || "once") : "once",
-      bill_id: type === "expense" ? Number(get("bill_id") || 0) : 0
-    };
+    const type = get("type") || "expense";
+    const base = { type, amount: Number(get("amount") || 0), transaction_date: get("transaction_date") };
+    if (type === "transfer") {
+      return {...base, category:"Transfer Antar Dompet", from_wallet_id:Number(get("from_wallet_id")||0), to_wallet_id:Number(get("to_wallet_id")||0), spending_kind:"once", bill_id:0};
+    }
+    return {...base, category:get("category")||"Lainnya", wallet_id:Number(get("wallet_id")||0), spending_kind:type==="expense"?(get("spending_kind")||"once"):"once", bill_id:type==="expense"?Number(get("bill_id")||0):0};
   });
 }
 
@@ -1318,8 +1351,9 @@ async function submitPendingConfirmation(card, action) {
     if (action === "confirm") {
       const overrides = collectPendingOverrides(card);
       if (overrides.some(x => x.amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(x.transaction_date))) throw new Error("Periksa nominal dan tanggal transaksi terlebih dahulu.");
-      if (overrides.some(x => x.type === "transfer" && (!x.from_wallet_id || !x.to_wallet_id || Number(x.from_wallet_id) === Number(x.to_wallet_id)))) throw new Error("Transfer harus memakai dompet asal dan tujuan yang berbeda.");
-      if (overrides.some(x => x.type !== "transfer" && !x.wallet_id)) throw new Error("Pilih dompet transaksi terlebih dahulu.");
+      if (overrides.some(x => x.receivable_action && (!x.wallet_id || !x.receivable_borrower_name))) throw new Error("Periksa nama peminjam dan dompet piutang terlebih dahulu.");
+      if (overrides.some(x => !x.receivable_action && x.type === "transfer" && (!x.from_wallet_id || !x.to_wallet_id || Number(x.from_wallet_id) === Number(x.to_wallet_id)))) throw new Error("Transfer harus memakai dompet asal dan tujuan yang berbeda.");
+      if (overrides.some(x => !x.receivable_action && x.type !== "transfer" && !x.wallet_id)) throw new Error("Pilih dompet transaksi terlebih dahulu.");
       payload.overrides = overrides;
     }
     const result = await fetchJson("ajax/finance.php", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}, {kind:"finance_confirmation",preview:{confirmation_action:action}});
@@ -1387,7 +1421,7 @@ function renderChats(forceBottom = false) {
   });
 
   if (!(state.chats || []).length) {
-    cb.innerHTML = '<div class="chat-row assistant system-greeting"><div class="bubble assistant"><div class="bubble-text">Halo! <b>Smart Chat</b> siap membantu. Selain mencatat transaksi/foto nota, Anda bisa bertanya seperti <b>“pengeluaran tanggal 10 September”</b>, <b>“pengeluaran terbesar bulan ini”</b>, <b>“saldo SeaBank”</b>, atau <b>“ringkasan keuangan bulan ini”</b>.</div></div></div>';
+    cb.innerHTML = '<div class="chat-row assistant system-greeting"><div class="bubble assistant chat-welcome"><div class="bubble-text"><b class="chat-welcome-title">Halo! 👋 Ada yang bisa saya bantu?</b><span class="chat-welcome-copy">Saya bisa membantu mencatat transaksi, memantau keuangan, mengelola piutang, atau sekadar menemani Anda bercerita. Tulis saja dengan bahasa sehari-hari.</span><div class="chat-welcome-suggestions"><button type="button" data-chat-suggestion="makan 25rb dari BCA">💸 Catat transaksi</button><button type="button" data-chat-suggestion="aman sampai gajian?">📊 Aman sampai gajian?</button><button type="button" data-chat-suggestion="Catat piutang">🤝 Catat piutang</button><button type="button" data-chat-suggestion="Saya mau cerita">💬 Mulai ngobrol</button></div></div></div></div>';
   }
 
   const pending = (state.features || {}).pending_confirmation || state.pending_confirmation || null;
@@ -1430,25 +1464,33 @@ function transactionDetailMarkup(t, wallets = []) {
   const wallet = id => names[String(id)] || (id ? `Dompet #${id}` : 'Tidak tersedia');
   const pending = !!t.offline_pending;
   const transfer = t.type === 'transfer';
-  const type = transfer ? 'Transfer Antar Dompet' : (t.type === 'income' ? 'Pemasukan' : 'Pengeluaran');
-  const tone = transfer ? 'transfer' : (t.type === 'income' ? 'income' : 'expense');
+  const receivableLend = t.source === 'receivable_lend';
+  const receivableRepay = t.source === 'receivable_repayment';
+  const receivable = receivableLend || receivableRepay;
+  const borrowerName = String(t.receivable_borrower_name || 'Peminjam');
+  const type = receivableLend ? 'Memberi Hutang' : (receivableRepay ? 'Pelunasan Piutang' : (transfer ? 'Transfer Antar Dompet' : (t.type === 'income' ? 'Pemasukan' : 'Pengeluaran')));
+  const tone = receivableLend ? 'expense' : (receivableRepay ? 'income' : (transfer ? 'transfer' : (t.type === 'income' ? 'income' : 'expense')));
   const rawDate = String(t.transaction_date || '');
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawDate);
   const date = match ? `${match[3]}/${match[2]}/${match[1]}` : rawDate || 'Tidak tersedia';
   const ref = pending ? `LOKAL-${String(t.id)}` : `TRX-${String(t.id).padStart(6, '0')}`;
-  const sources = {bill:'Pembayaran tagihan',credit_card_bill_payment:'Pembayaran kartu kredit',recurring:'Transaksi berulang',receipt_scan:'Scan nota',chat_with_photo:'Chat dengan foto',wallet_transfer:'Transfer dompet',offline_pending:'Catatan offline',manual:'Catatan manual'};
+  const sources = {bill:'Pembayaran tagihan',credit_card_bill_payment:'Pembayaran kartu kredit',recurring:'Transaksi berulang',receipt_scan:'Scan nota',chat_with_photo:'Chat dengan foto',wallet_transfer:'Transfer dompet',receivable_lend:'Piutang · memberi hutang',receivable_repayment:'Piutang · pelunasan',offline_pending:'Catatan offline',manual:'Catatan manual'};
   const source = sources[t.source] || (t.source ? String(t.source) : 'Catatan transaksi');
   const billRow = ((state.features || {}).bills || []).find(b => Number(b.id) === Number(t.bill_id || 0));
   const billLabel = billRow ? `${billRow.name} · ${rupiah(billRow.amount)}` : (t.bill_id ? `Tagihan #${t.bill_id}` : '');
   const field = (label, value) => `<div><dt>${esc(label)}</dt><dd>${esc(String(value))}</dd></div>`;
-  const route = transfer ? field('Dari dompet',wallet(t.from_wallet_id))+field('Ke dompet',wallet(t.to_wallet_id)) : field('Dompet',wallet(t.wallet_id || 1));
+  const route = receivableLend
+    ? field('Peminjam',borrowerName)+field('Dari dompet',wallet(t.from_wallet_id))+field('Tujuan','Piutang '+borrowerName)
+    : receivableRepay
+      ? field('Peminjam',borrowerName)+field('Sumber','Piutang '+borrowerName)+field('Masuk ke dompet',wallet(t.to_wallet_id))
+      : transfer ? field('Dari dompet',wallet(t.from_wallet_id))+field('Ke dompet',wallet(t.to_wallet_id)) : field('Dompet',wallet(t.wallet_id || 1));
   const photo = photoUrl(t.attachment);
   return `<header class="tx-invoice-brand"><div><span class="tx-invoice-eyebrow">CATATAN KEUANGAN</span><h2 id="txDetailTitle">Bukti Transaksi</h2></div><span class="tx-invoice-status ${pending?'pending':''}">${pending?'Menunggu sinkronisasi':'Tercatat'}</span></header>
     <div class="tx-invoice-reference"><span>${esc(ref)}</span><span>${esc(date)}</span></div>
-    <section class="tx-invoice-amount ${tone}"><span>${esc(type)}</span><strong>${esc(rupiah(t.amount))}</strong><small>${transfer?'Perpindahan dana antar-dompet':t.type==='income'?'Dana masuk':'Dana keluar'}</small></section>
-    <dl class="tx-invoice-meta">${field('Kategori',t.category || 'Lainnya')}${!transfer?field('Pola pengeluaran',spendingKindLabel(t.spending_kind || (t.source==='recurring'?'recurring':t.source==='bill'?'once':'daily'))):''}${t.bill_id?field('Terhubung ke tagihan',billLabel):''}${route}${field('Sumber pencatatan',source)}${field('Waktu pencatatan',t.created_at || 'Tidak tersedia')}</dl>
+    <section class="tx-invoice-amount ${tone}"><span>${esc(type)}</span><strong>${esc(rupiah(t.amount))}</strong><small>${receivableLend?'Dana keluar sebagai piutang':receivableRepay?'Dana kembali dari piutang':transfer?'Perpindahan dana antar-dompet':t.type==='income'?'Dana masuk':'Dana keluar'}</small></section>
+    <dl class="tx-invoice-meta">${field('Kategori',t.category || 'Lainnya')}${!transfer&&!receivable?field('Pola pengeluaran',spendingKindLabel(t.spending_kind || (t.source==='recurring'?'recurring':t.source==='bill'?'once':'daily'))):''}${receivableLend&&t.receivable_due_date?field('Jatuh tempo',formatBillDate(t.receivable_due_date)):''}${t.bill_id?field('Terhubung ke tagihan',billLabel):''}${route}${field('Sumber pencatatan',source)}${field('Waktu pencatatan',t.created_at || 'Tidak tersedia')}</dl>
     <section class="tx-invoice-note"><h3>Catatan</h3><p>${esc(t.note || 'Tidak ada catatan tambahan.')}</p></section>
-    <div class="tx-invoice-total"><span>Total ${transfer?'transfer':'transaksi'}</span><strong>${esc(rupiah(t.amount))}</strong></div>
+    <div class="tx-invoice-total"><span>${receivableLend?'Total hutang diberikan':receivableRepay?'Total pelunasan':`Total ${transfer?'transfer':'transaksi'}`}</span><strong>${esc(rupiah(t.amount))}</strong></div>
     ${photo?`<details class="tx-invoice-proof"><summary>Lihat bukti terlampir</summary><img src="${esc(photo)}" alt="Bukti transaksi terlampir" loading="lazy"><p class="tx-proof-error" hidden>Bukti belum dapat dimuat. Coba kembali saat terhubung internet.</p></details>`:''}
     <footer class="tx-invoice-foot">${pending?'Catatan ini masih tersimpan di perangkat dan belum tersinkron ke server.':'Ringkasan dari catatan keuangan pribadi.'}<br>Referensi TRX adalah nomor catatan aplikasi, bukan nomor invoice penjual.</footer>`;
 }
@@ -1511,16 +1553,24 @@ function renderTransactions() {
   list.innerHTML = "";
   transactions.forEach((t) => {
     const isTransfer = t.type === "transfer";
-    const sign = t.type === "expense" ? "-" : (t.type === "income" ? "+" : "↔ ");
-    const cls = t.type === "expense" ? "expense" : (t.type === "income" ? "income" : "transfer");
+    const receivableLend = t.source === "receivable_lend";
+    const receivableRepay = t.source === "receivable_repayment";
+    const isReceivable = receivableLend || receivableRepay;
+    const borrowerName = String(t.receivable_borrower_name || "Peminjam");
+    const sign = receivableLend ? "-" : (receivableRepay ? "+" : (t.type === "expense" ? "-" : (t.type === "income" ? "+" : "↔ ")));
+    const cls = receivableLend ? "expense" : (receivableRepay ? "income" : (t.type === "expense" ? "expense" : (t.type === "income" ? "income" : "transfer")));
     const x = document.createElement("div");
-    x.className = `tx tx-card tx-${cls}` + (t.offline_pending ? " offline-pending" : "");
+    x.className = `tx tx-card tx-${cls}` + (t.offline_pending ? " offline-pending" : "") + (isReceivable ? " tx-receivable" : "");
 
-    const walletLabel = isTransfer
-      ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
-      : (wallets[Number(t.wallet_id || 1)] || "Utama");
-    const pattern = transactionPatternLabel(String(t.spending_kind || ""));
-    const typeText = transactionKindLabel(String(t.type || ""));
+    const walletLabel = receivableLend
+      ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → Piutang ${borrowerName}`
+      : receivableRepay
+        ? `Piutang ${borrowerName} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
+        : isTransfer
+          ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
+          : (wallets[Number(t.wallet_id || 1)] || "Utama");
+    const pattern = isReceivable ? "" : transactionPatternLabel(String(t.spending_kind || ""));
+    const typeText = receivableLend ? "Memberi Hutang" : (receivableRepay ? "Pelunasan Piutang" : transactionKindLabel(String(t.type || "")));
     const displayDate = formatTransactionDate(t.transaction_date);
     const note = String(t.note || "").trim();
 
@@ -1528,13 +1578,17 @@ function renderTransactions() {
       `<span class="tx-kind-badge ${cls}">${esc(typeText)}</span>`,
       pattern ? `<span class="tx-pattern-badge">${esc(pattern)}</span>` : "",
       t.source === "receipt_scan" ? '<span class="scan-badge">scan nota</span>' : "",
+      isReceivable ? '<span class="scan-badge">piutang</span>' : "",
       t.offline_pending ? '<span class="sync-badge">offline</span>' : ""
     ].filter(Boolean).join("");
 
     const detailAction = `<button type="button" class="tx-detail-btn" data-detail-id="${esc(String(t.id))}" aria-label="Lihat detail transaksi">Detail</button>`;
     const actions = detailAction + (t.offline_pending
       ? '<span class="pending-sync-text">Menunggu sinkronisasi</span>'
-      : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
+      : isReceivable
+        ? '<button type="button" class="tx-edit-btn" data-open-receivables="1">Kelola Piutang</button>'
+        : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
+    const txTitle = isReceivable ? `${typeText} · ${borrowerName}` : (t.category || "Lainnya");
 
     x.innerHTML = `
       <div class="tx-card-head">
@@ -1542,7 +1596,7 @@ function renderTransactions() {
           ${t.attachment ? attachmentHtml(t.attachment, true) : `<div class="tx-icon" aria-hidden="true">${txIcon(t.category)}</div>`}
           <div class="tx-info">
             <div class="tx-title-row">
-              <b class="tx-title">${esc(t.category || "Lainnya")}</b>
+              <b class="tx-title">${esc(txTitle)}</b>
               <div class="tx-badges">${statusBadges}</div>
             </div>
             <div class="tx-meta">
@@ -1596,6 +1650,7 @@ function renderTransactions() {
   syncTransactionFilterUi();
   document.querySelectorAll("[data-delete-id]").forEach((btn) => btn.addEventListener("click", () => delTx(Number(btn.dataset.deleteId))));
   document.querySelectorAll("[data-edit-id]").forEach((btn) => btn.addEventListener("click", () => openTransactionEdit(Number(btn.dataset.editId))));
+  list.querySelectorAll("[data-open-receivables]").forEach(btn => btn.addEventListener("click", () => openFinanceCenter("receivables")));
   list.querySelectorAll("[data-detail-id]").forEach(btn => btn.addEventListener("click", () => openTransactionDetail(btn.dataset.detailId)));
   bindStoredPhotos(list);
 }
@@ -2199,6 +2254,17 @@ function openPhotoViewer(url) {
 document.getElementById("closePhotoViewer")?.addEventListener("click", () => document.getElementById("photoViewer").close());
 document.getElementById("photoViewer")?.addEventListener("click", (e) => { if (e.target.id === "photoViewer") e.currentTarget.close(); });
 
+// Quick suggestions pada salam awal Asisten Keuangan.
+document.addEventListener("click", (e) => {
+  const suggestion = e.target.closest("[data-chat-suggestion]");
+  if (!suggestion) return;
+  const input = document.getElementById("message");
+  if (!input) return;
+  input.value = suggestion.dataset.chatSuggestion || "";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.focus();
+});
+
 // ---------------- CHAT SEND ----------------
 const chatForm = document.getElementById("chatForm");
 chatForm.addEventListener("submit", async (e) => {
@@ -2209,7 +2275,7 @@ chatForm.addEventListener("submit", async (e) => {
   sourceMenu.hidden = true;
   const cb = document.getElementById("chatBody");
   const tempPhoto = selectedPhoto?.previewUrl ? `<div class="stored-photo temp"><img src="${esc(selectedPhoto.previewUrl)}" alt="Foto"></div>` : "";
-  cb.insertAdjacentHTML("beforeend", `<div class="bubble user ${selectedPhoto ? "has-photo" : ""}">${tempPhoto}${msg ? `<div class="bubble-text">${esc(msg)}</div>` : ""}</div><div class="bubble assistant" id="typing"><div class="bubble-text">${selectedPhoto ? "Membaca foto dan menyiapkan konfirmasi…" : "Memproses lokal…"}</div></div>`);
+  cb.insertAdjacentHTML("beforeend", `<div class="bubble user ${selectedPhoto ? "has-photo" : ""}">${tempPhoto}${msg ? `<div class="bubble-text">${esc(msg)}</div>` : ""}</div><div class="bubble assistant" id="typing"><div class="bubble-text">${selectedPhoto ? "Membaca foto dan menyiapkan konfirmasi…" : "Sedang memproses…"}</div></div>`);
   cb.scrollTop = cb.scrollHeight;
   document.getElementById("sendBtn").disabled = true;
   if (attachBtn) attachBtn.disabled = true;
@@ -3844,6 +3910,7 @@ function updateFinanceCenterHeading(tab = "") {
     "admin-banks": ["Rekening Pembayaran", "Kelola rekening tujuan pembayaran Premium."],
     "admin-users": ["Akun Pengguna", "Kelola paket dan akses pengguna secara manual."],
     "admin-maintenance": ["Mode Maintenance", "Atur siapa yang tetap dapat mengakses aplikasi selama pemeliharaan."],
+    "receivables": ["Piutang / Memberi Hutang", "Catat pemberian hutang, pelunasan, bukti foto, dan rekap per peminjam."],
   };
   const title = el("financeCenterTitle");
   const subtitle = el("financeCenterSubtitle");
@@ -3853,7 +3920,7 @@ function updateFinanceCenterHeading(tab = "") {
     if (subtitle) subtitle.textContent = adminCopy[1];
   } else {
     if (title) title.textContent = "Pusat Keuangan";
-    if (subtitle) subtitle.textContent = "Kelola dompet, budget, tagihan, target, analitik, backup dan aplikasi.";
+    if (subtitle) subtitle.textContent = "Kelola piutang, dompet, budget, tagihan, target, analitik, backup dan aplikasi.";
   }
 }
 function selectFinanceTab(tab) {
@@ -3889,6 +3956,7 @@ el("closeFinanceCenter")?.addEventListener("click", () => financeCenter.close())
 function renderFinanceCenter() {
   const f = featureState();
   renderWallets(f.wallets || []);
+  renderReceivables(f.receivables || {});
   renderCategories(f.categories || [], f.monthly_budgets || []);
   renderBills(f.bills || []);
   renderRecurring(f.recurring || []);
@@ -3899,6 +3967,367 @@ function renderFinanceCenter() {
   renderFeatureSelectOptions();
   renderSyncQueueDetails();
 }
+
+
+// ---------------- V68: PIUTANG / MEMBERI HUTANG ----------------
+function receivableState() {
+  const r = featureState()?.receivables || {};
+  return {
+    summary: r.summary || { total_lent:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
+    people: Array.isArray(r.people) ? r.people : [],
+    entries: Array.isArray(r.entries) ? r.entries : [],
+    wallets: Array.isArray(r.wallets) ? r.wallets : [],
+  };
+}
+
+function receivablePersonStatusLabel(p={}) {
+  if (p.status === "overdue") return "Lewat jatuh tempo";
+  if (Number(p.outstanding || 0) <= 0) return "Lunas";
+  return "Belum lunas";
+}
+
+function receivableInitial(name="") {
+  const text = String(name || "?").trim();
+  return esc((text.charAt(0) || "?").toUpperCase());
+}
+
+function receivableProofHtml(entry={}) {
+  if (!entry.attachment?.file) return "";
+  const src = photoUrl(entry.attachment);
+  return `<a class="receivable-proof-link" href="${esc(src)}" target="_blank" rel="noopener">Lihat bukti foto</a>`;
+}
+
+function receivableEntryMarkup(entry={}) {
+  const repayment = entry.action === "repayment";
+  const actionLabel = repayment ? "Pelunasan" : "Memberi hutang";
+  const amountClass = repayment ? "repayment" : "lend";
+  const amountPrefix = repayment ? "+" : "−";
+  const due = !repayment && entry.due_date ? ` · jatuh tempo ${formatBillDate(entry.due_date)}` : "";
+  const allocation = repayment && entry.allocation_label ? `<small class="receivable-entry-allocation">↳ ${esc(entry.allocation_label)}</small>` : "";
+  const note = String(entry.note || "").trim();
+  return `<article class="receivable-entry ${repayment ? "repayment" : "lend"}">
+    <div class="receivable-entry-icon" aria-hidden="true">${repayment ? "↙" : "↗"}</div>
+    <div class="receivable-entry-copy">
+      <b>${esc(entry.borrower_name || "Peminjam")} · ${esc(actionLabel)}</b>
+      <small>${esc(formatBillDate(entry.transaction_date || ""))} · ${esc(entry.wallet_name || "Dompet")}${esc(due)}</small>
+      ${allocation}
+      ${note ? `<small class="receivable-entry-note">${esc(note)}</small>` : ""}
+      ${receivableProofHtml(entry)}
+    </div>
+    <div class="receivable-entry-side">
+      <b class="${amountClass}">${amountPrefix}${esc(rupiah(entry.amount || 0))}</b>
+      <button type="button" data-receivable-delete="${Number(entry.id || 0)}">Hapus</button>
+    </div>
+  </article>`;
+}
+
+function fillReceivableWalletSelect(id, wallets=[]) {
+  const select = el(id); if (!select) return;
+  const prev = select.value;
+  select.innerHTML = wallets.length
+    ? wallets.map(w => `<option value="${Number(w.id)}">${esc(w.name)} · tersedia ${esc(rupiah(w.available_balance ?? w.balance ?? 0))}</option>`).join("")
+    : '<option value="">Belum ada dompet yang dapat digunakan</option>';
+  if (prev && [...select.options].some(o => o.value === prev)) select.value = prev;
+}
+
+function receivableFilterValues() {
+  return {
+    borrower: String(el("receivableFilterBorrower")?.value || ""),
+    status: String(el("receivableFilterStatus")?.value || "all"),
+    action: String(el("receivableFilterAction")?.value || "all"),
+    from: String(el("receivableFilterFrom")?.value || ""),
+    to: String(el("receivableFilterTo")?.value || ""),
+    wallet: Number(el("receivableFilterWallet")?.value || 0),
+  };
+}
+
+function receivableFilteredView(r) {
+  const f = receivableFilterValues();
+  const statusMatches = p => f.status === "all" || (f.status === "paid" ? Number(p.outstanding||0) <= 0 : f.status === "active" ? Number(p.outstanding||0) > 0 : String(p.status||"") === "overdue");
+  let people = r.people.filter(p => (!f.borrower || String(p.key) === f.borrower) && statusMatches(p));
+  const allowed = new Set(people.map(p => String(p.key)));
+  let entries = r.entries.filter(e => {
+    if (!allowed.has(String(e.borrower_key))) return false;
+    if (f.action !== "all" && String(e.action) !== f.action) return false;
+    if (f.from && String(e.transaction_date||"") < f.from) return false;
+    if (f.to && String(e.transaction_date||"") > f.to) return false;
+    if (f.wallet && Number(e.wallet_id||0) !== f.wallet) return false;
+    return true;
+  });
+  const hasEntryFilter = f.action !== "all" || !!f.from || !!f.to || !!f.wallet;
+  if (hasEntryFilter) {
+    const keys = new Set(entries.map(e => String(e.borrower_key)));
+    people = people.filter(p => keys.has(String(p.key)));
+  }
+  return {filters:f, people, entries};
+}
+
+function updateReceivableRepayHint() {
+  const r = receivableState();
+  const key = el("receivableRepayBorrower")?.value || "";
+  const p = r.people.find(x => String(x.key) === String(key));
+  const hint = el("receivableRepayOutstanding");
+  const input = el("receivableRepayAmount");
+  const target = el("receivableRepayLend");
+  if (!hint) return;
+  if (!p) {
+    hint.innerHTML = "Pilih peminjam untuk melihat sisa hutang.";
+    if (input) input.removeAttribute("max");
+    if (target) target.innerHTML = '<option value="0">Akumulasi semua hutang (FIFO)</option>';
+    return;
+  }
+  hint.innerHTML = `Sisa hutang <strong>${esc(rupiah(p.outstanding || 0))}</strong> · diberikan ${esc(rupiah(p.lent || 0))} · sudah dibayar ${esc(rupiah(p.repaid || 0))}.`;
+  if (input) input.max = String(Math.max(0, Number(p.outstanding || 0)));
+  if (target) {
+    const prev = target.value;
+    const loans = (p.loans || []).filter(x => Number(x.remaining || 0) > 0);
+    target.innerHTML = '<option value="0">Akumulasi semua hutang (FIFO)</option>' + loans.map(loan => `<option value="${Number(loan.id)}">${esc(formatBillDate(loan.transaction_date||""))} · ${esc(rupiah(loan.amount||0))} · sisa ${esc(rupiah(loan.remaining||0))}${loan.wallet_name?` · ${esc(loan.wallet_name)}`:""}</option>`).join("");
+    if (prev && [...target.options].some(o => o.value === prev)) target.value = prev;
+  }
+}
+
+function updateReceivableRepayTargetMax() {
+  const r = receivableState();
+  const p = r.people.find(x => String(x.key) === String(el("receivableRepayBorrower")?.value || ""));
+  const lendId = Number(el("receivableRepayLend")?.value || 0);
+  const input = el("receivableRepayAmount");
+  if (!p || !input) return;
+  let max = Number(p.outstanding || 0);
+  if (lendId > 0) {
+    const loan = (p.loans || []).find(x => Number(x.id) === lendId);
+    if (loan) max = Number(loan.remaining || 0);
+  }
+  input.max = String(Math.max(0,max));
+}
+
+function renderReceivables(raw={}) {
+  const r = {
+    summary: raw.summary || { total_lent:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
+    people: Array.isArray(raw.people) ? raw.people : [], entries: Array.isArray(raw.entries) ? raw.entries : [], wallets: Array.isArray(raw.wallets) ? raw.wallets : [],
+  };
+
+  const borrowerFilter = el("receivableFilterBorrower");
+  if (borrowerFilter) {
+    const prev = borrowerFilter.value;
+    borrowerFilter.innerHTML = '<option value="">Semua peminjam</option>' + r.people.map(p => `<option value="${esc(p.key)}">${esc(p.name)}</option>`).join("");
+    if (prev && [...borrowerFilter.options].some(o => o.value === prev)) borrowerFilter.value = prev;
+  }
+  const walletFilter = el("receivableFilterWallet");
+  if (walletFilter) {
+    const prev = walletFilter.value;
+    walletFilter.innerHTML = '<option value="0">Semua dompet</option>' + r.wallets.map(w => `<option value="${Number(w.id)}">${esc(w.name)}</option>`).join("");
+    if (prev && [...walletFilter.options].some(o => o.value === prev)) walletFilter.value = prev;
+  }
+
+  const view = receivableFilteredView(r);
+  const filteredLent = view.entries.filter(e=>e.action==="lend").reduce((a,e)=>a+Number(e.amount||0),0);
+  const filteredRepaid = view.entries.filter(e=>e.action==="repayment").reduce((a,e)=>a+Number(e.amount||0),0);
+  const visibleOutstanding = view.people.reduce((a,p)=>a+Number(p.outstanding||0),0);
+  const activeVisible = view.people.filter(p=>Number(p.outstanding||0)>0).length;
+  const summaryBox = el("receivableSummaryGrid");
+  if (summaryBox) summaryBox.innerHTML = `
+    <div class="receivable-summary-card"><span>Total diberikan${view.entries.length!==r.entries.length?' · filter':''}</span><b>${esc(rupiah(filteredLent))}</b></div>
+    <div class="receivable-summary-card"><span>Total dibayar${view.entries.length!==r.entries.length?' · filter':''}</span><b>${esc(rupiah(filteredRepaid))}</b></div>
+    <div class="receivable-summary-card emphasis"><span>Sisa piutang saat ini</span><b>${esc(rupiah(visibleOutstanding))}</b></div>
+    <div class="receivable-summary-card"><span>Peminjam aktif</span><b>${activeVisible} orang</b></div>`;
+
+  const filterStatus = el("receivableFilterStatusText");
+  if (filterStatus) filterStatus.textContent = `Menampilkan ${view.people.length} peminjam dan ${view.entries.length} transaksi sesuai filter. PDF akan memakai filter yang sama.`;
+
+  const lendBorrowerSelect = el("receivableLendBorrowerSelect");
+  if (lendBorrowerSelect) {
+    const prev = lendBorrowerSelect.value || "__new__";
+    lendBorrowerSelect.innerHTML = '<option value="__new__">+ Tambah orang baru</option>' + r.people.map(p => `<option value="${esc(p.key)}">${esc(p.name)} · ${Number(p.outstanding||0)>0?`sisa ${esc(rupiah(p.outstanding||0))}`:'sudah lunas'}</option>`).join("");
+    if ([...lendBorrowerSelect.options].some(o => o.value === prev)) lendBorrowerSelect.value = prev;
+    else lendBorrowerSelect.value = "__new__";
+    updateReceivableLendBorrowerMode();
+  }
+  fillReceivableWalletSelect("receivableLendWallet", r.wallets);
+  fillReceivableWalletSelect("receivableRepayWallet", r.wallets);
+
+  const today = typeof localTodayValue === "function" ? localTodayValue() : new Date().toISOString().slice(0,10);
+  if (el("receivableLendDate") && !el("receivableLendDate").value) el("receivableLendDate").value = today;
+  if (el("receivableRepayDate") && !el("receivableRepayDate").value) el("receivableRepayDate").value = today;
+
+  const repaySelect = el("receivableRepayBorrower");
+  if (repaySelect) {
+    const prev = repaySelect.value;
+    const active = r.people.filter(p => Number(p.outstanding || 0) > 0);
+    repaySelect.innerHTML = '<option value="">Pilih peminjam</option>' + active.map(p => `<option value="${esc(p.key)}">${esc(p.name)} · sisa ${esc(rupiah(p.outstanding || 0))}</option>`).join("");
+    if (prev && [...repaySelect.options].some(o => o.value === prev)) repaySelect.value = prev;
+  }
+
+  const peopleBox = el("receivablePeopleList");
+  if (peopleBox) {
+    const people = view.people;
+    if (!people.length) peopleBox.innerHTML = '<div class="empty compact">Tidak ada data piutang sesuai filter.</div>';
+    else peopleBox.innerHTML = people.map(p => {
+      const personEntries = view.entries.filter(e => String(e.borrower_key) === String(p.key));
+      const activeLoans = (p.loans || []).filter(x=>Number(x.remaining||0)>0);
+      const statusClass = p.status === "overdue" ? "is-overdue" : Number(p.outstanding || 0) <= 0 ? "is-paid" : "";
+      const due = p.next_due_date ? ` · jatuh tempo terdekat ${formatBillDate(p.next_due_date)}` : "";
+      const loansMarkup = activeLoans.length ? `<div class="receivable-loan-list"><b>Hutang yang masih terbuka</b>${activeLoans.map(loan=>`<div class="receivable-loan-item"><div><strong>${esc(rupiah(loan.remaining||0))}</strong><small>${esc(formatBillDate(loan.transaction_date||""))} · awal ${esc(rupiah(loan.amount||0))}${loan.due_date?` · JT ${esc(formatBillDate(loan.due_date))}`:""}</small></div><button type="button" class="secondary-btn" data-receivable-repay-loan="${Number(loan.id)}" data-borrower-key="${esc(p.key)}">Lunasi ini</button></div>`).join("")}</div>` : "";
+      return `<details class="receivable-person ${statusClass}">
+        <summary><div class="receivable-person-main"><span class="receivable-person-avatar">${receivableInitial(p.name)}</span><span class="receivable-person-copy"><b>${esc(p.name)}</b><small>${esc(receivablePersonStatusLabel(p))} · ${Number(p.entries || 0)} transaksi${esc(due)}</small></span></div><span class="receivable-person-amount"><span>Sisa hutang</span><b>${esc(rupiah(p.outstanding || 0))}</b></span></summary>
+        <div class="receivable-person-body">
+          <div class="receivable-person-kpis"><div><span>Total diberikan</span><b>${esc(rupiah(p.lent || 0))}</b></div><div><span>Sudah dibayar</span><b>${esc(rupiah(p.repaid || 0))}</b></div><div><span>Sisa</span><b>${esc(rupiah(p.outstanding || 0))}</b></div></div>
+          ${loansMarkup}
+          <div class="receivable-person-actions"><button type="button" class="btn secondary" data-receivable-lend-again="${esc(p.key)}">Tambah Hutang Lagi</button>${Number(p.outstanding || 0) > 0 ? `<button type="button" class="btn primary" data-receivable-repay-person="${esc(p.key)}">Catat Pelunasan</button>` : ""}</div>
+          <div class="receivable-history-list">${personEntries.length ? personEntries.map(receivableEntryMarkup).join("") : '<div class="empty compact">Tidak ada riwayat sesuai filter.</div>'}</div>
+        </div>
+      </details>`;
+    }).join("");
+  }
+
+  const historyBox = el("receivableHistoryList");
+  if (historyBox) historyBox.innerHTML = view.entries.length ? view.entries.map(receivableEntryMarkup).join("") : '<div class="empty compact">Tidak ada riwayat piutang sesuai filter.</div>';
+
+  updateReceivableRepayHint();
+  updateReceivableRepayTargetMax();
+
+  document.querySelectorAll("[data-receivable-repay-person]").forEach(btn => btn.onclick = () => {
+    const key = String(btn.dataset.receivableRepayPerson || "");
+    if (el("receivableRepayBorrower")) el("receivableRepayBorrower").value = key;
+    setReceivableMobileMode("repayment"); updateReceivableRepayHint();
+    el("receivableRepayBorrower")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(() => el("receivableRepayAmount")?.focus(), 260);
+  });
+  document.querySelectorAll("[data-receivable-repay-loan]").forEach(btn => btn.onclick = () => {
+    const key=String(btn.dataset.borrowerKey||""); const loanId=Number(btn.dataset.receivableRepayLoan||0);
+    if(el("receivableRepayBorrower"))el("receivableRepayBorrower").value=key;
+    setReceivableMobileMode("repayment"); updateReceivableRepayHint();
+    if(el("receivableRepayLend"))el("receivableRepayLend").value=String(loanId); updateReceivableRepayTargetMax();
+    el("receivableRepayAmount")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>el("receivableRepayAmount")?.focus(),250);
+  });
+  document.querySelectorAll("[data-receivable-lend-again]").forEach(btn => btn.onclick = () => {
+    const key = String(btn.dataset.receivableLendAgain || "");
+    if (el("receivableLendBorrowerSelect") && [...el("receivableLendBorrowerSelect").options].some(o=>o.value===key)) el("receivableLendBorrowerSelect").value = key;
+    updateReceivableLendBorrowerMode();
+    setReceivableMobileMode("lend"); el("receivableLendBorrowerSelect")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(() => el("receivableLendAmount")?.focus(), 260);
+  });
+  document.querySelectorAll("[data-receivable-delete]").forEach(btn => btn.onclick = async () => {
+    const id = Number(btn.dataset.receivableDelete || 0); if (!id) return;
+    if (!confirm("Hapus catatan piutang ini? Saldo dompet akan dihitung ulang sesuai transaksi yang tersisa.")) return;
+    try { await featureAction({action:"receivable_delete",id}, "Catatan piutang dihapus"); announceRealtimeMutation(); await reloadTransactionsOnly(); }
+    catch (e) { showFeatureToast(e.message || "Catatan piutang gagal dihapus.", "error"); }
+  });
+}
+
+function updateReceivableLendBorrowerMode() {
+  const select = el("receivableLendBorrowerSelect");
+  const wrap = el("receivableLendNewBorrowerWrap");
+  const input = el("receivableLendBorrower");
+  const isNew = !select || select.value === "__new__" || !select.value;
+  if (wrap) wrap.hidden = !isNew;
+  if (input) {
+    input.disabled = !isNew;
+    if (!isNew) input.value = "";
+  }
+}
+
+function setReceivableMobileMode(mode="lend") {
+  mode = mode === "repayment" ? "repayment" : "lend";
+  document.querySelectorAll("[data-receivable-form-mode]").forEach(b=>b.classList.toggle("is-active",b.dataset.receivableFormMode===mode));
+  document.querySelectorAll("[data-receivable-form]").forEach(card=>card.classList.toggle("mobile-form-hidden",card.dataset.receivableForm!==mode));
+}
+
+function receivableEnsureOnline() {
+  if (!navigator.onLine || state.offline_mode) throw new Error("Pencatatan piutang membutuhkan koneksi internet agar saldo dan sisa hutang tidak bentrok antarperangkat.");
+}
+function receivableValidatePhoto(file) {
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) throw new Error("Ukuran bukti foto maksimal 8 MB.");
+  if (file.type && !["image/jpeg","image/png","image/webp"].includes(file.type)) throw new Error("Bukti foto harus JPG, PNG, atau WebP.");
+}
+
+async function saveReceivableLend() {
+  const btn = el("saveReceivableLend"); const old = btn?.textContent || "Catat Pemberian Hutang";
+  try {
+    receivableEnsureOnline();
+    const borrowerChoice=String(el("receivableLendBorrowerSelect")?.value||"__new__"), borrowerKey=borrowerChoice!=="__new__"?borrowerChoice:"", borrower=borrowerKey?"":String(el("receivableLendBorrower")?.value||"").trim(), amount=Number(el("receivableLendAmount")?.value||0), walletId=Number(el("receivableLendWallet")?.value||0), date=el("receivableLendDate")?.value||"", dueDate=el("receivableLendDueDate")?.value||"", note=String(el("receivableLendNote")?.value||"").trim(), file=el("receivableLendPhoto")?.files?.[0]||null;
+    if(!borrowerKey&&!borrower)throw new Error("Pilih peminjam lama atau isi nama orang baru."); if(amount<=0)throw new Error("Nominal hutang harus lebih dari nol."); if(!walletId)throw new Error("Pilih dompet sumber dana."); if(!date)throw new Error("Pilih tanggal pemberian hutang."); receivableValidatePhoto(file);
+    if(btn){btn.disabled=true;btn.textContent=file?"Mengunggah bukti…":"Menyimpan…";}
+    const fd=new FormData(); fd.append("action","receivable_lend");fd.append("borrower_key",borrowerKey);fd.append("borrower_name",borrower);fd.append("amount",String(amount));fd.append("wallet_id",String(walletId));fd.append("transaction_date",date);fd.append("due_date",dueDate);fd.append("note",note); if(file)fd.append("photo",file,file.name);
+    await featureFormAction(fd,"Hutang berhasil dicatat");announceRealtimeMutation();
+    ["receivableLendAmount","receivableLendDueDate","receivableLendNote","receivableLendPhoto"].forEach(id=>{if(el(id))el(id).value="";}); if(!borrowerKey&&el("receivableLendBorrower"))el("receivableLendBorrower").value=""; await reloadTransactionsOnly();
+  } catch(e){showFeatureToast(e.message||"Pemberian hutang gagal dicatat.","error");} finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+}
+
+async function saveReceivableRepay() {
+  const btn=el("saveReceivableRepay"), old=btn?.textContent||"Catat Pelunasan";
+  try{
+    receivableEnsureOnline();
+    const borrowerKey=String(el("receivableRepayBorrower")?.value||""), lendId=Number(el("receivableRepayLend")?.value||0), amount=Number(el("receivableRepayAmount")?.value||0), walletId=Number(el("receivableRepayWallet")?.value||0), date=el("receivableRepayDate")?.value||"", note=String(el("receivableRepayNote")?.value||"").trim(), file=el("receivableRepayPhoto")?.files?.[0]||null;
+    if(!borrowerKey)throw new Error("Pilih peminjam yang melakukan pelunasan."); if(amount<=0)throw new Error("Nominal pelunasan harus lebih dari nol."); if(!walletId)throw new Error("Pilih dompet penerima pelunasan."); if(!date)throw new Error("Pilih tanggal pelunasan."); receivableValidatePhoto(file);
+    const max=Number(el("receivableRepayAmount")?.max||0);if(max>0&&amount>max)throw new Error(`Nominal pelunasan maksimal ${rupiah(max)} untuk pilihan hutang ini.`);
+    if(btn){btn.disabled=true;btn.textContent=file?"Mengunggah bukti…":"Menyimpan…";}
+    const fd=new FormData();fd.append("action","receivable_repay");fd.append("borrower_key",borrowerKey);fd.append("lend_id",String(lendId));fd.append("amount",String(amount));fd.append("wallet_id",String(walletId));fd.append("transaction_date",date);fd.append("note",note);if(file)fd.append("photo",file,file.name);
+    await featureFormAction(fd,"Pelunasan berhasil dicatat");announceRealtimeMutation();
+    ["receivableRepayAmount","receivableRepayNote","receivableRepayPhoto"].forEach(id=>{if(el(id))el(id).value="";});if(el("receivableRepayLend"))el("receivableRepayLend").value="0"; await reloadTransactionsOnly();
+  }catch(e){showFeatureToast(e.message||"Pelunasan gagal dicatat.","error");}finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+}
+
+function receivableFilteredCsvRows() {
+  const r=receivableState(), view=receivableFilteredView(r); const quote=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const lent=view.entries.filter(e=>e.action==="lend").reduce((a,e)=>a+Number(e.amount||0),0), repaid=view.entries.filter(e=>e.action==="repayment").reduce((a,e)=>a+Number(e.amount||0),0);
+  const lines=[["REKAP PIUTANG - SESUAI FILTER"],["Total diberikan",lent],["Total dibayar",repaid],["Peminjam tampil",view.people.length],[],["REKAP PER PEMINJAM"],["Nama Peminjam","Total Diberikan","Total Dibayar","Sisa Saat Ini","Status","Jatuh Tempo Terdekat"],...view.people.map(p=>[p.name,p.lent||0,p.repaid||0,p.outstanding||0,receivablePersonStatusLabel(p),p.next_due_date||""]),[],["RIWAYAT SESUAI FILTER"],["Tanggal","Peminjam","Jenis","Nominal","Dompet","Alokasi Pelunasan","Jatuh Tempo","Keterangan"],...view.entries.map(e=>[e.transaction_date,e.borrower_name,e.action==="repayment"?"Pelunasan":"Memberi Hutang",e.amount||0,e.wallet_name||"",e.allocation_label||"",e.due_date||"",e.note||""])];
+  return "\uFEFF"+lines.map(row=>row.map(quote).join(";")).join("\r\n");
+}
+function downloadReceivableCsv(){const r=receivableState();if(!r.people.length)return showFeatureToast("Belum ada data piutang untuk direkap.","info");const blob=new Blob([receivableFilteredCsvRows()],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`rekap-piutang-${typeof localTodayValue==="function"?localTodayValue():"data"}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function downloadReceivablePdf(){
+  const r=receivableState();
+  if(!r.people.length)return showFeatureToast("Belum ada data piutang untuk direkap.","info");
+  const f=receivableFilterValues();
+  if(f.from&&f.to&&f.from>f.to)return showFeatureToast("Tanggal awal filter tidak boleh melewati tanggal akhir.","error");
+
+  const q=new URLSearchParams();
+  if(f.borrower)q.set("borrower_key",f.borrower);
+  if(f.status!=="all")q.set("status",f.status);
+  if(f.action!=="all")q.set("action",f.action);
+  if(f.from)q.set("from",f.from);
+  if(f.to)q.set("to",f.to);
+  if(f.wallet)q.set("wallet_id",String(f.wallet));
+
+  // V71: gunakan bridge URL yang sama dengan laporan transaksi.
+  // target=_blank sengaja tidak dipakai karena Android WebView menonaktifkan
+  // multiple-window; akibatnya klik PDF sebelumnya terlihat seperti tidak melakukan apa-apa.
+  const url=legacyApiUrl("ajax/receivables_report.php?"+q.toString());
+  const btn=el("downloadReceivablePdf");
+  const oldHtml=btn?.innerHTML||"Unduh PDF";
+  try{
+    if(btn){
+      btn.disabled=true;
+      btn.setAttribute("aria-busy","true");
+      btn.innerHTML='<span class="btn-inline-spinner" aria-hidden="true"></span> Menyiapkan PDF…';
+    }
+    const a=document.createElement("a");
+    a.href=url;
+    a.style.display="none";
+    a.setAttribute("aria-hidden","true");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showFeatureToast("Rekap PDF sedang disiapkan untuk diunduh.","success");
+  }catch(e){
+    showFeatureToast(e?.message||"PDF piutang tidak dapat diunduh.","error");
+  }finally{
+    window.setTimeout(()=>{
+      if(btn){btn.disabled=false;btn.removeAttribute("aria-busy");btn.innerHTML=oldHtml;}
+    },1400);
+  }
+}
+function resetReceivableFilters(){["receivableFilterBorrower","receivableFilterAction","receivableFilterStatus","receivableFilterWallet"].forEach(id=>{if(el(id))el(id).value=id==="receivableFilterStatus"||id==="receivableFilterAction"?"all":id==="receivableFilterWallet"?"0":"";});["receivableFilterFrom","receivableFilterTo"].forEach(id=>{if(el(id))el(id).value="";});renderReceivables(featureState()?.receivables||{});}
+
+el("saveReceivableLend")?.addEventListener("click",saveReceivableLend);
+el("saveReceivableRepay")?.addEventListener("click",saveReceivableRepay);
+el("receivableLendBorrowerSelect")?.addEventListener("change",()=>{updateReceivableLendBorrowerMode();if(el("receivableLendBorrowerSelect")?.value==="__new__")setTimeout(()=>el("receivableLendBorrower")?.focus(),60);});
+el("receivableRepayBorrower")?.addEventListener("change",()=>{updateReceivableRepayHint();updateReceivableRepayTargetMax();});
+el("receivableRepayLend")?.addEventListener("change",updateReceivableRepayTargetMax);
+["receivableFilterBorrower","receivableFilterStatus","receivableFilterAction","receivableFilterFrom","receivableFilterTo","receivableFilterWallet"].forEach(id=>el(id)?.addEventListener("change",()=>renderReceivables(featureState()?.receivables||{})));
+el("resetReceivableFilters")?.addEventListener("click",resetReceivableFilters);
+el("downloadReceivableCsv")?.addEventListener("click",downloadReceivableCsv);
+el("downloadReceivablePdf")?.addEventListener("click",downloadReceivablePdf);
+document.querySelectorAll("[data-receivable-form-mode]").forEach(btn=>btn.addEventListener("click",()=>setReceivableMobileMode(btn.dataset.receivableFormMode)));
+setReceivableMobileMode("lend");
 
 function syncWalletTypeFields() {
   const credit = String(el("walletType")?.value || "") === "credit_card";
@@ -4018,21 +4447,70 @@ function renderHistory(rows) {
 function barRows(items, total, labelKey="category", valueKey="total") {return (items||[]).length?(items||[]).map(x=>{const v=Number(x[valueKey]||0);const pct=Number(x.percent ?? (total?Math.round(v/total*100):0));return `<div class="analytic-bar-row"><div><span>${esc(x[labelKey]||"")}</span><b>${rupiah(v)}</b></div><div class="analytic-track"><span style="width:${Math.min(100,pct)}%"></span></div><small>${pct}%</small></div>`}).join(""):'<div class="empty compact">Belum ada data.</div>';}
 function renderAnalytics(a,p){const card=el("predictionCard");if(card){
 const status=p.status||"unknown";
+const creditLevel=p.credit_urgency_level||"none";
 const labels={risk:"Berisiko kurang",tight:"Cukup ketat",safe:"Diperkirakan aman",unknown:"Data harian belum cukup",conditional:"Aman bersyarat"};
+let statusLabel=labels[status]||labels.unknown;
+if(["urgent","critical"].includes(creditLevel))statusLabel+=creditLevel==="critical"?" · Limit kartu kritis":" · Limit kartu urgent";
 card.className="prediction-card "+(["unknown","conditional"].includes(status)?"tight":status);
-card.innerHTML=`<div><small>Perkiraan sisa sebelum gajian ${esc(p.payday_date||"-")}</small><strong>${rupiah(p.predicted_balance||0)}</strong><p><b>Saldo tersedia ${rupiah(p.current_balance||0)}</b>${Number(p.reserved_balance||0)>0?` · dana disisihkan ${rupiah(p.reserved_balance)}`:""}${Number(p.minimum_balance||0)>0?` · saldo minimum ${rupiah(p.minimum_balance)}`:""}${Number(p.reserved_balance||0)>0||Number(p.minimum_balance||0)>0?` dari total ${rupiah(p.gross_balance||0)}`:""}</p><p>${p.days_left||0} hari lagi · pola pengeluaran <b>Harian</b> ${rupiah(p.average_daily_expense||0)}/hari. Transaksi Sekali bayar dan Berulang tidak dipaksakan menjadi rata-rata harian.</p><p>Estimasi belanja harian tersisa ${rupiah(p.estimated_daily_spend||0)} · tagihan belum lunas ${rupiah(p.upcoming_bills_total||0)} · pengeluaran berulang ${rupiah(p.recurring_expense||0)}</p><p>Hari ini sudah belanja ${rupiah(p.daily_spent_today||0)}; perkiraan tambahan ${rupiah(p.remaining_daily_spend_today||0)}. Pemasukan terjadwal ${rupiah(p.recurring_income||0)} belum merupakan saldo tersedia.</p><p>Dana disisihkan dan saldo minimum tidak dihitung sebagai uang belanja. Pengeluaran historis non-harian ${rupiah(p.excluded_history_total||0)} tetap masuk laporan aktual tetapi tidak membesar-besarkan proyeksi harian.</p></div><span class="prediction-status">${labels[status]||labels.unknown}</span>`;
+const creditInfo=Number(p.credit_total_limit||0)>0?`<p><b>Kartu kredit:</b> terpakai ${rupiah(p.credit_total_used||0)} dari limit ${rupiah(p.credit_total_limit||0)} (${Number(p.credit_utilization_percent||0).toLocaleString("id-ID",{maximumFractionDigits:1})}%) · sisa limit ${rupiah(p.credit_total_available||0)}.${Number(p.credit_limit_urgent_reserve||0)>0?` <b>Cadangan urgent ${rupiah(p.credit_limit_urgent_reserve||0)}</b> untuk menjaga minimal ${Number(p.credit_target_available_percent||20)}% ruang limit.`:""}</p>`:"";
+card.innerHTML=`<div><small>Perkiraan sisa sebelum gajian ${esc(p.payday_date||"-")}</small><strong>${rupiah(p.predicted_balance||0)}</strong><p><b>Saldo tersedia ${rupiah(p.current_balance||0)}</b>${Number(p.reserved_balance||0)>0?` · dana disisihkan ${rupiah(p.reserved_balance)}`:""}${Number(p.minimum_balance||0)>0?` · saldo minimum ${rupiah(p.minimum_balance)}`:""}${Number(p.reserved_balance||0)>0||Number(p.minimum_balance||0)>0?` dari total ${rupiah(p.gross_balance||0)}`:""}</p><p>${p.days_left||0} hari lagi · pola pengeluaran <b>Harian</b> ${rupiah(p.average_daily_expense||0)}/hari. Transaksi Sekali bayar dan Berulang tidak dipaksakan menjadi rata-rata harian.</p><p>Estimasi belanja harian tersisa ${rupiah(p.estimated_daily_spend||0)} · tagihan belum lunas ${rupiah(p.upcoming_bills_total||0)} · pengeluaran berulang ${rupiah(p.recurring_expense||0)}</p>${creditInfo}<p>Hari ini sudah belanja ${rupiah(p.daily_spent_today||0)}; perkiraan tambahan ${rupiah(p.remaining_daily_spend_today||0)}. Pemasukan terjadwal ${rupiah(p.recurring_income||0)} belum merupakan saldo tersedia.</p><p>Dana disisihkan dan saldo minimum tidak dihitung sebagai uang belanja. Limit kartu kredit tidak dianggap saldo tunai; ketika sisa limit ≤20%, analisis menyisihkan dana tambahan untuk mengembalikan ruang limit minimal 20%. Pengeluaran historis non-harian ${rupiah(p.excluded_history_total||0)} tetap masuk laporan aktual tetapi tidak membesar-besarkan proyeksi harian.</p></div><span class="prediction-status">${statusLabel}</span>`;
 }
 const k=el("analyticsKpis");if(k)k.innerHTML=`<div><small>Pemasukan bulan ini</small><b>${rupiah(a.income||0)}</b></div><div><small>Pengeluaran bulan ini</small><b>${rupiah(a.expense||0)}</b></div><div><small>Rata-rata aktual / hari (semua pengeluaran)</small><b>${rupiah(a.average_daily_expense||0)}</b></div><div><small>Vs bulan lalu</small><b>${a.expense_change_percent===null?"-":(a.expense_change_percent>0?"+":"")+a.expense_change_percent+"%"}</b></div>`;
 const cat=el("analyticsCategoryBars");if(cat)cat.innerHTML=barRows(a.categories||[],a.expense||0);
 const bud=el("analyticsBudgetBars");if(bud)bud.innerHTML=(a.monthly_budgets||[]).length?(a.monthly_budgets||[]).map(x=>`<div class="analytic-bar-row ${x.status}"><div><span>${esc(x.icon||"")} ${esc(x.category)}</span><b>${rupiah(x.spent)} / ${rupiah(x.limit)}</b></div><div class="analytic-track"><span style="width:${Math.min(100,x.percent)}%"></span></div><small>${x.percent}%</small></div>`).join(""):'<div class="empty compact">Belum ada budget kategori bulan ini.</div>';}
 el("paydayDay")?.addEventListener("change",async()=>{try{await featureAction({action:"payday_set",day:Number(el("paydayDay").value)},"Tanggal gajian disimpan");}catch(e){alert(e.message)}});
 
-function renderNotificationForm(n){if(!el("notifyEnabled"))return;el("notifyEnabled").checked=!!n.enabled;el("notifyDaily").checked=!!n.daily_budget;el("notifyBills").checked=!!n.bills;el("notifyLow").checked=!!n.low_balance;if(el("notifyReconciliation"))el("notifyReconciliation").checked=n.daily_reconciliation!==false;if(el("notifyEmailEnabled"))el("notifyEmailEnabled").checked=n.email_enabled!==false;el("notifyLowThreshold").value=Number(n.low_balance_threshold||100000);}
-el("saveNotificationSettings")?.addEventListener("click",async()=>{try{await featureAction({action:"notifications_set",settings:{enabled:el("notifyEnabled").checked,daily_budget:el("notifyDaily").checked,bills:el("notifyBills").checked,low_balance:el("notifyLow").checked,daily_reconciliation:el("notifyReconciliation")?.checked!==false,email_enabled:el("notifyEmailEnabled")?.checked!==false,low_balance_threshold:Number(el("notifyLowThreshold").value||0)}},"Pengaturan notifikasi disimpan");renderTransactionInboxAssistant();checkFinanceNotifications();}catch(e){alert(e.message)}});
-el("requestNotifyBtn")?.addEventListener("click",async()=>{if(!("Notification" in window))return alert("Browser ini tidak mendukung notifikasi.");const p=await Notification.requestPermission();showFeatureToast(p==="granted"?"Notifikasi diizinkan":"Izin notifikasi belum diberikan");});
+const notificationSettingsModal=el("notificationSettingsModal");
+function updateNotificationSettingsUi(){
+  const enabled=!!el("notifyEnabled")?.checked;
+  const options=el("notificationSettingsOptions");
+  if(options){options.classList.toggle("is-disabled",!enabled);options.querySelectorAll("input,select,button").forEach(node=>{if(node.id!=="notifyEnabled")node.disabled=!enabled||(node.tagName==="OPTION"&&node.disabled);});}
+  const mode=el("notificationDeliveryMode");
+  if(mode&&!enabled)mode.disabled=true;
+}
+function renderNotificationForm(n){
+  if(!el("notifyEnabled"))return;
+  el("notifyEnabled").checked=!!n.enabled;
+  el("notifyDaily").checked=!!n.daily_budget;
+  el("notifyBills").checked=!!n.bills;
+  el("notifyLow").checked=!!n.low_balance;
+  if(el("notifyReconciliation"))el("notifyReconciliation").checked=n.daily_reconciliation!==false;
+  const mode=el("notificationDeliveryMode");
+  if(mode){
+    const wanted=n.email_enabled?"app_email":"app";
+    const option=mode.querySelector(`option[value="${wanted}"]`);
+    mode.value=option&&!option.disabled?wanted:"app";
+  }
+  el("notifyLowThreshold").value=Number(n.low_balance_threshold||100000);
+  updateNotificationSettingsUi();
+}
+el("notifyEnabled")?.addEventListener("change",updateNotificationSettingsUi);
+el("saveNotificationSettings")?.addEventListener("click",async()=>{
+  const btn=el("saveNotificationSettings"),old=btn?.textContent||"Simpan Pengaturan";
+  try{
+    const enabled=!!el("notifyEnabled")?.checked;
+    if(btn){btn.disabled=true;btn.textContent="Menyimpan…";}
+    await featureAction({action:"notifications_set",settings:{enabled,daily_budget:!!el("notifyDaily")?.checked,bills:!!el("notifyBills")?.checked,low_balance:!!el("notifyLow")?.checked,daily_reconciliation:el("notifyReconciliation")?.checked!==false,email_enabled:enabled&&el("notificationDeliveryMode")?.value==="app_email",low_balance_threshold:Number(el("notifyLowThreshold")?.value||0)}},"Pengaturan notifikasi disimpan");
+    renderTransactionInboxAssistant();
+    checkFinanceNotifications();
+    notificationSettingsModal?.close();
+  }catch(e){alert(e.message||"Pengaturan notifikasi gagal disimpan.");}
+  finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+});
+el("requestNotifyBtn")?.addEventListener("click",async()=>{if(!("Notification" in window))return alert("Browser ini tidak mendukung notifikasi.");const p=await Notification.requestPermission();showFeatureToast(p==="granted"?"Notifikasi perangkat diizinkan":"Izin notifikasi perangkat belum diberikan");});
+function openNotificationSettingsModal(){
+  if(typeof isMobileSidebar==="function"&&isMobileSidebar())closeSidebar();
+  renderNotificationForm(featureState()?.notifications||{});
+  if(notificationSettingsModal&&!notificationSettingsModal.open)notificationSettingsModal.showModal();
+}
+el("openNotificationSettings")?.addEventListener("click",openNotificationSettingsModal);
+el("openNotificationSettingsFromBackup")?.addEventListener("click",openNotificationSettingsModal);
+el("closeNotificationSettings")?.addEventListener("click",()=>notificationSettingsModal?.close());
+el("cancelNotificationSettings")?.addEventListener("click",()=>notificationSettingsModal?.close());
+notificationSettingsModal?.addEventListener("click",e=>{if(e.target===notificationSettingsModal)notificationSettingsModal.close();});
 
 function notificationEmailKind(key){if(String(key).startsWith("credit_card_due_"))return "bill";if(String(key).startsWith("bill_"))return "bill";if(String(key).startsWith("budget_"))return "budget";if(String(key)==="low_balance")return "low_balance";return "info";}
-async function emailNotificationOnce(key,title,body){const n=featureState()?.notifications||{};if(n.email_enabled===false)return;try{await fetchJson("ajax/email_notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,kind:notificationEmailKind(key),title,message:body})});}catch(_){/* email tidak boleh mengganggu notifikasi utama */}}
+async function emailNotificationOnce(key,title,body){const n=featureState()?.notifications||{};if(!n.enabled||!n.email_enabled)return;try{await fetchJson("ajax/email_notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,kind:notificationEmailKind(key),title,message:body})});}catch(_){/* email tidak boleh mengganggu notifikasi utama */}}
 function persistWarningNotificationOnce(key,title,body){
   const today=new Date().toISOString().slice(0,10);
   const localKey="finance_center_notify_"+key+"_"+today;
@@ -4041,16 +4519,17 @@ function persistWarningNotificationOnce(key,title,body){
     .then(j=>{localStorage.setItem(localKey,"1");applyUserNotificationSnapshot(j);announceRealtimeMutation();})
     .catch(()=>{/* pusat pemberitahuan tidak boleh mengganggu fitur utama */});
 }
-function notifyOnce(key,title,body,externalEnabled=true){persistWarningNotificationOnce(key,title,body);if(!externalEnabled)return;const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
+function notifyOnce(key,title,body,externalEnabled=true){if(!externalEnabled)return;persistWarningNotificationOnce(key,title,body);const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
 function formatCreditCardReminderDate(value){return formatBillDate(value);}
 function creditCardReminderMessage(r){
   const h=Number(r.days_until||0);
   return `H-${h} penagihan ${r.name} pada ${formatCreditCardReminderDate(r.due_date)} · tagihan tercatat ${rupiah(r.amount||0)}.`;
 }
-function syncAndroidCreditCardReminders(){
+function syncAndroidCreditCardReminders(enabled=true){
   try{
     if(!window.AndroidReminders || typeof window.AndroidReminders.replaceCreditCardSchedules!=="function")return;
     const schedules=[];
+    if(!enabled){window.AndroidReminders.replaceCreditCardSchedules(JSON.stringify(schedules));return;}
     (featureState()?.credit_card_reminders||[]).forEach(r=>{
       if(Number(r.amount||0)<=0 || !r.due_date)return;
       [2,1].forEach(daysBefore=>{
@@ -4086,7 +4565,7 @@ function checkFinanceNotifications(){
   if(n.low_balance&&Number(state.summary?.balance||0)<=Number(n.low_balance_threshold||0))notifyOnce("low_balance","Saldo rendah","Saldo saat ini "+rupiah(state.summary?.balance||0),externalEnabled);
   const r=f.transaction_inbox?.reconciliation||{};
   if(n.daily_reconciliation!==false&&r.prompt_due&&!r.completed)notifyOnce("reconciliation","Sudah lengkap transaksi hari ini?",`${Number(r.transaction_count||0)} transaksi tercatat${Number(r.pending_count||0)>0?` · ${Number(r.pending_count)} draf transaksi belum dirapikan`:""}.`,externalEnabled);
-  syncAndroidCreditCardReminders();
+  syncAndroidCreditCardReminders(externalEnabled);
 }
 
 
@@ -5011,7 +5490,7 @@ el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=60", { updateViaCache: "none" });
+      await navigator.serviceWorker.register("sw.js?v=66", { updateViaCache: "none" });
       await navigator.serviceWorker.ready;
       await cacheCurrentShellForOffline();
     } catch (_) {}
@@ -5032,13 +5511,14 @@ const adminBroadcastPresets = {
   security:{title:"Pemberitahuan Keamanan Akun",subject:"Informasi keamanan Catatan Keuangan",message:"Terdapat informasi keamanan penting terkait penggunaan akun Catatan Keuangan. Pastikan Anda hanya masuk melalui aplikasi atau situs resmi.",action_label:"Buka Catatan Keuangan",action_url:`${String(window.FINANCE_APP?.syncBase||location.origin).replace(/\/$/,"")}/`}
 };
 function applyAdminBroadcastPreset(force=false){const kind=el("adminBroadcastKind")?.value||"android_update",p=adminBroadcastPresets[kind];if(!p)return;[["adminBroadcastTitle","title"],["adminBroadcastSubject","subject"],["adminBroadcastMessage","message"],["adminBroadcastActionLabel","action_label"],["adminBroadcastActionUrl","action_url"]].forEach(([id,key])=>{const node=el(id);if(node&&(force||!node.value.trim()))node.value=p[key]||"";});updateAdminBroadcastTargetHint();}
-function adminBroadcastEligibleCount(){const target=el("adminBroadcastTarget")?.value||"all";return adminPanelUsers.filter(u=>u.email_verified&&(target==="all"||(target==="premium"&&u.plan?.active)||(target==="free"&&!u.plan?.active))).length;}
-function updateAdminBroadcastTargetHint(){const box=el("adminBroadcastProgress");if(!box||adminBroadcastBusy)return;box.textContent=`Target saat ini: ${adminBroadcastEligibleCount()} email terverifikasi.`;}
-function renderAdminBroadcastHistory(rows){const box=el("adminBroadcastHistory");if(!box)return;rows=Array.isArray(rows)?rows:[];box.innerHTML=rows.length?rows.map(c=>{const x=c.counts||{},queued=Number(x.queued||0),waiting=Number(x.pending||0)+Number(x.sending||0)+queued,done=Number(x.sent||0)+Number(x.failed||0),total=Number(c.total||0),pct=total?Math.round(done/total*100):0,status=c.status==="completed"?"Selesai":c.status==="completed_with_errors"?"Selesai dengan error":c.status==="paused_quota"?"Dijeda — Kuota Gmail":c.status==="sending"?"Mengirim":"Antre",recipients=Array.isArray(c.recipients)?c.recipients:[],diag=recipients.length?`<details class="admin-broadcast-diagnostics"><summary>Detail pengiriman</summary><div class="admin-broadcast-diagnostic-list">${recipients.map(r=>{const label=r.status==="sent"?"Diterima SMTP":r.status==="failed"?"Gagal":r.status==="queued"?"Antre":r.status==="sending"?"Mengirim":"Menunggu",extra=r.status==="sent"?(r.smtp_response||r.message_id||""):(r.error||"");return `<div class="admin-broadcast-diagnostic-item"><span><b>${esc(r.email||"-")}</b><small>${esc(label)}${r.sent_at?` · ${esc(r.sent_at)}`:""}</small></span>${extra?`<small title="${esc(extra)}">${esc(extra)}</small>`:""}</div>`}).join("")}</div><small class="admin-broadcast-delivery-note">“Diterima SMTP” berarti server email menerima pesan. Status “Antre” berarti email belum dikirim dan tetap tersimpan untuk dilanjutkan nanti.</small></details>`:"",pause=c.status==="paused_quota"?`<small><b>Pengiriman dijeda:</b> ${esc(c.pause_message||"Kuota email harian tercapai. Penerima yang belum terkirim tetap di antrean.")}${c.paused_at?` · ${esc(c.paused_at)}`:""}</small>`:"",showRetry=Number(x.failed||0)>0||waiting>0||c.status==="paused_quota",retryLabel=c.status==="paused_quota"||waiting>0?"Proses Antrean":"Coba Lagi";return `<div class="admin-broadcast-card"><div class="admin-broadcast-row"><div class="admin-broadcast-icon">✉</div><div class="admin-broadcast-main"><b>${esc(c.title||"Broadcast")}</b><small>${esc(c.created_at||"")} · ${esc(c.target||"all")} · ${status}</small><div class="admin-broadcast-meter"><span style="width:${Math.min(100,pct)}%"></span></div><small>${Number(x.sent||0)} diterima SMTP · ${Number(x.failed||0)} gagal · ${waiting} antre/menunggu</small>${pause}${c.action_url_rewritten?`<small>Link APK langsung otomatis dialihkan ke halaman download resmi.</small>`:""}</div>${showRetry?`<button type="button" class="btn secondary admin-broadcast-retry" data-broadcast-retry="${Number(c.id)}">${retryLabel}</button>`:""}</div>${diag}</div>`}).join(""):'<div class="empty">Belum ada riwayat broadcast.</div>';box.querySelectorAll("[data-broadcast-retry]").forEach(btn=>btn.onclick=async()=>{if(adminBroadcastBusy)return;const id=Number(btn.dataset.broadcastRetry||0);try{adminBroadcastBusy=true;btn.disabled=true;btn.textContent="Memproses…";await adminPost({action:"email_broadcast_retry",campaign_id:id});const result=await processAdminBroadcast(id);const queued=Number(result?.counts?.queued||0);if(result?.status==="paused_quota"||queued>0)showFeatureToast(`${queued} email masih aman di antrean. Kuota Gmail belum tersedia.`);else showFeatureToast("Antrean broadcast selesai diproses.");}catch(e){alert(e.message)}finally{adminBroadcastBusy=false;await loadAdminPanel();updateAdminBroadcastTargetHint();}});}
+function adminBroadcastTargetUsers(){const target=el("adminBroadcastTarget")?.value||"all";return adminPanelUsers.filter(u=>target==="all"||(target==="premium"&&u.plan?.active)||(target==="free"&&!u.plan?.active));}
+function adminBroadcastEligibleCount(){return adminBroadcastTargetUsers().filter(u=>u.email_verified&&u.notification_email).length;}
+function updateAdminBroadcastTargetHint(){const box=el("adminBroadcastProgress");if(!box||adminBroadcastBusy)return;const users=adminBroadcastTargetUsers(),emails=adminBroadcastEligibleCount();box.textContent=`Target saat ini: ${users.length} pengguna di aplikasi · ${emails} memilih email.`;}
+function renderAdminBroadcastHistory(rows){const box=el("adminBroadcastHistory");if(!box)return;rows=Array.isArray(rows)?rows:[];box.innerHTML=rows.length?rows.map(c=>{const x=c.counts||{},queued=Number(x.queued||0),waiting=Number(x.pending||0)+Number(x.sending||0)+queued,done=Number(x.sent||0)+Number(x.failed||0),total=Number(c.total||0),pct=total?Math.round(done/total*100):0,status=c.status==="completed"?"Selesai":c.status==="completed_with_errors"?"Selesai dengan error":c.status==="paused_quota"?"Dijeda — Kuota Gmail":c.status==="app_only"?"Aplikasi saja":c.status==="sending"?"Mengirim":"Antre",recipients=Array.isArray(c.recipients)?c.recipients:[],diag=recipients.length?`<details class="admin-broadcast-diagnostics"><summary>Detail pengiriman</summary><div class="admin-broadcast-diagnostic-list">${recipients.map(r=>{const label=r.status==="sent"?"Diterima SMTP":r.status==="failed"?"Gagal":r.status==="queued"?"Antre":r.status==="sending"?"Mengirim":"Menunggu",extra=r.status==="sent"?(r.smtp_response||r.message_id||""):(r.error||"");return `<div class="admin-broadcast-diagnostic-item"><span><b>${esc(r.email||"-")}</b><small>${esc(label)}${r.sent_at?` · ${esc(r.sent_at)}`:""}</small></span>${extra?`<small title="${esc(extra)}">${esc(extra)}</small>`:""}</div>`}).join("")}</div><small class="admin-broadcast-delivery-note">“Diterima SMTP” berarti server email menerima pesan. Status “Antre” berarti email belum dikirim dan tetap tersimpan untuk dilanjutkan nanti.</small></details>`:"",pause=c.status==="paused_quota"?`<small><b>Pengiriman dijeda:</b> ${esc(c.pause_message||"Kuota email harian tercapai. Penerima yang belum terkirim tetap di antrean.")}${c.paused_at?` · ${esc(c.paused_at)}`:""}</small>`:"",showRetry=Number(x.failed||0)>0||waiting>0||c.status==="paused_quota",retryLabel=c.status==="paused_quota"||waiting>0?"Proses Antrean":"Coba Lagi";return `<div class="admin-broadcast-card"><div class="admin-broadcast-row"><div class="admin-broadcast-icon">✉</div><div class="admin-broadcast-main"><b>${esc(c.title||"Broadcast")}</b><small>${esc(c.created_at||"")} · ${esc(c.target||"all")} · ${status}</small><div class="admin-broadcast-meter"><span style="width:${Math.min(100,pct)}%"></span></div><small>${Number(x.sent||0)} diterima SMTP · ${Number(x.failed||0)} gagal · ${waiting} antre/menunggu</small>${pause}${c.action_url_rewritten?`<small>Link APK langsung otomatis dialihkan ke halaman download resmi.</small>`:""}</div>${showRetry?`<button type="button" class="btn secondary admin-broadcast-retry" data-broadcast-retry="${Number(c.id)}">${retryLabel}</button>`:""}</div>${diag}</div>`}).join(""):'<div class="empty">Belum ada riwayat broadcast.</div>';box.querySelectorAll("[data-broadcast-retry]").forEach(btn=>btn.onclick=async()=>{if(adminBroadcastBusy)return;const id=Number(btn.dataset.broadcastRetry||0);try{adminBroadcastBusy=true;btn.disabled=true;btn.textContent="Memproses…";await adminPost({action:"email_broadcast_retry",campaign_id:id});const result=await processAdminBroadcast(id);const queued=Number(result?.counts?.queued||0);if(result?.status==="paused_quota"||queued>0)showFeatureToast(`${queued} email masih aman di antrean. Kuota Gmail belum tersedia.`);else showFeatureToast("Antrean broadcast selesai diproses.");}catch(e){alert(e.message)}finally{adminBroadcastBusy=false;await loadAdminPanel();updateAdminBroadcastTargetHint();}});}
 async function processAdminBroadcast(campaignId){let guard=0;while(guard++<200){const j=await adminPost({action:"email_broadcast_process",campaign_id:campaignId,batch_size:3});const c=j.action_result||{},x=c.counts||{},queued=Number(x.queued||0),pending=Number(x.pending||0)+Number(x.sending||0)+queued,sent=Number(x.sent||0),failed=Number(x.failed||0),total=Number(c.total||0);const progress=el("adminBroadcastProgress");if(c.status==="paused_quota"){if(progress)progress.textContent=`Pengiriman dijeda: kuota Gmail habis. ${queued} email tersimpan di antrean.`;renderAdminBroadcastHistory(j.email_broadcasts||[]);return c;}if(progress)progress.textContent=`Mengirim… ${sent}/${total} diterima server email${failed?` · ${failed} gagal`:""}${queued?` · ${queued} antre`:""}`;renderAdminBroadcastHistory(j.email_broadcasts||[]);if(pending<=0)return c;}throw new Error("Proses broadcast dihentikan karena terlalu banyak iterasi.");}
 
 function adminBroadcastPayload(){return {kind:el("adminBroadcastKind")?.value||"announcement",target:el("adminBroadcastTarget")?.value||"all",title:el("adminBroadcastTitle")?.value.trim()||"",subject:el("adminBroadcastSubject")?.value.trim()||"",message:el("adminBroadcastMessage")?.value.trim()||"",action_url:el("adminBroadcastActionUrl")?.value.trim()||"",action_label:el("adminBroadcastActionLabel")?.value.trim()||"",include_link:!!el("adminBroadcastIncludeLink")?.checked};}
-async function sendAdminBroadcast(){if(adminBroadcastBusy)return;const payload=adminBroadcastPayload();if(!payload.title||!payload.subject||!payload.message)return alert("Judul, subjek, dan isi pesan wajib diisi.");const count=adminBroadcastEligibleCount();if(!count)return alert("Tidak ada email terverifikasi pada target ini.");if(!confirm(`Kirim broadcast ini ke ${count} email pengguna terverifikasi?`))return;const btn=el("adminBroadcastSend"),old=btn?.textContent||"Kirim Broadcast";try{adminBroadcastBusy=true;if(btn){btn.disabled=true;btn.textContent="Menyiapkan…";}const created=await adminPost({action:"email_broadcast_create",broadcast:payload});const campaignId=Number(created.action_result?.id||0);if(!campaignId)throw new Error("Broadcast tidak berhasil dibuat.");renderAdminBroadcastHistory(created.email_broadcasts||[]);if(btn)btn.textContent="Mengirim…";const result=await processAdminBroadcast(campaignId);const failed=Number(result?.counts?.failed||0),queued=Number(result?.counts?.queued||0);if(result?.status==="paused_quota"||queued>0)showFeatureToast(`Kuota Gmail habis. ${queued} email disimpan aman di antrean.`);else showFeatureToast(failed?`Broadcast selesai, ${failed} email gagal.`:"Broadcast sudah diterima server email. Cek Inbox/Spam penerima.");}catch(e){alert(e.message||"Broadcast gagal dikirim.");}finally{adminBroadcastBusy=false;if(btn){btn.disabled=false;btn.textContent=old;}await loadAdminPanel();updateAdminBroadcastTargetHint();}}
+async function sendAdminBroadcast(){if(adminBroadcastBusy)return;const payload=adminBroadcastPayload();if(!payload.title||!payload.subject||!payload.message)return alert("Judul, subjek, dan isi pesan wajib diisi.");const targets=adminBroadcastTargetUsers(),count=adminBroadcastEligibleCount();if(!targets.length)return alert("Tidak ada pengguna pada target ini.");if(!confirm(`Kirim broadcast ke ${targets.length} pengguna melalui aplikasi${count?` dan ${count} pengguna juga melalui email`:""}?`))return;const btn=el("adminBroadcastSend"),old=btn?.textContent||"Kirim Broadcast";try{adminBroadcastBusy=true;if(btn){btn.disabled=true;btn.textContent="Menyiapkan…";}const created=await adminPost({action:"email_broadcast_create",broadcast:payload});const campaignId=Number(created.action_result?.id||0);if(!campaignId)throw new Error("Broadcast tidak berhasil dibuat.");renderAdminBroadcastHistory(created.email_broadcasts||[]);if(btn)btn.textContent=count?"Mengirim…":"Menyimpan…";const result=await processAdminBroadcast(campaignId);const failed=Number(result?.counts?.failed||0),queued=Number(result?.counts?.queued||0);if(result?.status==="paused_quota"||queued>0)showFeatureToast(`Broadcast aplikasi terkirim. ${queued} email masih aman di antrean.`);else if(!count)showFeatureToast("Broadcast dikirim melalui aplikasi. Tidak ada target yang memilih email.");else showFeatureToast(failed?`Broadcast aplikasi terkirim, ${failed} email gagal.`:"Broadcast aplikasi terkirim dan email sudah diterima server email.");}catch(e){alert(e.message||"Broadcast gagal dikirim.");}finally{adminBroadcastBusy=false;if(btn){btn.disabled=false;btn.textContent=old;}await loadAdminPanel();updateAdminBroadcastTargetHint();}}
 async function sendAdminBroadcastTest(){if(adminBroadcastBusy)return;const payload=adminBroadcastPayload();if(!payload.title||!payload.subject||!payload.message)return alert("Judul, subjek, dan isi pesan wajib diisi.");const btn=el("adminBroadcastTest"),old=btn?.textContent||"Kirim Tes ke Saya";try{adminBroadcastBusy=true;if(btn){btn.disabled=true;btn.textContent="Mengirim Tes…";}const j=await adminPost({action:"email_broadcast_test",broadcast:payload}),r=j.action_result||{};const response=r.smtp_response?`\n\nRespons SMTP: ${r.smtp_response}`:"";alert(`Email tes diterima server email untuk ${r.email||"email admin"}.\n\nMode: ${r.include_link?"dengan link eksternal":"AMAN tanpa link eksternal"}. Silakan cek Inbox, Spam, dan Promotions.${r.action_url_rewritten?"\nLink APK langsung telah dialihkan ke halaman download resmi.":""}${response}`);}catch(e){alert(e.message||"Email tes gagal dikirim.");}finally{adminBroadcastBusy=false;if(btn){btn.disabled=false;btn.textContent=old;}updateAdminBroadcastTargetHint();}}
 el("adminBroadcastKind")?.addEventListener("change",()=>applyAdminBroadcastPreset(true));
 el("adminBroadcastTarget")?.addEventListener("change",updateAdminBroadcastTargetHint);
@@ -5340,7 +5820,7 @@ setInterval(()=>{if(state.features)checkFinanceNotifications();},60000);
 
 // ===== V52 - RESIZABLE MOBILE SHEETS + WALLET ORDER SYNC =====
 const CK_RESIZABLE_SHEET_IDS = [
-  "budgetModal", "notificationCenterModal", "financeCenter", "quickCaptureModal",
+  "budgetModal", "notificationCenterModal", "notificationSettingsModal", "financeCenter", "quickCaptureModal",
   "transactionInboxModal", "transactionCreateModal", "transactionEditModal",
   "helpFaqModal", "learningModal", "walletBalanceModal", "emailSecurityModal", "settingModal"
 ];
@@ -5350,7 +5830,7 @@ function ckSheetViewportHeight() {
 }
 function ckSheetMaxHeight(dialog) {
   const vh = ckSheetViewportHeight();
-  const safeTopSheetIds = new Set(["walletBalanceModal", "notificationCenterModal"]);
+  const safeTopSheetIds = new Set(["walletBalanceModal", "notificationCenterModal", "notificationSettingsModal"]);
   if (safeTopSheetIds.has(dialog?.id)) {
     // Rincian Saldo dan Pemberitahuan tidak boleh menutupi notch / camera island / status bar.
     // Sisakan sekitar 7.5% viewport, minimal 52px dan maksimal 72px.

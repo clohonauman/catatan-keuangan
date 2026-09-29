@@ -1186,6 +1186,21 @@ function nativeReply(string $message, array $saved=[]): string {
         $walletIds=[];
         foreach($saved as $x) {
             $type=(string)($x['type']??'expense');
+            $source=(string)($x['source']??'');
+            if($source==='receivable_lend'){
+                $from=function_exists('financeWalletById')?financeWalletById((int)($x['from_wallet_id']??0)):null;
+                $name=trim((string)($x['receivable_borrower_name']??'Peminjam'));
+                $parts[]='Piutang '.$name.' '.rupiah($x['amount']).' dari '.trim((string)($from['name']??'Dompet'));
+                if(!empty($x['from_wallet_id']))$walletIds[(int)$x['from_wallet_id']]=true;
+                continue;
+            }
+            if($source==='receivable_repayment'){
+                $to=function_exists('financeWalletById')?financeWalletById((int)($x['to_wallet_id']??0)):null;
+                $name=trim((string)($x['receivable_borrower_name']??'Peminjam'));
+                $parts[]='Pelunasan piutang '.$name.' '.rupiah($x['amount']).' ke '.trim((string)($to['name']??'Dompet'));
+                if(!empty($x['to_wallet_id']))$walletIds[(int)$x['to_wallet_id']]=true;
+                continue;
+            }
             if($type==='transfer'){
                 $from=function_exists('financeWalletById')?financeWalletById((int)($x['from_wallet_id']??0)):null;
                 $to=function_exists('financeWalletById')?financeWalletById((int)($x['to_wallet_id']??0)):null;
@@ -1301,6 +1316,13 @@ function nativeReply(string $message, array $saved=[]): string {
     }
 
     if (smartIsQuestion($message)) return 'Saya belum memahami pertanyaan itu. Coba “berapa uang saya?”, “pengeluaran terbesar bulan ini”, “kategori paling boros bulan lalu”, atau “ringkasan keuangan bulan ini”.';
+
+    // V72 fallback jika nativeReply dipanggil dari jalur yang sudah memuat
+    // Local Conversational Learning Engine.
+    if(function_exists('localConversationReply')){
+        $conversation=localConversationReply($message);
+        if($conversation!==null)return $conversation;
+    }
 
     // Pengetahuan yang pernah diajarkan pengguna berlaku lintas akun.
     $learned = learningFindRule($message);

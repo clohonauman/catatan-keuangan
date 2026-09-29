@@ -10,6 +10,10 @@ try {
     $cached=offlineOpCachedResponse($input);if($cached){echo json_encode($cached,JSON_UNESCAPED_UNICODE);exit;}
     $id=(int)($input['id']??0);
     if($id<=0) throw new InvalidArgumentException('ID transaksi tidak valid.');
+    $existing=transactionById($id);
+    if($existing && in_array((string)($existing['source']??''),['receivable_lend','receivable_repayment'],true)){
+        throw new InvalidArgumentException('Transaksi piutang dikelola melalui menu Piutang / Memberi Hutang.');
+    }
     $expected=trim((string)($input['expected_version']??''));
     $deleted=deleteTransaction($id,$expected);
     if(!$deleted) throw new InvalidArgumentException('Transaksi tidak ditemukan.');

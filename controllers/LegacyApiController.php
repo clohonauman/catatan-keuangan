@@ -18,7 +18,7 @@ class LegacyApiController extends Controller
     ];
 
     /** @var string[] Endpoint file/binary yang tidak boleh dinormalisasi sebagai JSON. */
-    private const RAW_ENDPOINTS = ['export','payment_proof','photo','report'];
+    private const RAW_ENDPOINTS = ['export','payment_proof','photo','report','receivables_report'];
 
     private static function configureJsonResponse(Response $yiiResponse): void
     {
@@ -362,6 +362,7 @@ class LegacyApiController extends Controller
     public function actionPhoto(){ return $this->runLegacy('photo'); }
     public function actionRealtime(){ return $this->runLegacy('realtime'); }
     public function actionReport(){ return $this->runLegacy('report'); }
+    public function actionReceivablesReport(){ return $this->runLegacy('receivables_report'); }
     public function actionSettings(){ return $this->runLegacy('settings'); }
     public function actionSubscription(){ return $this->runLegacy('subscription'); }
     public function actionTransactions(){ return $this->runLegacy('transactions'); }

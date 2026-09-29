@@ -140,6 +140,24 @@ function smartPaydayIntent(string $message): bool {
         && preg_match('/\b(?:gajian|gaji berikutnya|terima gaji|tanggal gaji)\b/u',$t));
 }
 
+/**
+ * V69: bedakan permintaan analitik pribadi dari pertanyaan FAQ tentang cara kerja fitur.
+ * Contoh analitik: "apakah saya aman sampai gajian?", "cukup sampai gajian?".
+ * Contoh FAQ: "bagaimana prediksi aman sampai gajian dihitung?".
+ */
+function smartPaydayAnalysisIntent(string $message): bool {
+    if(!smartPaydayIntent($message)) return false;
+    $t=norm($message);
+
+    // Pertanyaan yang secara jelas meminta penjelasan metode/fitur tetap diarahkan ke FAQ.
+    if(preg_match('/\b(?:bagaimana|gimana|cara|rumus|mekanisme|metode|fitur|apa itu|maksud)\b/u',$t)
+        && preg_match('/\b(?:hitung|dihitung|menghitung|perhitungan|prediksi|analitik|bekerja|kerja)\b/u',$t)){
+        return false;
+    }
+
+    return true;
+}
+
 
 /**
  * Detect and calculate a user-supplied daily spending scenario until payday.
@@ -247,8 +265,9 @@ function smartPaydayScenarioReply(string $message): ?string {
     $balance=max(0,(int)($p['current_balance']??0));
     $bills=max(0,(int)($p['upcoming_bills_total']??0));
     $recExpense=max(0,(int)($p['recurring_expense']??0));
+    $creditUrgent=max(0,(int)($p['credit_limit_urgent_reserve']??0));
     $futureIncome=max(0,(int)($p['recurring_income']??0));
-    $fixed=$bills+$recExpense;
+    $fixed=$bills+$recExpense+$creditUrgent;
     $needLow=$fixed+$dailyNeedLow;$needHigh=$fixed+$dailyNeedHigh;
     $remainLow=$balance-$needLow;   // spending at the lower end
     $remainHigh=$balance-$needHigh; // spending at the upper end
@@ -275,9 +294,10 @@ function smartPaydayScenarioReply(string $message): ?string {
     foreach($items as $item)$lines[]='• '.$item['label'].': '.smartMoneyRangeText((int)$item['low'],(int)$item['high']).'/hari';
     $lines[]='• Total kebutuhan harian: '.smartMoneyRangeText($dailyLow,$dailyHigh).'/hari';
     $lines[]='• Total kebutuhan harian sampai gajian: '.smartMoneyRangeText($dailyNeedLow,$dailyNeedHigh);
-    if($fixed>0){
-        $lines[]='• Tagihan + pengeluaran berulang sebelum gajian: '.rupiah($fixed).($bills>0?' (tagihan '.rupiah($bills):'').($bills>0&&$recExpense>0?' + berulang '.rupiah($recExpense):'').($bills>0?')':($recExpense>0?' (berulang '.rupiah($recExpense).')':''));
+    if($bills>0||$recExpense>0){
+        $lines[]='• Tagihan + pengeluaran berulang sebelum gajian: '.rupiah($bills+$recExpense).($bills>0?' (tagihan '.rupiah($bills):'').($bills>0&&$recExpense>0?' + berulang '.rupiah($recExpense):'').($bills>0?')':($recExpense>0?' (berulang '.rupiah($recExpense).')':''));
     }
+    if($creditUrgent>0)$lines[]='• Cadangan urgent limit kartu kredit: '.rupiah($creditUrgent).' untuk memulihkan ruang limit minimum 20% (di luar tagihan kartu yang sudah ikut dihitung).';
     $lines[]='• Total kebutuhan skenario: '.smartMoneyRangeText($needLow,$needHigh);
 
     if($remainLow>=0&&$remainHigh>=0){
@@ -293,7 +313,7 @@ function smartPaydayScenarioReply(string $message): ?string {
     if($maxDaily>0)$lines[]='Supaya pas sampai gajian setelah kewajiban yang sudah tercatat, batas matematis pengeluaranmu sekitar '.rupiah($maxDaily).'/hari.';
     if($safeDaily>0&&$safeDaily<$maxDaily)$lines[]='Kalau mau menyisakan cadangan Rp100.000, lebih aman jaga pengeluaran sekitar '.rupiah($safeDaily).'/hari atau kurang.';
     if($futureIncome>0)$lines[]='Ada pemasukan berulang '.rupiah($futureIncome).' yang dijadwalkan sebelum gajian, tetapi saya tidak memasukkannya sebagai uang yang sudah tersedia. Kalau benar-benar masuk, posisi kamu akan lebih longgar.';
-    $lines[]='Perhitungan ini memakai saldo tersedia (setelah dana disisihkan/saldo minimum), plus tagihan dan transaksi berulang yang sudah tercatat. Ini simulasi, jadi tidak membuat transaksi baru.';
+    $lines[]='Perhitungan ini memakai saldo tersedia (setelah dana disisihkan/saldo minimum), tagihan, transaksi berulang, serta kebutuhan urgent untuk menjaga sisa limit kartu kredit minimum 20%. Ini simulasi, jadi tidak membuat transaksi baru.';
     return implode("\n",$lines);
 }
 
@@ -309,6 +329,12 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     $bills=max(0,(int)$p['upcoming_bills_total']);
     $recExpense=max(0,(int)$p['recurring_expense']);
     $recIncome=max(0,(int)$p['recurring_income']);
+    $creditUrgent=max(0,(int)($p['credit_limit_urgent_reserve']??0));
+    $creditLevel=(string)($p['credit_urgency_level']??'none');
+    $creditLimit=max(0,(int)($p['credit_total_limit']??0));
+    $creditUsed=max(0,(int)($p['credit_total_used']??0));
+    $creditAvailable=max(0,(int)($p['credit_total_available']??0));
+    $creditUtil=(float)($p['credit_utilization_percent']??0);
     $predicted=(int)$p['predicted_balance'];
     $reserve=max(100000,$average*3);
     $withoutIncome=$predicted-$recIncome;
@@ -325,6 +351,10 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     } elseif($withoutIncome<0){
         $lines[]='🟠 Aman bersyarat sampai gajian '.$date.'.';
         $lines[]='Proyeksi cukup hanya jika pemasukan berulang masuk tepat waktu. Tanpanya, dana diperkirakan kurang '.rupiah(-$withoutIncome).'.';
+    } elseif(in_array($creditLevel,['urgent','critical'],true)){
+        $lines[]='🟠 Aman bersyarat sampai gajian '.$date.'.';
+        if($creditUrgent>0)$lines[]='Arus kas masih dapat dihitung cukup, tetapi ruang limit kartu kredit sudah '.($creditLevel==='critical'?'kritis':'urgent').'. Analisis menyisihkan '.rupiah($creditUrgent).' untuk mengembalikan minimal 20% sisa limit yang belum tercakup oleh tagihan sebelum gajian.';
+        else $lines[]='Arus kas masih dapat dihitung cukup, tetapi ruang limit kartu kredit saat ini sudah '.($creditLevel==='critical'?'kritis':'urgent').'. Pembayaran kartu yang sudah masuk Tagihan sebelum gajian diproyeksikan cukup untuk memulihkan ruang limit, jadi pembayaran tersebut perlu diprioritaskan.';
     } elseif($predicted<$reserve){
         $lines[]='🟡 Diperkirakan cukup, tetapi mepet sampai gajian '.$date.'.';
         $lines[]='Sisa dana '.rupiah($predicted).' masih di bawah cadangan analitik '.rupiah($reserve).' (nilai terbesar antara Rp100.000 dan 3 kali rata-rata harian).';
@@ -346,6 +376,10 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     if (isset($p['daily_spent_today'])) $lines[]='• Belanja harian hari ini sudah tercatat: '.rupiah($p['daily_spent_today']).'; perkiraan tambahan hari ini '.rupiah($p['remaining_daily_spend_today']).'.';
     $lines[]='• Tagihan belum lunas sebelum gajian, termasuk yang terlambat: '.rupiah($bills);
     $lines[]='• Pengeluaran berulang terjadwal: '.rupiah($recExpense);
+    if($creditLimit>0){
+        $lines[]='• Kartu kredit: terpakai '.rupiah($creditUsed).' dari limit '.rupiah($creditLimit).' ('.number_format($creditUtil,1,',','.').'%) · sisa limit '.rupiah($creditAvailable).'.';
+        if($creditUrgent>0)$lines[]='• Cadangan urgent limit kartu: '.rupiah($creditUrgent).' agar sisa limit kembali minimal 20%; pembayaran kartu yang sudah masuk tagihan sebelum gajian tidak dihitung dua kali.';
+    }
     if($recIncome>0)$lines[]='• Pemasukan berulang yang DIHARAPKAN sebelum gajian: '.rupiah($recIncome);
     $lines[]='• Perkiraan sisa dana: '.rupiah($predicted);
     // Label the top bills rather than assuming discretionary spending is the cause.
@@ -360,7 +394,7 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
     }
     $lines[]="\nYang bisa kamu lakukan:";
     // Use money already on hand for recommendations; future receipts are uncertain.
-    $afterFixed=$balance-$bills-$recExpense;
+    $afterFixed=$balance-$bills-$recExpense-$creditUrgent;
     $breakEven=(int)floor(max(0,$afterFixed)/$days);
     $withReserve=(int)floor(max(0,$afterFixed-$reserve)/$days);
     if($afterFixed<0){
@@ -379,10 +413,11 @@ function smartPaydayAnalysisText(array $p, int $expenseCount): string {
             $lines[]='• Pertahankan pengeluaran sesuai kemampuan dan sisihkan dana tagihan terlebih dahulu.';
         }
     }
+    if($creditUrgent>0)$lines[]='• Prioritaskan pembayaran kartu yang paling mendekati/menembus batas 20% sisa limit. Ini menjaga ruang transaksi darurat tanpa menganggap limit sebagai saldo tunai.';
     if($recIncome>0)$lines[]='• Jangan gunakan pemasukan terjadwal sebagai saldo yang sudah tersedia. Pastikan tanggal masuknya lebih awal daripada kewajiban yang harus dibayar.';
     if($thinHistory)$lines[]='• Lengkapi catatan pengeluaran harian dan tagihan sebelum menjadikan perkiraan ini sebagai patokan.';
     $lines[]="\nTanggal gajian mengikuti pengaturan di menu Analitik; sesuaikan jika berbeda. Gaji pada hari gajian belum dihitung untuk membiayai hari-hari sebelumnya.";
-    $lines[]='Ini estimasi, bukan jaminan. Cicilan/tagihan yang sudah lunas tidak diproyeksikan lagi; kewajiban belum lunas dihitung sesuai jadwal. Dana disisihkan tidak dianggap sebagai uang belanja. Hubungkan pembayaran ke Tagihan agar kewajiban tidak tercatat ganda.';
+    $lines[]='Ini estimasi, bukan jaminan. Cicilan/tagihan yang sudah lunas tidak diproyeksikan lagi; kewajiban yang belum lunas dihitung sesuai jadwal. Dana yang disisihkan tidak dianggap sebagai uang belanja. Limit kartu kredit juga bukan saldo tunai; analisis hanya memasukkan kebutuhan mendesak untuk menjaga minimal 20% ruang limit tetap tersedia. Hubungkan pembayaran ke menu Tagihan agar kewajiban tidak tercatat ganda.';
     return implode("\n",$lines);
 }
 

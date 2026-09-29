@@ -3,6 +3,7 @@ require_once __DIR__ . '/config.php';
 use app\repositories\AuthRepository;
 require_once __DIR__ . '/mail_helper.php';
 require_once __DIR__ . '/user_notification_helper.php';
+require_once __DIR__ . '/user_notification_preference_helper.php';
 
 define('DEVICE_COOKIE', 'finance_device');
 define('DEVICE_COOKIE_DAYS', 180);
@@ -206,6 +207,10 @@ function authSendLoginNotification(array $user)
         );
     } catch (Throwable $e) {
         error_log('[Login app notification] user_id=' . (int)($user['id'] ?? 0) . ' gagal: ' . $e->getMessage());
+    }
+
+    if (!userNotificationEmailEnabledForUser((int)($user['id'] ?? 0))) {
+        return ['sent' => false, 'skipped' => true, 'reason' => 'Pengguna memilih notifikasi hanya melalui aplikasi atau menonaktifkan notifikasi otomatis.'];
     }
 
     $email = authNormalizeEmail($user['email'] ?? '');

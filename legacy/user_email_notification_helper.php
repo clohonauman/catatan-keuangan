@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/auth.php';
 require_once __DIR__.'/mail_helper.php';
+require_once __DIR__.'/user_notification_preference_helper.php';
 use app\repositories\DocumentRepository;
 
 const USER_EMAIL_NOTIFICATION_FILE = 'mysql://user_email_notifications';
@@ -143,6 +144,9 @@ function emailNotifySendToUser(int $userId, string $kind, string $title, string 
 }
 
 function emailNotifyAutomatic(int $userId, string $dedupKey, string $kind, string $title, string $message, array $options=[]): array {
+    if (!userNotificationEmailEnabledForUser($userId)) {
+        return ['ok'=>true,'status'=>'skipped','skipped'=>true,'reason'=>'Pengguna memilih notifikasi hanya melalui aplikasi.'];
+    }
     $dedupKey = preg_replace('/[^a-zA-Z0-9_.:-]+/', '_', trim($dedupKey));
     if ($dedupKey === '') throw new InvalidArgumentException('Kunci notifikasi tidak valid.');
     $day = date('Y-m-d');
@@ -172,18 +176,31 @@ function emailNotifyAutomatic(int $userId, string $dedupKey, string $kind, strin
     return array_merge($result, ['ok'=>true,'status'=>$status]);
 }
 
-function emailBroadcastTargetUsers(string $target, array $userIds=[]): array {
+function emailBroadcastTargetAppUsers(string $target, array $userIds=[]): array {
     $target = strtolower(trim($target));
     if (!in_array($target, ['all','free','premium','selected'], true)) throw new InvalidArgumentException('Target broadcast tidak valid.');
     $wanted = array_values(array_unique(array_filter(array_map('intval', $userIds), fn($x)=>$x>0)));
     $auth = authReadData();
-    $rows=[]; $seen=[];
+    $rows=[];
     foreach ((array)($auth['users'] ?? []) as $u) {
         $id=(int)($u['id'] ?? 0);
+        if ($id <= 0) continue;
         if ($target === 'selected' && !in_array($id, $wanted, true)) continue;
         $plan = authPlan($u);
         if ($target === 'free' && !empty($plan['active'])) continue;
         if ($target === 'premium' && empty($plan['active'])) continue;
+        $rows[]=['user_id'=>$id,'username'=>(string)($u['username'] ?? '')];
+    }
+    return $rows;
+}
+
+function emailBroadcastTargetUsers(string $target, array $userIds=[]): array {
+    $rows=[]; $seen=[];
+    foreach (emailBroadcastTargetAppUsers($target, $userIds) as $targetUser) {
+        $id=(int)($targetUser['user_id'] ?? 0);
+        if (!userNotificationEmailEnabledForUser($id)) continue;
+        $u=authFindUserById($id);
+        if (!$u) continue;
         $email = emailNotifyUserEmail($u, true);
         if ($email === '' || isset($seen[$email])) continue;
         $seen[$email]=true;
@@ -209,8 +226,10 @@ function emailBroadcastCreate(array $admin, array $input): array {
     if ($message === '' || emailNotifyTextLen($message) > 4000) throw new InvalidArgumentException('Isi broadcast wajib diisi (maks. 4.000 karakter).');
     [$actionUrl, $actionUrlRewritten] = emailNotifyNormalizeBroadcastActionUrl($kind, $actionUrl);
     if (emailNotifyTextLen($actionLabel) > 50) throw new InvalidArgumentException('Label tombol terlalu panjang.');
-    $recipients = emailBroadcastTargetUsers($target, (array)($input['user_ids'] ?? []));
-    if (!$recipients) throw new InvalidArgumentException('Tidak ada pengguna dengan email terverifikasi pada target ini.');
+    $targetUserIds = (array)($input['user_ids'] ?? []);
+    $appRecipients = emailBroadcastTargetAppUsers($target, $targetUserIds);
+    if (!$appRecipients) throw new InvalidArgumentException('Tidak ada pengguna pada target ini.');
+    $recipients = emailBroadcastTargetUsers($target, $targetUserIds);
 
     $campaign = emailNotifyMutate(function (&$data) use ($admin,$kind,$target,$title,$subject,$message,$actionUrl,$actionLabel,$includeLink,$actionUrlRewritten,$recipients) {
         $campaign=[
@@ -218,7 +237,7 @@ function emailBroadcastCreate(array $admin, array $input): array {
             'title'=>$title, 'subject'=>$subject, 'message'=>$message, 'action_url'=>$actionUrl, 'action_label'=>$actionLabel,
             'include_link'=>$includeLink, 'action_url_rewritten'=>$actionUrlRewritten,
             'created_by'=>(string)($admin['username'] ?? 'admin'), 'created_at'=>date('Y-m-d H:i:s'), 'updated_at'=>date('Y-m-d H:i:s'),
-            'status'=>'queued', 'recipients'=>$recipients,
+            'status'=>$recipients?'queued':'app_only', 'recipients'=>$recipients,
         ];
         $data['campaigns'][]=$campaign;
         if (count($data['campaigns']) > 100) $data['campaigns'] = array_slice($data['campaigns'], -100);
@@ -227,7 +246,7 @@ function emailBroadcastCreate(array $admin, array $input): array {
 
     // Broadcast admin juga masuk ke Pusat Pemberitahuan aplikasi. Penyimpanan ini
     // terpisah dari SMTP sehingga tetap tersedia di aplikasi walau email masih antre.
-    foreach ($recipients as $recipient) {
+    foreach ($appRecipients as $recipient) {
         $uid = (int)($recipient['user_id'] ?? 0);
         if ($uid <= 0) continue;
         try {

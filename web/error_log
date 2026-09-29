@@ -278,3 +278,99 @@ Stack trace:
 #9 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(382): yii\web\Application->handleRequest()
 #10 /home/catk5343/public_html/web/index.php(9): yii\base\Application->run()
 #11 {main}
+[29-Sep-2026 19:53:15 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 19:53:15 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
+[29-Sep-2026 19:53:19 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 19:53:19 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
+[29-Sep-2026 19:53:23 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 19:53:23 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
+[29-Sep-2026 19:53:30 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 19:53:30 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
+[29-Sep-2026 20:08:51 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 20:08:51 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
+[29-Sep-2026 20:10:01 Asia/Makassar] PHP Warning:  http_response_code(): Cannot set response code - headers already sent (output started at /home/catk5343/public_html/legacy/ajax/receivables_report.php:18) in /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php on line 143
+[29-Sep-2026 20:10:01 Asia/Makassar] An Error occurred while handling another error:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/web/ErrorHandler.php(138): yii\web\Response->send()
+#2 /home/catk5343/public_html/vendor/yiisoft/yii2/base/ErrorHandler.php(151): yii\web\ErrorHandler->renderException()
+#3 [internal function]: yii\base\ErrorHandler->handleException()
+#4 {main}
+Previous exception:
+yii\web\HeadersAlreadySentException: Headers already sent. in /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php:368
+Stack trace:
+#0 /home/catk5343/public_html/vendor/yiisoft/yii2/web/Response.php(341): yii\web\Response->sendHeaders()
+#1 /home/catk5343/public_html/vendor/yiisoft/yii2/base/Application.php(388): yii\web\Response->send()
+#2 /home/catk5343/public_html/web/index.php(30): yii\base\Application->run()
+#3 {main}
