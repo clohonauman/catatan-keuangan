@@ -1,4 +1,4 @@
-const CACHE = 'finance-shell-v105';
+const CACHE = 'finance-shell-v107';
 const OFFLINE_SHELL_KEY = './__offline_shell__';
 const OFFLINE_ROOT_KEY = './';
 const OFFLINE_INDEX_KEY = './index.php';

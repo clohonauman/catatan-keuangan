@@ -118,5 +118,55 @@ class SiteController extends Controller
         return $this->render('index',compact('error','notice','mode','user','unlocked','emailStatus','loginDevices','emailSecurityRequested','assetVersion','nativeBiometricUnlockNonce','nativeBiometricAutoUnlockAllowed','forcePinFallback'));
     }
 
-    public function actionError(){ $e=Yii::$app->errorHandler->exception; return $this->asJson(['ok'=>false,'error'=>YII_DEBUG?$e->getMessage():'Terjadi kesalahan pada server.']); }
+    public function actionError()
+    {
+        $exception = Yii::$app->errorHandler->exception;
+        $statusCode = ($exception instanceof \yii\web\HttpException) ? (int)$exception->statusCode : 500;
+        if ($statusCode < 400 || $statusCode > 599) $statusCode = 500;
+
+        $request = Yii::$app->request;
+        $accept = strtolower((string)$request->headers->get('Accept',''));
+        $path = strtolower((string)$request->pathInfo);
+        $expectsJson = $request->isAjax
+            || str_contains($path, 'legacy-api')
+            || str_contains($path, 'api/')
+            || (str_contains($accept, 'application/json') && !str_contains($accept, 'text/html'));
+
+        if ($expectsJson) {
+            Yii::$app->response->statusCode = $statusCode;
+            return $this->asJson([
+                'ok' => false,
+                'status' => $statusCode,
+                'error' => (YII_DEBUG && $exception) ? $exception->getMessage() : $this->publicErrorMessage($statusCode),
+            ]);
+        }
+
+        $copy = $this->errorPageCopy($statusCode);
+        Yii::$app->response->statusCode = $statusCode;
+        Yii::$app->response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return $this->render('error', array_merge(['statusCode'=>$statusCode], $copy));
+    }
+
+    private function publicErrorMessage(int $statusCode): string
+    {
+        $copy = $this->errorPageCopy($statusCode);
+        return (string)($copy['message'] ?? 'Terjadi kesalahan pada server.');
+    }
+
+    private function errorPageCopy(int $statusCode): array
+    {
+        $map = [
+            400 => ['title'=>'Permintaan tidak dapat diproses','message'=>'Permintaan yang dikirim tidak valid atau tidak lengkap.','hint'=>'Periksa kembali alamat atau data yang dikirim, lalu coba lagi.','icon'=>'!'],
+            401 => ['title'=>'Perlu masuk terlebih dahulu','message'=>'Sesi atau autentikasi diperlukan untuk membuka halaman ini.','hint'=>'Silakan kembali ke aplikasi dan masuk ke akun Anda.','icon'=>'↪'],
+            403 => ['title'=>'Akses dibatasi','message'=>'Anda tidak memiliki izin untuk mengakses halaman atau sumber daya ini.','hint'=>'Jika seharusnya Anda memiliki akses, kembali ke aplikasi lalu coba masuk kembali.','icon'=>'🔒'],
+            404 => ['title'=>'Halaman tidak ditemukan','message'=>'Halaman yang Anda cari tidak tersedia, sudah dipindahkan, atau alamatnya tidak tepat.','hint'=>'Periksa alamat halaman atau kembali ke aplikasi.','icon'=>'⌕'],
+            408 => ['title'=>'Permintaan terlalu lama','message'=>'Server menghentikan permintaan karena membutuhkan waktu terlalu lama.','hint'=>'Periksa koneksi internet Anda kemudian coba lagi.','icon'=>'◷'],
+            429 => ['title'=>'Terlalu banyak permintaan','message'=>'Terlalu banyak permintaan diterima dalam waktu singkat.','hint'=>'Tunggu sebentar sebelum mencoba kembali.','icon'=>'⏳'],
+            500 => ['title'=>'Terjadi gangguan di server','message'=>'Aplikasi mengalami kesalahan saat memproses permintaan Anda.','hint'=>'Data Anda tidak otomatis berubah karena halaman ini. Coba lagi beberapa saat lagi.','icon'=>'⚠'],
+            502 => ['title'=>'Layanan sementara tidak terhubung','message'=>'Server utama belum dapat menerima respons dari layanan di belakangnya.','hint'=>'Coba muat ulang setelah beberapa saat.','icon'=>'↔'],
+            503 => ['title'=>'Layanan sementara tidak tersedia','message'=>'Aplikasi sedang sibuk atau dalam proses pemeliharaan.','hint'=>'Silakan coba kembali beberapa saat lagi.','icon'=>'⚙'],
+            504 => ['title'=>'Respons server terlalu lama','message'=>'Layanan di belakang server membutuhkan waktu terlalu lama untuk merespons.','hint'=>'Periksa koneksi dan coba kembali beberapa saat lagi.','icon'=>'◴'],
+        ];
+        return $map[$statusCode] ?? ['title'=>'Permintaan tidak dapat diselesaikan','message'=>'Aplikasi tidak dapat menyelesaikan permintaan ini.','hint'=>'Silakan kembali atau coba lagi beberapa saat lagi.','icon'=>'⚠'];
+    }
 }

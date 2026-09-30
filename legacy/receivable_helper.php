@@ -90,7 +90,7 @@ function financeReceivableSnapshot(): array {
     $wallets=[];
     foreach((array)($d['wallets']??[]) as $w) $wallets[(int)($w['id']??0)]=(string)($w['name']??'Dompet');
 
-    $people=[];$entries=[];$totalLent=0;$totalRepaid=0;
+    $people=[];$entries=[];$totalLent=0;$totalRepaid=0;$totalInterest=0;
     foreach((array)($d['transactions']??[]) as $tx){
         if(!financeReceivableIsTransaction((array)$tx)) continue;
         $action=(string)($tx['source']??'')==='receivable_repayment'?'repayment':'lend';
@@ -100,7 +100,7 @@ function financeReceivableSnapshot(): array {
         if($key==='') $key=financeReceivableBorrowerKey($name);
         $amount=max(0,(int)($tx['amount']??0));
         if(!isset($people[$key])) $people[$key]=[
-            'key'=>$key,'name'=>$name,'lent'=>0,'repaid'=>0,'outstanding'=>0,'entries'=>0,'last_date'=>'','last_id'=>0,
+            'key'=>$key,'name'=>$name,'lent'=>0,'interest'=>0,'repaid'=>0,'outstanding'=>0,'entries'=>0,'last_date'=>'','last_id'=>0,
             'next_due_date'=>'','overdue'=>false,'loans'=>[],
         ];
         if((int)($tx['id']??0)>=(int)$people[$key]['last_id']) $people[$key]['name']=$name;
@@ -114,6 +114,7 @@ function financeReceivableSnapshot(): array {
         $walletId=$action==='lend'?(int)($tx['from_wallet_id']??0):(int)($tx['to_wallet_id']??0);
         $entries[]=[
             'id'=>(int)($tx['id']??0),
+            'sort_id'=>(int)($tx['id']??0),
             'action'=>$action,
             'borrower_key'=>$key,
             'borrower_name'=>$name,
@@ -130,26 +131,78 @@ function financeReceivableSnapshot(): array {
         ];
     }
 
-    // V68: alokasi pelunasan bisa diarahkan ke satu pemberian hutang tertentu.
-    // Pelunasan tanpa target tetap dialokasikan FIFO ke hutang tertua agar perilaku V67 kompatibel.
-    $entryIndex=[];$loansByPerson=[];
-    foreach($entries as $idx=>$e){
-        $entryIndex[(int)$e['id']]=$idx;
+    // V78: bunga disimpan sebagai penyesuaian non-kas di finance_meta extra_json.
+    // Karena bukan finance_transaction, penambahan bunga tidak pernah mengubah saldo dompet.
+    $interestRows=array_values(array_filter((array)($d['meta']['receivable_interest_entries']??[]),static fn($x)=>is_array($x)));
+    foreach($interestRows as $row){
+        $interestId=max(0,(int)($row['id']??0));
+        $key=trim((string)($row['borrower_key']??''));
+        $name=trim((string)($row['borrower_name']??''));
+        $amount=max(0,(int)($row['amount']??0));
+        if($interestId<=0||$key===''||$amount<=0) continue;
+        if($name==='') $name='Tanpa Nama';
+        if(!isset($people[$key])) $people[$key]=[
+            'key'=>$key,'name'=>$name,'lent'=>0,'interest'=>0,'repaid'=>0,'outstanding'=>0,'entries'=>0,'last_date'=>'','last_id'=>0,
+            'next_due_date'=>'','overdue'=>false,'loans'=>[],
+        ];
+        $people[$key]['interest']+=$amount;$people[$key]['entries']++;$totalInterest+=$amount;
+        $date=(string)($row['transaction_date']??'');
+        if($date>$people[$key]['last_date'])$people[$key]['last_date']=$date;
+        $entries[]=[
+            'id'=>-$interestId,
+            'interest_id'=>$interestId,
+            'sort_id'=>1000000000+$interestId,
+            'action'=>'interest',
+            'borrower_key'=>$key,
+            'borrower_name'=>$name,
+            'amount'=>$amount,
+            'transaction_date'=>$date,
+            'due_date'=>'',
+            'note'=>(string)($row['note']??''),
+            'wallet_id'=>0,
+            'wallet_name'=>'Tidak memengaruhi saldo',
+            'attachment'=>null,
+            'created_at'=>(string)($row['created_at']??''),
+            'receivable_lend_id'=>max(0,(int)($row['lend_id']??0)),
+            'interest_rate'=>isset($row['rate_percent'])?(float)$row['rate_percent']:0,
+            'interest_base'=>max(0,(int)($row['base_amount']??0)),
+            'allocations'=>[],
+        ];
+    }
+
+    // Alokasi pelunasan diarahkan ke satu hutang tertentu atau FIFO.
+    // V78 menambahkan bunga ke nilai hutang target sebelum pelunasan dialokasikan.
+    $loansByPerson=[];
+    foreach($entries as $e){
         if($e['action']!=='lend') continue;
         $loansByPerson[$e['borrower_key']][(int)$e['id']]=[
             'id'=>(int)$e['id'],'borrower_key'=>(string)$e['borrower_key'],'borrower_name'=>(string)$e['borrower_name'],
-            'amount'=>(int)$e['amount'],'repaid'=>0,'remaining'=>(int)$e['amount'],
+            'principal_amount'=>(int)$e['amount'],'interest_amount'=>0,'amount'=>(int)$e['amount'],'repaid'=>0,'remaining'=>(int)$e['amount'],
             'transaction_date'=>(string)$e['transaction_date'],'due_date'=>(string)$e['due_date'],
             'wallet_id'=>(int)$e['wallet_id'],'wallet_name'=>(string)$e['wallet_name'],'note'=>(string)$e['note'],
             'attachment'=>$e['attachment']??null,
         ];
     }
+    foreach($entries as &$e){
+        if(($e['action']??'')!=='interest')continue;
+        $key=(string)$e['borrower_key'];$lendId=max(0,(int)($e['receivable_lend_id']??0));
+        if($lendId>0 && isset($loansByPerson[$key][$lendId])){
+            $amount=max(0,(int)$e['amount']);
+            $loansByPerson[$key][$lendId]['interest_amount']+=$amount;
+            $loansByPerson[$key][$lendId]['amount']+=$amount;
+            $loansByPerson[$key][$lendId]['remaining']+=$amount;
+            $loan=$loansByPerson[$key][$lendId];
+            $e['wallet_id']=(int)($loan['wallet_id']??0);
+            $e['wallet_name']='Tidak memengaruhi saldo'.(!empty($loan['wallet_name'])?' · terkait '.(string)$loan['wallet_name']:'');
+            $e['allocation_label']='Hutang '.financeReportDateLabel((string)$loan['transaction_date']).' · pokok '.financeRupiah((int)$loan['principal_amount']);
+        }
+    } unset($e);
     foreach($loansByPerson as &$loanMap){
         uasort($loanMap,static function($a,$b){$c=strcmp((string)$a['transaction_date'],(string)$b['transaction_date']);return $c!==0?$c:((int)$a['id']<=>(int)$b['id']);});
     } unset($loanMap);
 
     $repaymentIndexes=array_values(array_filter(array_keys($entries),static fn($i)=>(string)($entries[$i]['action']??'')==='repayment'));
-    usort($repaymentIndexes,static function($ia,$ib)use($entries){$a=$entries[$ia];$b=$entries[$ib];$c=strcmp((string)$a['transaction_date'],(string)$b['transaction_date']);return $c!==0?$c:((int)$a['id']<=>(int)$b['id']);});
+    usort($repaymentIndexes,static function($ia,$ib)use($entries){$a=$entries[$ia];$b=$entries[$ib];$c=strcmp((string)$a['transaction_date'],(string)$b['transaction_date']);return $c!==0?$c:((int)($a['sort_id']??$a['id'])<=>(int)($b['sort_id']??$b['id']));});
     foreach($repaymentIndexes as $idx){
         $entry=&$entries[$idx];$key=(string)$entry['borrower_key'];$remaining=max(0,(int)$entry['amount']);
         if($remaining<=0 || empty($loansByPerson[$key])){unset($entry);continue;}
@@ -161,7 +214,6 @@ function financeReceivableSnapshot(): array {
                 $entry['allocations'][]=['lend_id'=>$target,'amount'=>$take];
             }
         }
-        // Sisa pelunasan (atau mode akumulasi) masuk ke hutang tertua yang masih terbuka.
         if($remaining>0){
             foreach($loansByPerson[$key] as $lendId=>&$loan){
                 if($remaining<=0)break;
@@ -173,14 +225,14 @@ function financeReceivableSnapshot(): array {
         }
         if($target>0 && isset($loansByPerson[$key][$target])){
             $loan=$loansByPerson[$key][$target];
-            $entry['allocation_label']='Hutang '.financeReportDateLabel((string)$loan['transaction_date']).' · '.financeRupiah((int)$loan['amount']);
+            $entry['allocation_label']='Hutang '.financeReportDateLabel((string)$loan['transaction_date']).' · total '.financeRupiah((int)$loan['amount']);
         } else $entry['allocation_label']='Akumulasi hutang (FIFO)';
         unset($entry);
     }
 
     $today=date('Y-m-d');
     foreach($people as $key=>&$p){
-        $p['outstanding']=max(0,(int)$p['lent']-(int)$p['repaid']);
+        $p['outstanding']=max(0,(int)$p['lent']+(int)($p['interest']??0)-(int)$p['repaid']);
         $loans=array_values($loansByPerson[$key]??[]);
         $nextDue='';
         foreach($loans as $loan){
@@ -205,14 +257,16 @@ function financeReceivableSnapshot(): array {
     });
     usort($entries,static function($a,$b){
         $cmp=strcmp((string)$b['transaction_date'],(string)$a['transaction_date']);
-        return $cmp!==0?$cmp:((int)$b['id']<=>(int)$a['id']);
+        if($cmp!==0)return $cmp;
+        return (int)($b['sort_id']??$b['id']??0)<=>(int)($a['sort_id']??$a['id']??0);
     });
 
     return [
         'summary'=>[
             'total_lent'=>$totalLent,
+            'total_interest'=>$totalInterest,
             'total_repaid'=>$totalRepaid,
-            'outstanding'=>max(0,$totalLent-$totalRepaid),
+            'outstanding'=>max(0,$totalLent+$totalInterest-$totalRepaid),
             'borrower_count'=>count($people),
             'active_borrowers'=>count(array_filter($people,static fn($p)=>(int)($p['outstanding']??0)>0)),
         ],
@@ -332,6 +386,81 @@ function financeReceivableRepay(array $input, ?array $attachment=null): array {
     return addTransaction($tx);
 }
 
+
+/** V78 - Tambah bunga manual tanpa memengaruhi saldo dompet. */
+function financeReceivableAddInterest(array $input): array {
+    $key=trim((string)($input['borrower_key']??''));
+    if($key==='') throw new InvalidArgumentException('Pilih peminjam yang akan diberi bunga.');
+    $person=financeReceivableFindPerson($key);
+    if(!$person) throw new InvalidArgumentException('Data peminjam tidak ditemukan.');
+    if((int)($person['outstanding']??0)<=0) throw new InvalidArgumentException('Piutang peminjam ini sudah lunas.');
+
+    $lendId=max(0,(int)($input['lend_id']??0));
+    if($lendId<=0) throw new InvalidArgumentException('Pilih hutang yang akan dikenakan bunga.');
+    $loan=null;
+    foreach((array)($person['loans']??[]) as $row) if((int)($row['id']??0)===$lendId){$loan=$row;break;}
+    if(!$loan) throw new InvalidArgumentException('Hutang yang dipilih tidak ditemukan.');
+    $base=max(0,(int)($loan['remaining']??0));
+    if($base<=0) throw new InvalidArgumentException('Hutang yang dipilih sudah lunas.');
+
+    $mode=strtolower(trim((string)($input['mode']??'percent')));
+    if(!in_array($mode,['percent','amount'],true))$mode='percent';
+    $rate=0.0;$amount=0;
+    if($mode==='percent'){
+        $raw=str_replace(',','.',trim((string)($input['rate_percent']??'')));
+        $rate=(float)$raw;
+        if($rate<=0 || $rate>100) throw new InvalidArgumentException('Persentase bunga harus lebih dari 0% dan maksimal 100%.');
+        $amount=(int)round($base*$rate/100);
+        if($amount<=0)$amount=1;
+    }else{
+        $amount=max(0,(int)($input['amount']??0));
+        if($amount<=0) throw new InvalidArgumentException('Nominal bunga harus lebih dari nol.');
+    }
+    $date=financeReceivableValidDate((string)($input['transaction_date']??date('Y-m-d')));
+    $note=substr(trim((string)($input['note']??'')),0,500);
+    $name=(string)$person['name'];
+
+    $r=financeMutate(function (&$d) use($key,$name,$lendId,$mode,$rate,$amount,$base,$date,$note) {
+        if(!isset($d['meta']['receivable_interest_entries'])||!is_array($d['meta']['receivable_interest_entries']))$d['meta']['receivable_interest_entries']=[];
+        $next=max(1,(int)($d['meta']['next_receivable_interest_id']??1));
+        foreach($d['meta']['receivable_interest_entries'] as $row)$next=max($next,(int)($row['id']??0)+1);
+        $entry=[
+            'id'=>$next,'borrower_key'=>$key,'borrower_name'=>$name,'lend_id'=>$lendId,
+            'amount'=>$amount,'mode'=>$mode,'rate_percent'=>$mode==='percent'?$rate:0,'base_amount'=>$base,
+            'transaction_date'=>$date,'note'=>$note,'created_at'=>date('Y-m-d H:i:s'),
+        ];
+        $d['meta']['receivable_interest_entries'][]=$entry;
+        $d['meta']['next_receivable_interest_id']=$next+1;
+        if(function_exists('auditAdd'))auditAdd($d,'create','receivable_interest',$next,null,$entry,false,'Bunga piutang ditambahkan');
+        return $entry;
+    });
+    return (array)$r['result'];
+}
+
+/** V78 - Hapus bunga manual. Saldo dompet tetap tidak berubah. */
+function financeReceivableDeleteInterest(int $id): array {
+    if($id<=0) throw new InvalidArgumentException('ID bunga tidak valid.');
+    $d=financeReadData();$found=null;
+    foreach((array)($d['meta']['receivable_interest_entries']??[]) as $row)if((int)($row['id']??0)===$id){$found=$row;break;}
+    if(!$found) throw new InvalidArgumentException('Catatan bunga tidak ditemukan.');
+    $person=financeReceivableFindPerson((string)($found['borrower_key']??''));
+    $amount=max(0,(int)($found['amount']??0));
+    if($person && $amount>(int)($person['outstanding']??0)) throw new InvalidArgumentException('Bunga ini belum dapat dihapus karena sebagian nilainya sudah tertutup oleh pelunasan. Koreksi pelunasan terlebih dahulu.');
+
+    $r=financeMutate(function (&$data) use($id,$found) {
+        $rows=[];$deleted=false;
+        foreach((array)($data['meta']['receivable_interest_entries']??[]) as $row){
+            if((int)($row['id']??0)===$id){$deleted=true;continue;}
+            $rows[]=$row;
+        }
+        if(!$deleted) throw new InvalidArgumentException('Catatan bunga tidak ditemukan.');
+        $data['meta']['receivable_interest_entries']=$rows;
+        if(function_exists('auditAdd'))auditAdd($data,'delete','receivable_interest',$id,$found,null,false,'Bunga piutang dihapus');
+        return $found;
+    });
+    return (array)$r['result'];
+}
+
 function financeReceivableDelete(int $id): array {
     if($id<=0) throw new InvalidArgumentException('ID transaksi piutang tidak valid.');
     $tx=transactionById($id);
@@ -340,6 +469,9 @@ function financeReceivableDelete(int $id): array {
     if($key==='' && !empty($tx['receivable_borrower_name'])) $key=financeReceivableBorrowerKey((string)$tx['receivable_borrower_name']);
 
     if((string)($tx['source']??'')==='receivable_lend'){
+        foreach((array)(financeReadData()['meta']['receivable_interest_entries']??[]) as $interest){
+            if((int)($interest['lend_id']??0)===$id) throw new InvalidArgumentException('Pemberian hutang ini sudah memiliki bunga. Hapus catatan bunga terlebih dahulu.');
+        }
         $lent=0;$repaid=0;
         foreach(allTransactions() as $row){
             if((int)($row['id']??0)===$id || !financeReceivableIsTransaction((array)$row)) continue;

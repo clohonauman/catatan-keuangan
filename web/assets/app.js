@@ -3973,7 +3973,7 @@ function renderFinanceCenter() {
 function receivableState() {
   const r = featureState()?.receivables || {};
   return {
-    summary: r.summary || { total_lent:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
+    summary: r.summary || { total_lent:0, total_interest:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
     people: Array.isArray(r.people) ? r.people : [],
     entries: Array.isArray(r.entries) ? r.entries : [],
     wallets: Array.isArray(r.wallets) ? r.wallets : [],
@@ -3999,24 +3999,32 @@ function receivableProofHtml(entry={}) {
 
 function receivableEntryMarkup(entry={}) {
   const repayment = entry.action === "repayment";
-  const actionLabel = repayment ? "Pelunasan" : "Memberi hutang";
-  const amountClass = repayment ? "repayment" : "lend";
-  const amountPrefix = repayment ? "+" : "−";
-  const due = !repayment && entry.due_date ? ` · jatuh tempo ${formatBillDate(entry.due_date)}` : "";
-  const allocation = repayment && entry.allocation_label ? `<small class="receivable-entry-allocation">↳ ${esc(entry.allocation_label)}</small>` : "";
+  const interest = entry.action === "interest";
+  const actionLabel = repayment ? "Pelunasan" : interest ? "Bunga" : "Memberi hutang";
+  const amountClass = repayment ? "repayment" : interest ? "interest" : "lend";
+  const amountPrefix = repayment || interest ? "+" : "−";
+  const due = !repayment && !interest && entry.due_date ? ` · jatuh tempo ${formatBillDate(entry.due_date)}` : "";
+  const allocation = (repayment || interest) && entry.allocation_label ? `<small class="receivable-entry-allocation">↳ ${esc(entry.allocation_label)}</small>` : "";
+  const interestInfo = interest ? `<small class="receivable-interest-note">${Number(entry.interest_rate||0)>0?`${esc(String(entry.interest_rate).replace('.',','))}% dari ${esc(rupiah(entry.interest_base||0))}`:`Nominal manual`}</small>` : "";
   const note = String(entry.note || "").trim();
-  return `<article class="receivable-entry ${repayment ? "repayment" : "lend"}">
-    <div class="receivable-entry-icon" aria-hidden="true">${repayment ? "↙" : "↗"}</div>
+  const icon = repayment ? "↙" : interest ? "%" : "↗";
+  const walletText = entry.wallet_name || (interest ? "Tidak memengaruhi saldo" : "Dompet");
+  const deleteButton = interest
+    ? `<button type="button" data-receivable-interest-delete="${Number(entry.interest_id||0)}">Hapus</button>`
+    : `<button type="button" data-receivable-delete="${Number(entry.id || 0)}">Hapus</button>`;
+  return `<article class="receivable-entry ${repayment ? "repayment" : interest ? "interest" : "lend"}">
+    <div class="receivable-entry-icon" aria-hidden="true">${icon}</div>
     <div class="receivable-entry-copy">
       <b>${esc(entry.borrower_name || "Peminjam")} · ${esc(actionLabel)}</b>
-      <small>${esc(formatBillDate(entry.transaction_date || ""))} · ${esc(entry.wallet_name || "Dompet")}${esc(due)}</small>
+      <small>${esc(formatBillDate(entry.transaction_date || ""))} · ${esc(walletText)}${esc(due)}</small>
       ${allocation}
+      ${interestInfo}
       ${note ? `<small class="receivable-entry-note">${esc(note)}</small>` : ""}
       ${receivableProofHtml(entry)}
     </div>
     <div class="receivable-entry-side">
       <b class="${amountClass}">${amountPrefix}${esc(rupiah(entry.amount || 0))}</b>
-      <button type="button" data-receivable-delete="${Number(entry.id || 0)}">Hapus</button>
+      ${deleteButton}
     </div>
   </article>`;
 }
@@ -4076,12 +4084,12 @@ function updateReceivableRepayHint() {
     if (target) target.innerHTML = '<option value="0">Akumulasi semua hutang (FIFO)</option>';
     return;
   }
-  hint.innerHTML = `Sisa hutang <strong>${esc(rupiah(p.outstanding || 0))}</strong> · diberikan ${esc(rupiah(p.lent || 0))} · sudah dibayar ${esc(rupiah(p.repaid || 0))}.`;
+  hint.innerHTML = `Sisa hutang <strong>${esc(rupiah(p.outstanding || 0))}</strong> · diberikan ${esc(rupiah(p.lent || 0))} · bunga ${esc(rupiah(p.interest || 0))} · sudah dibayar ${esc(rupiah(p.repaid || 0))}.`;
   if (input) input.max = String(Math.max(0, Number(p.outstanding || 0)));
   if (target) {
     const prev = target.value;
     const loans = (p.loans || []).filter(x => Number(x.remaining || 0) > 0);
-    target.innerHTML = '<option value="0">Akumulasi semua hutang (FIFO)</option>' + loans.map(loan => `<option value="${Number(loan.id)}">${esc(formatBillDate(loan.transaction_date||""))} · ${esc(rupiah(loan.amount||0))} · sisa ${esc(rupiah(loan.remaining||0))}${loan.wallet_name?` · ${esc(loan.wallet_name)}`:""}</option>`).join("");
+    target.innerHTML = '<option value="0">Akumulasi semua hutang (FIFO)</option>' + loans.map(loan => `<option value="${Number(loan.id)}">${esc(formatBillDate(loan.transaction_date||""))} · total ${esc(rupiah(loan.amount||0))}${Number(loan.interest_amount||0)>0?` (bunga ${esc(rupiah(loan.interest_amount||0))})`:""} · sisa ${esc(rupiah(loan.remaining||0))}${loan.wallet_name?` · ${esc(loan.wallet_name)}`:""}</option>`).join("");
     if (prev && [...target.options].some(o => o.value === prev)) target.value = prev;
   }
 }
@@ -4100,9 +4108,61 @@ function updateReceivableRepayTargetMax() {
   input.max = String(Math.max(0,max));
 }
 
+function updateReceivableInterestHint() {
+  const r = receivableState();
+  const key = String(el("receivableInterestBorrower")?.value || "");
+  const p = r.people.find(x => String(x.key) === key);
+  const target = el("receivableInterestLend");
+  if (!p) {
+    if (target) target.innerHTML = '<option value="">Pilih hutang</option>';
+    updateReceivableInterestPreview();
+    return;
+  }
+  if (target) {
+    const prev = target.value;
+    const loans = (p.loans || []).filter(x => Number(x.remaining || 0) > 0);
+    target.innerHTML = '<option value="">Pilih hutang</option>' + loans.map(loan => {
+      const interest = Number(loan.interest_amount || 0);
+      return `<option value="${Number(loan.id)}">${esc(formatBillDate(loan.transaction_date||""))} · sisa ${esc(rupiah(loan.remaining||0))}${interest>0?` · bunga ${esc(rupiah(interest))}`:""}</option>`;
+    }).join("");
+    if (prev && [...target.options].some(o => o.value === prev)) target.value = prev;
+    else if (loans.length === 1) target.value = String(loans[0].id);
+  }
+  updateReceivableInterestPreview();
+}
+
+function updateReceivableInterestMode() {
+  const mode = String(el("receivableInterestMode")?.value || "percent");
+  if (el("receivableInterestPercentWrap")) el("receivableInterestPercentWrap").hidden = mode !== "percent";
+  if (el("receivableInterestAmountWrap")) el("receivableInterestAmountWrap").hidden = mode !== "amount";
+  updateReceivableInterestPreview();
+}
+
+function updateReceivableInterestPreview() {
+  const box = el("receivableInterestPreview"); if (!box) return;
+  const r = receivableState();
+  const key = String(el("receivableInterestBorrower")?.value || "");
+  const lendId = Number(el("receivableInterestLend")?.value || 0);
+  const p = r.people.find(x => String(x.key) === key);
+  const loan = p ? (p.loans || []).find(x => Number(x.id) === lendId) : null;
+  if (!p || !loan) { box.innerHTML = "Pilih peminjam dan hutang untuk menghitung bunga. Saldo dompet tidak akan berubah."; return; }
+  const base = Math.max(0, Number(loan.remaining || 0));
+  const mode = String(el("receivableInterestMode")?.value || "percent");
+  let amount = 0; let detail = "";
+  if (mode === "percent") {
+    const rate = Number(String(el("receivableInterestPercent")?.value || "0").replace(",","."));
+    amount = rate > 0 ? Math.max(1, Math.round(base * rate / 100)) : 0;
+    detail = rate > 0 ? `${String(rate).replace('.',',')}% × ${rupiah(base)}` : `Sisa hutang ${rupiah(base)}`;
+  } else {
+    amount = Math.max(0, Number(el("receivableInterestAmount")?.value || 0));
+    detail = `Sisa hutang ${rupiah(base)}`;
+  }
+  box.innerHTML = `${esc(p.name)} · ${esc(detail)}${amount>0?` → bunga <strong>${esc(rupiah(amount))}</strong>, sisa menjadi <strong>${esc(rupiah(base+amount))}</strong>.`:"."} Saldo dompet tetap tidak berubah.`;
+}
+
 function renderReceivables(raw={}) {
   const r = {
-    summary: raw.summary || { total_lent:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
+    summary: raw.summary || { total_lent:0, total_interest:0, total_repaid:0, outstanding:0, borrower_count:0, active_borrowers:0 },
     people: Array.isArray(raw.people) ? raw.people : [], entries: Array.isArray(raw.entries) ? raw.entries : [], wallets: Array.isArray(raw.wallets) ? raw.wallets : [],
   };
 
@@ -4121,18 +4181,20 @@ function renderReceivables(raw={}) {
 
   const view = receivableFilteredView(r);
   const filteredLent = view.entries.filter(e=>e.action==="lend").reduce((a,e)=>a+Number(e.amount||0),0);
+  const filteredInterest = view.entries.filter(e=>e.action==="interest").reduce((a,e)=>a+Number(e.amount||0),0);
   const filteredRepaid = view.entries.filter(e=>e.action==="repayment").reduce((a,e)=>a+Number(e.amount||0),0);
   const visibleOutstanding = view.people.reduce((a,p)=>a+Number(p.outstanding||0),0);
   const activeVisible = view.people.filter(p=>Number(p.outstanding||0)>0).length;
   const summaryBox = el("receivableSummaryGrid");
   if (summaryBox) summaryBox.innerHTML = `
     <div class="receivable-summary-card"><span>Total diberikan${view.entries.length!==r.entries.length?' · filter':''}</span><b>${esc(rupiah(filteredLent))}</b></div>
+    <div class="receivable-summary-card interest"><span>Total bunga${view.entries.length!==r.entries.length?' · filter':''}</span><b>${esc(rupiah(filteredInterest))}</b></div>
     <div class="receivable-summary-card"><span>Total dibayar${view.entries.length!==r.entries.length?' · filter':''}</span><b>${esc(rupiah(filteredRepaid))}</b></div>
     <div class="receivable-summary-card emphasis"><span>Sisa piutang saat ini</span><b>${esc(rupiah(visibleOutstanding))}</b></div>
     <div class="receivable-summary-card"><span>Peminjam aktif</span><b>${activeVisible} orang</b></div>`;
 
   const filterStatus = el("receivableFilterStatusText");
-  if (filterStatus) filterStatus.textContent = `Menampilkan ${view.people.length} peminjam dan ${view.entries.length} transaksi sesuai filter. PDF akan memakai filter yang sama.`;
+  if (filterStatus) filterStatus.textContent = `Menampilkan ${view.people.length} peminjam dan ${view.entries.length} catatan sesuai filter. PDF akan memakai filter yang sama.`;
 
   const lendBorrowerSelect = el("receivableLendBorrowerSelect");
   if (lendBorrowerSelect) {
@@ -4148,13 +4210,20 @@ function renderReceivables(raw={}) {
   const today = typeof localTodayValue === "function" ? localTodayValue() : new Date().toISOString().slice(0,10);
   if (el("receivableLendDate") && !el("receivableLendDate").value) el("receivableLendDate").value = today;
   if (el("receivableRepayDate") && !el("receivableRepayDate").value) el("receivableRepayDate").value = today;
+  if (el("receivableInterestDate") && !el("receivableInterestDate").value) el("receivableInterestDate").value = today;
 
+  const active = r.people.filter(p => Number(p.outstanding || 0) > 0);
   const repaySelect = el("receivableRepayBorrower");
   if (repaySelect) {
     const prev = repaySelect.value;
-    const active = r.people.filter(p => Number(p.outstanding || 0) > 0);
     repaySelect.innerHTML = '<option value="">Pilih peminjam</option>' + active.map(p => `<option value="${esc(p.key)}">${esc(p.name)} · sisa ${esc(rupiah(p.outstanding || 0))}</option>`).join("");
     if (prev && [...repaySelect.options].some(o => o.value === prev)) repaySelect.value = prev;
+  }
+  const interestBorrower = el("receivableInterestBorrower");
+  if (interestBorrower) {
+    const prev = interestBorrower.value;
+    interestBorrower.innerHTML = '<option value="">Pilih peminjam</option>' + active.map(p => `<option value="${esc(p.key)}">${esc(p.name)} · sisa ${esc(rupiah(p.outstanding || 0))}</option>`).join("");
+    if (prev && [...interestBorrower.options].some(o => o.value === prev)) interestBorrower.value = prev;
   }
 
   const peopleBox = el("receivablePeopleList");
@@ -4166,13 +4235,16 @@ function renderReceivables(raw={}) {
       const activeLoans = (p.loans || []).filter(x=>Number(x.remaining||0)>0);
       const statusClass = p.status === "overdue" ? "is-overdue" : Number(p.outstanding || 0) <= 0 ? "is-paid" : "";
       const due = p.next_due_date ? ` · jatuh tempo terdekat ${formatBillDate(p.next_due_date)}` : "";
-      const loansMarkup = activeLoans.length ? `<div class="receivable-loan-list"><b>Hutang yang masih terbuka</b>${activeLoans.map(loan=>`<div class="receivable-loan-item"><div><strong>${esc(rupiah(loan.remaining||0))}</strong><small>${esc(formatBillDate(loan.transaction_date||""))} · awal ${esc(rupiah(loan.amount||0))}${loan.due_date?` · JT ${esc(formatBillDate(loan.due_date))}`:""}</small></div><button type="button" class="secondary-btn" data-receivable-repay-loan="${Number(loan.id)}" data-borrower-key="${esc(p.key)}">Lunasi ini</button></div>`).join("")}</div>` : "";
+      const loansMarkup = activeLoans.length ? `<div class="receivable-loan-list"><b>Hutang yang masih terbuka</b>${activeLoans.map(loan=>{
+        const interest = Number(loan.interest_amount||0);
+        return `<div class="receivable-loan-item"><div><strong>${esc(rupiah(loan.remaining||0))}</strong><small>${esc(formatBillDate(loan.transaction_date||""))} · pokok ${esc(rupiah(loan.principal_amount??loan.amount??0))}${interest>0?` · <span class="receivable-loan-interest">bunga ${esc(rupiah(interest))}</span>`:""}${loan.due_date?` · JT ${esc(formatBillDate(loan.due_date))}`:""}</small></div><div class="receivable-loan-item-actions"><button type="button" class="secondary-btn" data-receivable-interest-loan="${Number(loan.id)}" data-borrower-key="${esc(p.key)}">Tambah bunga</button><button type="button" class="secondary-btn" data-receivable-repay-loan="${Number(loan.id)}" data-borrower-key="${esc(p.key)}">Lunasi ini</button></div></div>`;
+      }).join("")}</div>` : "";
       return `<details class="receivable-person ${statusClass}">
-        <summary><div class="receivable-person-main"><span class="receivable-person-avatar">${receivableInitial(p.name)}</span><span class="receivable-person-copy"><b>${esc(p.name)}</b><small>${esc(receivablePersonStatusLabel(p))} · ${Number(p.entries || 0)} transaksi${esc(due)}</small></span></div><span class="receivable-person-amount"><span>Sisa hutang</span><b>${esc(rupiah(p.outstanding || 0))}</b></span></summary>
+        <summary><div class="receivable-person-main"><span class="receivable-person-avatar">${receivableInitial(p.name)}</span><span class="receivable-person-copy"><b>${esc(p.name)}</b><small>${esc(receivablePersonStatusLabel(p))} · ${Number(p.entries || 0)} catatan${esc(due)}</small></span></div><span class="receivable-person-amount"><span>Sisa hutang</span><b>${esc(rupiah(p.outstanding || 0))}</b></span></summary>
         <div class="receivable-person-body">
-          <div class="receivable-person-kpis"><div><span>Total diberikan</span><b>${esc(rupiah(p.lent || 0))}</b></div><div><span>Sudah dibayar</span><b>${esc(rupiah(p.repaid || 0))}</b></div><div><span>Sisa</span><b>${esc(rupiah(p.outstanding || 0))}</b></div></div>
+          <div class="receivable-person-kpis"><div><span>Total diberikan</span><b>${esc(rupiah(p.lent || 0))}</b></div><div><span>Bunga</span><b>${esc(rupiah(p.interest || 0))}</b></div><div><span>Sudah dibayar</span><b>${esc(rupiah(p.repaid || 0))}</b></div><div><span>Sisa</span><b>${esc(rupiah(p.outstanding || 0))}</b></div></div>
           ${loansMarkup}
-          <div class="receivable-person-actions"><button type="button" class="btn secondary" data-receivable-lend-again="${esc(p.key)}">Tambah Hutang Lagi</button>${Number(p.outstanding || 0) > 0 ? `<button type="button" class="btn primary" data-receivable-repay-person="${esc(p.key)}">Catat Pelunasan</button>` : ""}</div>
+          <div class="receivable-person-actions"><button type="button" class="btn secondary" data-receivable-lend-again="${esc(p.key)}">Tambah Hutang Lagi</button>${Number(p.outstanding || 0) > 0 ? `<button type="button" class="btn secondary" data-receivable-interest-person="${esc(p.key)}">Tambah Bunga</button><button type="button" class="btn primary" data-receivable-repay-person="${esc(p.key)}">Catat Pelunasan</button>` : ""}</div>
           <div class="receivable-history-list">${personEntries.length ? personEntries.map(receivableEntryMarkup).join("") : '<div class="empty compact">Tidak ada riwayat sesuai filter.</div>'}</div>
         </div>
       </details>`;
@@ -4184,6 +4256,8 @@ function renderReceivables(raw={}) {
 
   updateReceivableRepayHint();
   updateReceivableRepayTargetMax();
+  updateReceivableInterestHint();
+  updateReceivableInterestMode();
 
   document.querySelectorAll("[data-receivable-repay-person]").forEach(btn => btn.onclick = () => {
     const key = String(btn.dataset.receivableRepayPerson || "");
@@ -4198,6 +4272,19 @@ function renderReceivables(raw={}) {
     if(el("receivableRepayLend"))el("receivableRepayLend").value=String(loanId); updateReceivableRepayTargetMax();
     el("receivableRepayAmount")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>el("receivableRepayAmount")?.focus(),250);
   });
+  document.querySelectorAll("[data-receivable-interest-person]").forEach(btn => btn.onclick = () => {
+    const key=String(btn.dataset.receivableInterestPerson||"");
+    if(el("receivableInterestBorrower"))el("receivableInterestBorrower").value=key;
+    setReceivableMobileMode("interest"); updateReceivableInterestHint();
+    el("receivableInterestBorrower")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>el("receivableInterestPercent")?.focus(),250);
+  });
+  document.querySelectorAll("[data-receivable-interest-loan]").forEach(btn => btn.onclick = () => {
+    const key=String(btn.dataset.borrowerKey||""); const loanId=Number(btn.dataset.receivableInterestLoan||0);
+    if(el("receivableInterestBorrower"))el("receivableInterestBorrower").value=key;
+    setReceivableMobileMode("interest"); updateReceivableInterestHint();
+    if(el("receivableInterestLend"))el("receivableInterestLend").value=String(loanId); updateReceivableInterestPreview();
+    el("receivableInterestPercent")?.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>el("receivableInterestPercent")?.focus(),250);
+  });
   document.querySelectorAll("[data-receivable-lend-again]").forEach(btn => btn.onclick = () => {
     const key = String(btn.dataset.receivableLendAgain || "");
     if (el("receivableLendBorrowerSelect") && [...el("receivableLendBorrowerSelect").options].some(o=>o.value===key)) el("receivableLendBorrowerSelect").value = key;
@@ -4209,6 +4296,12 @@ function renderReceivables(raw={}) {
     if (!confirm("Hapus catatan piutang ini? Saldo dompet akan dihitung ulang sesuai transaksi yang tersisa.")) return;
     try { await featureAction({action:"receivable_delete",id}, "Catatan piutang dihapus"); announceRealtimeMutation(); await reloadTransactionsOnly(); }
     catch (e) { showFeatureToast(e.message || "Catatan piutang gagal dihapus.", "error"); }
+  });
+  document.querySelectorAll("[data-receivable-interest-delete]").forEach(btn => btn.onclick = async () => {
+    const id = Number(btn.dataset.receivableInterestDelete || 0); if (!id) return;
+    if (!confirm("Hapus bunga ini? Nilai piutang akan berkurang, tetapi saldo dompet tidak berubah.")) return;
+    try { await featureAction({action:"receivable_interest_delete",id}, "Bunga piutang dihapus"); announceRealtimeMutation(); await reloadTransactionsOnly(); }
+    catch (e) { showFeatureToast(e.message || "Bunga piutang gagal dihapus.", "error"); }
   });
 }
 
@@ -4225,7 +4318,7 @@ function updateReceivableLendBorrowerMode() {
 }
 
 function setReceivableMobileMode(mode="lend") {
-  mode = mode === "repayment" ? "repayment" : "lend";
+  mode = ["lend","repayment","interest"].includes(mode) ? mode : "lend";
   document.querySelectorAll("[data-receivable-form-mode]").forEach(b=>b.classList.toggle("is-active",b.dataset.receivableFormMode===mode));
   document.querySelectorAll("[data-receivable-form]").forEach(card=>card.classList.toggle("mobile-form-hidden",card.dataset.receivableForm!==mode));
 }
@@ -4266,12 +4359,43 @@ async function saveReceivableRepay() {
   }catch(e){showFeatureToast(e.message||"Pelunasan gagal dicatat.","error");}finally{if(btn){btn.disabled=false;btn.textContent=old;}}
 }
 
+async function saveReceivableInterest() {
+  const btn=el("saveReceivableInterest"), old=btn?.textContent||"Tambahkan Bunga";
+  try{
+    receivableEnsureOnline();
+    const borrowerKey=String(el("receivableInterestBorrower")?.value||"");
+    const lendId=Number(el("receivableInterestLend")?.value||0);
+    const mode=String(el("receivableInterestMode")?.value||"percent");
+    const rate=Number(String(el("receivableInterestPercent")?.value||"0").replace(",","."));
+    const amount=Number(el("receivableInterestAmount")?.value||0);
+    const date=String(el("receivableInterestDate")?.value||"");
+    const note=String(el("receivableInterestNote")?.value||"").trim();
+    if(!borrowerKey)throw new Error("Pilih peminjam yang akan diberi bunga.");
+    if(!lendId)throw new Error("Pilih hutang yang akan dikenakan bunga.");
+    if(mode==="percent"&&(rate<=0||rate>100))throw new Error("Persentase bunga harus lebih dari 0% dan maksimal 100%.");
+    if(mode==="amount"&&amount<=0)throw new Error("Nominal bunga harus lebih dari nol.");
+    if(!date)throw new Error("Pilih tanggal penambahan bunga.");
+    if(btn){btn.disabled=true;btn.textContent="Menyimpan…";}
+    await featureAction({action:"receivable_interest_add",borrower_key:borrowerKey,lend_id:lendId,mode,rate_percent:rate,amount,transaction_date:date,note},"Bunga piutang berhasil ditambahkan");
+    announceRealtimeMutation();
+    if(el("receivableInterestPercent"))el("receivableInterestPercent").value="";
+    if(el("receivableInterestAmount"))el("receivableInterestAmount").value="";
+    if(el("receivableInterestNote"))el("receivableInterestNote").value="";
+    await reloadTransactionsOnly();
+  }catch(e){showFeatureToast(e.message||"Bunga piutang gagal ditambahkan.","error");}
+  finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+}
+
 function receivableFilteredCsvRows() {
   const r=receivableState(), view=receivableFilteredView(r); const quote=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  const lent=view.entries.filter(e=>e.action==="lend").reduce((a,e)=>a+Number(e.amount||0),0), repaid=view.entries.filter(e=>e.action==="repayment").reduce((a,e)=>a+Number(e.amount||0),0);
-  const lines=[["REKAP PIUTANG - SESUAI FILTER"],["Total diberikan",lent],["Total dibayar",repaid],["Peminjam tampil",view.people.length],[],["REKAP PER PEMINJAM"],["Nama Peminjam","Total Diberikan","Total Dibayar","Sisa Saat Ini","Status","Jatuh Tempo Terdekat"],...view.people.map(p=>[p.name,p.lent||0,p.repaid||0,p.outstanding||0,receivablePersonStatusLabel(p),p.next_due_date||""]),[],["RIWAYAT SESUAI FILTER"],["Tanggal","Peminjam","Jenis","Nominal","Dompet","Alokasi Pelunasan","Jatuh Tempo","Keterangan"],...view.entries.map(e=>[e.transaction_date,e.borrower_name,e.action==="repayment"?"Pelunasan":"Memberi Hutang",e.amount||0,e.wallet_name||"",e.allocation_label||"",e.due_date||"",e.note||""])];
+  const lent=view.entries.filter(e=>e.action==="lend").reduce((a,e)=>a+Number(e.amount||0),0);
+  const interest=view.entries.filter(e=>e.action==="interest").reduce((a,e)=>a+Number(e.amount||0),0);
+  const repaid=view.entries.filter(e=>e.action==="repayment").reduce((a,e)=>a+Number(e.amount||0),0);
+  const actionLabel=e=>e.action==="repayment"?"Pelunasan":e.action==="interest"?"Bunga":"Memberi Hutang";
+  const lines=[["REKAP PIUTANG - SESUAI FILTER"],["Total diberikan",lent],["Total bunga",interest],["Total dibayar",repaid],["Peminjam tampil",view.people.length],[],["REKAP PER PEMINJAM"],["Nama Peminjam","Total Diberikan","Bunga","Total Dibayar","Sisa Saat Ini","Status","Jatuh Tempo Terdekat"],...view.people.map(p=>[p.name,p.lent||0,p.interest||0,p.repaid||0,p.outstanding||0,receivablePersonStatusLabel(p),p.next_due_date||""]),[],["RIWAYAT SESUAI FILTER"],["Tanggal","Peminjam","Jenis","Nominal","Dompet/Saldo","Alokasi","Bunga %","Dasar Bunga","Jatuh Tempo","Keterangan"],...view.entries.map(e=>[e.transaction_date,e.borrower_name,actionLabel(e),e.amount||0,e.wallet_name||"",e.allocation_label||"",e.interest_rate||"",e.interest_base||"",e.due_date||"",e.note||""])];
   return "\uFEFF"+lines.map(row=>row.map(quote).join(";")).join("\r\n");
 }
+
 function downloadReceivableCsv(){const r=receivableState();if(!r.people.length)return showFeatureToast("Belum ada data piutang untuk direkap.","info");const blob=new Blob([receivableFilteredCsvRows()],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`rekap-piutang-${typeof localTodayValue==="function"?localTodayValue():"data"}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function downloadReceivablePdf(){
   const r=receivableState();
@@ -4319,9 +4443,15 @@ function resetReceivableFilters(){["receivableFilterBorrower","receivableFilterA
 
 el("saveReceivableLend")?.addEventListener("click",saveReceivableLend);
 el("saveReceivableRepay")?.addEventListener("click",saveReceivableRepay);
+el("saveReceivableInterest")?.addEventListener("click",saveReceivableInterest);
 el("receivableLendBorrowerSelect")?.addEventListener("change",()=>{updateReceivableLendBorrowerMode();if(el("receivableLendBorrowerSelect")?.value==="__new__")setTimeout(()=>el("receivableLendBorrower")?.focus(),60);});
 el("receivableRepayBorrower")?.addEventListener("change",()=>{updateReceivableRepayHint();updateReceivableRepayTargetMax();});
 el("receivableRepayLend")?.addEventListener("change",updateReceivableRepayTargetMax);
+el("receivableInterestBorrower")?.addEventListener("change",updateReceivableInterestHint);
+el("receivableInterestLend")?.addEventListener("change",updateReceivableInterestPreview);
+el("receivableInterestMode")?.addEventListener("change",updateReceivableInterestMode);
+el("receivableInterestPercent")?.addEventListener("input",updateReceivableInterestPreview);
+el("receivableInterestAmount")?.addEventListener("input",updateReceivableInterestPreview);
 ["receivableFilterBorrower","receivableFilterStatus","receivableFilterAction","receivableFilterFrom","receivableFilterTo","receivableFilterWallet"].forEach(id=>el(id)?.addEventListener("change",()=>renderReceivables(featureState()?.receivables||{})));
 el("resetReceivableFilters")?.addEventListener("click",resetReceivableFilters);
 el("downloadReceivableCsv")?.addEventListener("click",downloadReceivableCsv);

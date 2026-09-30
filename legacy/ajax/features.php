@@ -75,6 +75,8 @@ try {
                 throw $e;
             }
             break;
+        case 'receivable_interest_add': $result=financeReceivableAddInterest($input); break;
+        case 'receivable_interest_delete': $result=financeReceivableDeleteInterest((int)($input['id']??0)); break;
         case 'receivable_delete': $result=financeReceivableDelete((int)($input['id']??0)); break;
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;

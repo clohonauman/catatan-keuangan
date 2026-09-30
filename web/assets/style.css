@@ -3602,3 +3602,28 @@ dialog[open]>.feature-toast.in-dialog{
 #financeCenter [data-finance-panel][hidden]{
   display:none!important;
 }
+
+/* ===== V78 - Bunga Piutang Manual ===== */
+.receivable-summary-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.receivable-summary-card.interest{background:#fff8e8;border-color:#f4dda7}
+.receivable-summary-card.interest b{color:#a15c00}
+.receivable-interest-card{grid-column:1/-1}
+.receivable-interest-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.receivable-interest-grid label{min-width:0}
+#receivableInterestAmountWrap[hidden],#receivableInterestPercentWrap[hidden]{display:none!important}
+.receivable-entry.interest .receivable-entry-icon{background:#fff4d6;color:#9a5d00}
+.receivable-entry-side .interest{color:#a15c00}
+.receivable-person-kpis{grid-template-columns:repeat(4,1fr)}
+.receivable-loan-interest{color:#9a5d00!important;font-weight:700}
+.receivable-interest-note{display:block!important;color:#9a5d00!important;font-weight:700;margin-top:3px}
+@media(max-width:1100px){.receivable-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.receivable-interest-grid{grid-template-columns:1fr 1fr}.receivable-summary-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){
+  .receivable-mobile-mode{grid-template-columns:repeat(3,1fr)}
+  .receivable-mobile-mode button{font-size:11px;padding:10px 5px}
+  .receivable-interest-grid{grid-template-columns:1fr}
+  .receivable-person-kpis{grid-template-columns:1fr 1fr}
+}
+.receivable-loan-item-actions{display:flex;gap:6px;flex:0 0 auto}
+.receivable-loan-item-actions button{white-space:nowrap}
+@media(max-width:760px){.receivable-loan-item-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.receivable-loan-item-actions button{width:100%}}

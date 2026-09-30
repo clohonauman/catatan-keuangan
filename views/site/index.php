@@ -935,7 +935,7 @@ if (!function_exists('ck_icon')) {
             </button>
             <button type="button" class="sidebar-menu-item" data-finance-open="receivables">
                 <span class="sidebar-menu-icon"><?= ck_icon('users') ?></span>
-                <span><b>Piutang / Memberi Hutang</b><small>Catat pinjaman, pelunasan & rekap per orang</small></span>
+                <span><b>Piutang / Memberi Hutang</b><small>Catat pinjaman, bunga, pelunasan & rekap per orang</small></span>
                 <span class="sidebar-arrow">›</span>
             </button>
             <button type="button" class="sidebar-menu-item" id="openEmailSecurity">
@@ -1712,8 +1712,8 @@ if (!function_exists('ck_icon')) {
                     <div class="receivable-hero">
                         <div>
                             <span class="receivable-kicker">PIUTANG PRIBADI</span>
-                            <h3>Memberi Hutang & Pelunasan</h3>
-                            <p>Uang yang dipinjamkan mengurangi saldo dompet, tetapi tidak dihitung sebagai pengeluaran. Pelunasan menambah saldo kembali tanpa dianggap pemasukan baru.</p>
+                            <h3>Memberi Hutang, Bunga & Pelunasan</h3>
+                            <p>Uang yang dipinjamkan mengurangi saldo dompet, pelunasan mengembalikan saldo, sedangkan bunga manual hanya menambah nilai piutang tanpa memengaruhi saldo.</p>
                         </div>
                         <div class="receivable-hero-actions">
                             <button type="button" class="btn secondary" id="downloadReceivableCsv">CSV</button>
@@ -1723,6 +1723,7 @@ if (!function_exists('ck_icon')) {
 
                     <div class="receivable-summary-grid" id="receivableSummaryGrid">
                         <div class="receivable-summary-card"><span>Total diberikan</span><b>Rp0</b></div>
+                        <div class="receivable-summary-card interest"><span>Total bunga</span><b>Rp0</b></div>
                         <div class="receivable-summary-card"><span>Total dibayar</span><b>Rp0</b></div>
                         <div class="receivable-summary-card emphasis"><span>Sisa piutang</span><b>Rp0</b></div>
                         <div class="receivable-summary-card"><span>Peminjam aktif</span><b>0 orang</b></div>
@@ -1731,6 +1732,7 @@ if (!function_exists('ck_icon')) {
                     <div class="receivable-mobile-mode" role="tablist" aria-label="Mode pencatatan piutang">
                         <button type="button" class="is-active" data-receivable-form-mode="lend">Beri Hutang</button>
                         <button type="button" data-receivable-form-mode="repayment">Pelunasan</button>
+                        <button type="button" data-receivable-form-mode="interest">Tambah Bunga</button>
                     </div>
                     <div class="two-col-feature receivable-form-grid">
                         <div class="feature-card receivable-form-card" data-receivable-form="lend">
@@ -1779,6 +1781,22 @@ if (!function_exists('ck_icon')) {
                             </label>
                             <button type="button" class="btn primary wide" id="saveReceivableRepay">Catat Pelunasan</button>
                         </div>
+                        <div class="feature-card receivable-form-card receivable-interest-card" data-receivable-form="interest">
+                            <div class="feature-toolbar">
+                                <div><b>Tambah Bunga Manual</b><small>Menambah nilai piutang tanpa mengubah saldo dompet.</small></div>
+                            </div>
+                            <div class="receivable-interest-grid">
+                                <label>Peminjam<select id="receivableInterestBorrower"><option value="">Pilih peminjam</option></select></label>
+                                <label>Hutang yang dikenakan bunga<select id="receivableInterestLend"><option value="">Pilih hutang</option></select></label>
+                                <label>Metode bunga<select id="receivableInterestMode"><option value="percent">Persentase (%)</option><option value="amount">Nominal langsung</option></select></label>
+                                <label id="receivableInterestPercentWrap">Persentase bunga (%)<input type="number" id="receivableInterestPercent" min="0.01" max="100" step="0.01" placeholder="2" inputmode="decimal"></label>
+                                <label id="receivableInterestAmountWrap" hidden>Nominal bunga<input type="number" id="receivableInterestAmount" min="1" step="1000" placeholder="2000" inputmode="numeric"></label>
+                                <label>Tanggal penambahan bunga<input type="date" id="receivableInterestDate"></label>
+                            </div>
+                            <div class="receivable-outstanding-hint" id="receivableInterestPreview">Pilih peminjam dan hutang untuk menghitung bunga. Saldo dompet tidak akan berubah.</div>
+                            <label>Keterangan<textarea id="receivableInterestNote" rows="2" maxlength="500" placeholder="Opsional, mis. bunga bulan berikutnya"></textarea></label>
+                            <button type="button" class="btn primary wide" id="saveReceivableInterest">Tambahkan Bunga</button>
+                        </div>
                     </div>
 
                     <div class="feature-card receivable-filter-card">
@@ -1789,7 +1807,7 @@ if (!function_exists('ck_icon')) {
                         <div class="receivable-filter-grid">
                             <label>Peminjam<select id="receivableFilterBorrower"><option value="">Semua peminjam</option></select></label>
                             <label>Status<select id="receivableFilterStatus"><option value="all">Semua status</option><option value="active">Belum lunas</option><option value="overdue">Lewat jatuh tempo</option><option value="paid">Sudah lunas</option></select></label>
-                            <label>Jenis<select id="receivableFilterAction"><option value="all">Semua transaksi</option><option value="lend">Pemberian hutang</option><option value="repayment">Pelunasan</option></select></label>
+                            <label>Jenis<select id="receivableFilterAction"><option value="all">Semua transaksi</option><option value="lend">Pemberian hutang</option><option value="interest">Bunga</option><option value="repayment">Pelunasan</option></select></label>
                             <label>Dari tanggal<input type="date" id="receivableFilterFrom"></label>
                             <label>Sampai tanggal<input type="date" id="receivableFilterTo"></label>
                             <label>Dompet<select id="receivableFilterWallet"><option value="0">Semua dompet</option></select></label>
