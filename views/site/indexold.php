@@ -989,12 +989,6 @@ if (!function_exists('ck_icon')) {
                 <span><b>Analitik & Prediksi</b><small>Grafik dan cukup sampai gajian</small></span><span
                     class="sidebar-arrow">›</span>
             </button>
-            <button type="button" class="sidebar-menu-item premium-feature-link" data-premium-required="1"
-                data-finance-open="simulation">
-                <span class="sidebar-menu-icon"><?= ck_icon('chart') ?></span>
-                <span><b>Simulasi Keuangan</b><small>Rencanakan pemasukan & pengeluaran bulan depan</small></span><span
-                    class="sidebar-arrow">›</span>
-            </button>
             <button type="button" class="sidebar-menu-item" data-finance-open="backup">
                 <span class="sidebar-menu-icon"><?= ck_icon('cloud') ?></span>
                 <span><b>Backup & Aplikasi</b><small>Backup, restore, PWA & notifikasi</small></span><span
@@ -1559,7 +1553,6 @@ if (!function_exists('ck_icon')) {
             <div class="finance-tabs" id="financeTabs">
                 <button data-finance-tab="premium"><span class="premium-tab-icon"><?= ck_icon('crown') ?></span>Premium</button>
                 <button data-finance-tab="analytics" data-premium-tab="1">Analitik</button>
-                <button data-finance-tab="simulation" data-premium-tab="1">Simulasi</button>
                 <button data-finance-tab="wallets" data-premium-tab="1">Dompet</button>
                 <button data-finance-tab="receivables">Piutang</button>
                 <button data-finance-tab="budgets" data-premium-tab="1">Budget</button>
@@ -1657,53 +1650,7 @@ if (!function_exists('ck_icon')) {
                         <b>Akun Free tetap dapat menggunakan fitur dasar.</b> Chat pencatatan transaksi, kalkulator,
                         saldo, transaksi, batas harian, piutang/memberi hutang, foto nota, dan akses aplikasi tetap tersedia. Fitur lanjutan
                         seperti analitik, banyak dompet, budget kategori, tagihan, transaksi berulang, target menabung,
-                        export, backup, dan simulasi keuangan memerlukan Premium. Edit transaksi dasar tetap tersedia untuk semua akun.
-                    </div>
-                </section>
-                <section class="finance-tab-panel simulation-panel" data-finance-panel="simulation" hidden>
-                    <div class="feature-toolbar simulation-toolbar">
-                        <div>
-                            <b>Simulasi Keuangan</b>
-                            <small>Perkirakan pemasukan, pengeluaran, dan kondisi dana tanpa membuat transaksi nyata.</small>
-                        </div>
-                        <label>Bulan simulasi<input type="month" id="simulationMonth" min="<?= date('Y-m') ?>" value="<?= date('Y-m', strtotime('first day of next month')) ?>"></label>
-                    </div>
-
-                    <div class="simulation-summary" id="simulationSummary">
-                        <div><small>Saldo tersedia saat ini</small><b id="simulationCurrentBalance">Rp0</b></div>
-                        <div><small>Pemasukan direncanakan</small><b class="income" id="simulationIncomeTotal">Rp0</b></div>
-                        <div><small>Pengeluaran direncanakan</small><b class="expense" id="simulationExpenseTotal">Rp0</b></div>
-                        <div><small>Estimasi saldo setelah rencana</small><b id="simulationProjectedBalance">Rp0</b></div>
-                    </div>
-
-                    <div class="simulation-alert" id="simulationAlert" hidden></div>
-
-                    <div class="simulation-grid">
-                        <div class="feature-card simulation-column">
-                            <div class="simulation-column-head">
-                                <div><h4>Pemasukan</h4><small>Perkiraan otomatis + pemasukan terjadwal. Semua nominal dapat diubah.</small></div>
-                                <button type="button" class="btn secondary" id="simulationAddIncome">+ Tambah</button>
-                            </div>
-                            <div class="simulation-list" id="simulationIncomeList"></div>
-                        </div>
-                        <div class="feature-card simulation-column">
-                            <div class="simulation-column-head">
-                                <div><h4>Pengeluaran</h4><small>Riwayat pengeluaran harian + tagihan dan transaksi berulang.</small></div>
-                                <button type="button" class="btn secondary" id="simulationAddExpense">+ Tambah</button>
-                            </div>
-                            <div class="simulation-list" id="simulationExpenseList"></div>
-                        </div>
-                    </div>
-
-                    <div class="simulation-actions">
-                        <button type="button" class="btn secondary" id="simulationReset">Kembalikan perkiraan otomatis</button>
-                        <span id="simulationSaveState">Perubahan simulasi tersimpan di perangkat ini.</span>
-                    </div>
-
-                    <div class="feature-card simulation-info-card" id="simulationInfoCard">
-                        <div class="simulation-info-head"><b>Dasar perhitungan</b><span id="simulationHistoryMeta">Memuat...</span></div>
-                        <p id="simulationMethodText">Perkiraan pengeluaran variabel menggunakan riwayat transaksi harian. Tagihan dan transaksi berulang dipisahkan agar tidak dihitung dua kali.</p>
-                        <div class="simulation-history-list" id="simulationHistoryList"></div>
+                        export, dan backup memerlukan Premium. Edit transaksi dasar tetap tersedia untuk semua akun.
                     </div>
                 </section>
                 <section class="finance-tab-panel" data-finance-panel="analytics">

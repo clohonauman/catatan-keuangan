@@ -13,7 +13,7 @@ class LegacyApiController extends Controller
     private const JSON_ENDPOINTS = [
         'admin','admin_notifications','backup','chats','dashboard','delete_message',
         'delete_transaction','devices','edit_transaction','email_notifications',
-        'features','finance','learning','notifications','realtime','settings','simulation','subscription',
+        'features','finance','learning','notifications','realtime','settings','subscription',
         'transactions',
     ];
 
@@ -364,7 +364,6 @@ class LegacyApiController extends Controller
     public function actionReport(){ return $this->runLegacy('report'); }
     public function actionReceivablesReport(){ return $this->runLegacy('receivables_report'); }
     public function actionSettings(){ return $this->runLegacy('settings'); }
-    public function actionSimulation(){ return $this->runLegacy('simulation'); }
     public function actionSubscription(){ return $this->runLegacy('subscription'); }
     public function actionTransactions(){ return $this->runLegacy('transactions'); }
 

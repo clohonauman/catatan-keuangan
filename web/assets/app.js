@@ -55,6 +55,12 @@ let selectedPhoto = null;
 let premiumProofPrepared = null;
 let premiumProofPreparePromise = null;
 
+// V82: Simulasi Keuangan — hanya draft/proyeksi lokal, tidak menulis transaksi nyata.
+let simulationSnapshotCache = {};
+let simulationDraft = null;
+let simulationLoading = false;
+const SIMULATION_HISTORY_MONTHS = 6;
+
 const TX_PAGE_SIZE = 10;
 const CHAT_PAGE_SIZE = 10;
 let txPageState = { page: 1, limit: TX_PAGE_SIZE, total: 0, has_more: false, loading: false };
@@ -3911,6 +3917,7 @@ function updateFinanceCenterHeading(tab = "") {
     "admin-users": ["Akun Pengguna", "Kelola paket dan akses pengguna secara manual."],
     "admin-maintenance": ["Mode Maintenance", "Atur siapa yang tetap dapat mengakses aplikasi selama pemeliharaan."],
     "receivables": ["Piutang / Memberi Hutang", "Catat pemberian hutang, pelunasan, bukti foto, dan rekap per peminjam."],
+    "simulation": ["Simulasi Keuangan", "Rencanakan pemasukan dan pengeluaran bulan berikutnya tanpa mengubah transaksi nyata."],
   };
   const title = el("financeCenterTitle");
   const subtitle = el("financeCenterSubtitle");
@@ -3924,7 +3931,7 @@ function updateFinanceCenterHeading(tab = "") {
   }
 }
 function selectFinanceTab(tab) {
-  const premiumTabs = new Set(["analytics","wallets","budgets","bills","recurring","goals"]);
+  const premiumTabs = new Set(["analytics","simulation","wallets","budgets","bills","recurring","goals"]);
   if (premiumTabs.has(tab) && !isPremiumUser()) {
     tab = "premium";
     showFeatureToast("Fitur tersebut tersedia untuk akun Premium.");
@@ -3937,6 +3944,7 @@ function selectFinanceTab(tab) {
   document.querySelectorAll("[data-finance-tab]").forEach(b => b.classList.toggle("active", b.dataset.financeTab === tab));
   document.querySelectorAll("[data-finance-panel]").forEach(p => p.hidden = p.dataset.financePanel !== tab);
   if (tab === "premium") loadSubscriptionPanel();
+  if (tab === "simulation") loadSimulationForMonth(el("simulationMonth")?.value || simulationDefaultMonth());
   if (isSuperAdminFinanceTab(tab)) { loadAdminPanel(); refreshAdminNotifications(true); }
 }
 async function openFinanceCenter(tab = "analytics") {
@@ -3946,8 +3954,9 @@ async function openFinanceCenter(tab = "analytics") {
     return;
   }
   try { await refreshFeatures(); } catch (_) {}
-  if (!isPremiumUser() && ["analytics","wallets","budgets","bills","recurring","goals"].includes(tab)) tab = "premium";
+  if (!isPremiumUser() && ["analytics","simulation","wallets","budgets","bills","recurring","goals"].includes(tab)) tab = "premium";
   selectFinanceTab(tab); financeCenter?.showModal();
+  if (tab === "simulation") loadSimulationForMonth(el("simulationMonth")?.value || simulationDefaultMonth());
 }
 document.querySelectorAll("[data-finance-open]").forEach(btn => btn.addEventListener("click", () => openFinanceCenter(btn.dataset.financeOpen)));
 document.querySelectorAll("[data-finance-tab]").forEach(btn => btn.addEventListener("click", () => selectFinanceTab(btn.dataset.financeTab)));
@@ -3962,6 +3971,7 @@ function renderFinanceCenter() {
   renderRecurring(f.recurring || []);
   renderGoals(f.goals || []);
   renderAnalytics(f.analytics || {}, f.prediction || {});
+  renderSimulationPanel();
   renderHistory(f.history || []);
   renderNotificationForm(f.notifications || {});
   renderFeatureSelectOptions();
@@ -4573,6 +4583,243 @@ function renderHistory(rows) {
     catch(e){ alert(e.message || "Perubahan tidak dapat dibatalkan."); }
   });
 }
+
+function simulationDefaultMonth() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function simulationStorageKey(month) {
+  const uid = String(window.FINANCE_APP?.userId || "0");
+  return `finance_simulation_v82_${uid}_${String(month || "").replace(/[^0-9-]/g, "")}`;
+}
+function simulationClone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+function simulationNormaliseRow(row, type, index = 0) {
+  const amount = Math.max(0, Math.round(Number(row?.amount || 0)));
+  return {
+    id: String(row?.id || `manual-${type}-${Date.now()}-${index}`),
+    type: type === "income" ? "income" : "expense",
+    name: String(row?.name || (type === "income" ? "Pemasukan lain" : "Pengeluaran lain")).slice(0, 80),
+    category: String(row?.category || "").slice(0, 80),
+    amount,
+    source: String(row?.source || "manual"),
+    source_label: String(row?.source_label || "Manual"),
+    occurrences: Math.max(1, Number(row?.occurrences || 1)),
+    due_date: String(row?.due_date || ""),
+    dates: Array.isArray(row?.dates) ? row.dates.slice(0, 60) : [],
+  };
+}
+function simulationBaseline(snapshot) {
+  const income = [];
+  const expense = [];
+  (snapshot?.history?.income_suggestions || []).forEach((row, i) => income.push(simulationNormaliseRow(row, "income", i)));
+  (snapshot?.history?.expense_suggestions || []).forEach((row, i) => expense.push(simulationNormaliseRow(row, "expense", i)));
+  (snapshot?.scheduled?.income || []).forEach((row, i) => income.push(simulationNormaliseRow(row, "income", 100 + i)));
+  (snapshot?.scheduled?.expense || []).forEach((row, i) => expense.push(simulationNormaliseRow(row, "expense", 200 + i)));
+  return { income, expense };
+}
+function simulationReadDraft(month) {
+  try {
+    const raw = localStorage.getItem(simulationStorageKey(month));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.month !== month || !Array.isArray(parsed.income) || !Array.isArray(parsed.expense)) return null;
+    return {
+      month,
+      income: parsed.income.map((x, i) => simulationNormaliseRow(x, "income", i)),
+      expense: parsed.expense.map((x, i) => simulationNormaliseRow(x, "expense", i)),
+    };
+  } catch (_) { return null; }
+}
+function simulationSaveDraft() {
+  if (!simulationDraft?.month) return;
+  try {
+    localStorage.setItem(simulationStorageKey(simulationDraft.month), JSON.stringify(simulationDraft));
+    const stateText = el("simulationSaveState");
+    if (stateText) stateText.textContent = "Perubahan simulasi tersimpan di perangkat ini.";
+  } catch (_) {}
+}
+function simulationTotals() {
+  const income = (simulationDraft?.income || []).reduce((sum, row) => sum + Math.max(0, Number(row.amount || 0)), 0);
+  const expense = (simulationDraft?.expense || []).reduce((sum, row) => sum + Math.max(0, Number(row.amount || 0)), 0);
+  const current = Number(simulationSnapshotCache?.[simulationDraft?.month]?.current?.available || 0);
+  return { income, expense, net: income - expense, current, projected: current + income - expense, needed: Math.max(0, expense - income - current) };
+}
+function simulationRenderRow(row, type, index) {
+  const source = row.source_label || "Manual";
+  const occurrenceText = Number(row.occurrences || 1) > 1 ? ` · ${Number(row.occurrences)}x` : "";
+  const dueText = row.due_date ? ` · jatuh tempo ${esc(row.due_date)}` : "";
+  return `<div class="simulation-row" data-simulation-row data-simulation-type="${type}" data-simulation-index="${index}">
+    <div class="simulation-row-main">
+      <input type="text" data-simulation-name value="${esc(row.name)}" maxlength="80" aria-label="Nama item">
+      <small>${esc(source)}${occurrenceText}${dueText}</small>
+    </div>
+    <div class="simulation-row-amount"><input type="number" data-simulation-amount min="0" step="1000" inputmode="numeric" value="${Math.max(0, Number(row.amount || 0))}" aria-label="Nominal"></div>
+    <button type="button" class="simulation-remove" data-simulation-remove aria-label="Hapus item">×</button>
+  </div>`;
+}
+function renderSimulationList(type) {
+  const box = el(type === "income" ? "simulationIncomeList" : "simulationExpenseList");
+  if (!box) return;
+  const rows = simulationDraft?.[type] || [];
+  box.innerHTML = rows.length ? rows.map((row, index) => simulationRenderRow(row, type, index)).join("") : `<div class="empty compact">Belum ada ${type === "income" ? "pemasukan" : "pengeluaran"} dalam simulasi.</div>`;
+  box.querySelectorAll("[data-simulation-name]").forEach(input => input.addEventListener("input", () => {
+    const row = input.closest("[data-simulation-row]");
+    const kind = row?.dataset.simulationType;
+    const index = Number(row?.dataset.simulationIndex || -1);
+    if (!kind || index < 0 || !simulationDraft?.[kind]?.[index]) return;
+    simulationDraft[kind][index].name = input.value.slice(0, 80);
+    simulationSaveDraft();
+  }));
+  box.querySelectorAll("[data-simulation-amount]").forEach(input => input.addEventListener("input", () => {
+    const row = input.closest("[data-simulation-row]");
+    const kind = row?.dataset.simulationType;
+    const index = Number(row?.dataset.simulationIndex || -1);
+    if (!kind || index < 0 || !simulationDraft?.[kind]?.[index]) return;
+    simulationDraft[kind][index].amount = Math.max(0, Math.round(Number(input.value || 0)));
+    simulationSaveDraft();
+    renderSimulationSummary();
+  }));
+  box.querySelectorAll("[data-simulation-remove]").forEach(button => button.addEventListener("click", () => {
+    const row = button.closest("[data-simulation-row]");
+    const kind = row?.dataset.simulationType;
+    const index = Number(row?.dataset.simulationIndex || -1);
+    if (!kind || index < 0 || !simulationDraft?.[kind]) return;
+    simulationDraft[kind].splice(index, 1);
+    simulationSaveDraft();
+    renderSimulationPanel();
+  }));
+}
+function renderSimulationSummary() {
+  const totals = simulationTotals();
+  const current = el("simulationCurrentBalance");
+  const income = el("simulationIncomeTotal");
+  const expense = el("simulationExpenseTotal");
+  const projected = el("simulationProjectedBalance");
+  if (current) current.textContent = rupiah(totals.current);
+  if (income) income.textContent = rupiah(totals.income);
+  if (expense) expense.textContent = rupiah(totals.expense);
+  if (projected) {
+    projected.textContent = rupiah(totals.projected);
+    projected.classList.toggle("danger", totals.projected < 0);
+    projected.classList.toggle("safe", totals.projected >= 0);
+  }
+  const alert = el("simulationAlert");
+  if (alert) {
+    if (totals.projected < 0) {
+      alert.hidden = false;
+      alert.className = "simulation-alert danger";
+      alert.innerHTML = `<b>Dana belum mencukupi.</b><span>Rencana ini melebihi saldo tersedia sekitar <strong>${rupiah(Math.abs(totals.projected))}</strong>. Tambahan dana yang dibutuhkan: <strong>${rupiah(totals.needed)}</strong>.</span>`;
+    } else if (totals.projected === 0) {
+      alert.hidden = false;
+      alert.className = "simulation-alert warning";
+      alert.innerHTML = `<b>Saldo simulasi menjadi Rp0.</b><span>Belum ada ruang untuk pengeluaran tambahan setelah rencana ini.</span>`;
+    } else {
+      alert.hidden = false;
+      alert.className = "simulation-alert safe";
+      alert.innerHTML = `<b>Rencana masih berada dalam saldo tersedia.</b><span>Perkiraan sisa setelah rencana: <strong>${rupiah(totals.projected)}</strong>.</span>`;
+    }
+  }
+}
+function renderSimulationPanel() {
+  if (!el("simulationIncomeList")) return;
+  if (!simulationDraft) {
+    const month = el("simulationMonth")?.value || simulationDefaultMonth();
+    if (!simulationSnapshotCache[month]) {
+      el("simulationIncomeList").innerHTML = '<div class="empty compact">Pilih bulan untuk memuat perkiraan.</div>';
+      el("simulationExpenseList").innerHTML = '<div class="empty compact">Pilih bulan untuk memuat perkiraan.</div>';
+      return;
+    }
+  }
+  renderSimulationList("income");
+  renderSimulationList("expense");
+  renderSimulationSummary();
+  const snapshot = simulationSnapshotCache[simulationDraft?.month || el("simulationMonth")?.value || ""];
+  const meta = el("simulationHistoryMeta");
+  if (meta && snapshot) {
+    const h = snapshot.history || {};
+    meta.textContent = h.used_months ? `Riwayat ${h.from}–${h.to} · ${h.used_months} bulan aktif` : "Belum ada riwayat yang cukup";
+  }
+  const historyList = el("simulationHistoryList");
+  if (historyList && snapshot) {
+    const rows = snapshot.history?.months || [];
+    historyList.innerHTML = rows.map(row => `<div><span>${esc(row.month)}</span><b>${rupiah(row.income)}</b><strong>${rupiah(row.expense)}</strong></div>`).join("");
+  }
+}
+async function loadSimulationForMonth(month, force = false) {
+  if (!month || !isPremiumUser()) return;
+  const input = el("simulationMonth");
+  if (input && input.value !== month) input.value = month;
+  if (simulationLoading && !force) return;
+  simulationLoading = true;
+  const saveState = el("simulationSaveState");
+  if (saveState) saveState.textContent = "Memuat perkiraan otomatis…";
+  try {
+    let snapshot = simulationSnapshotCache[month];
+    if (!snapshot || force) {
+      try {
+        snapshot = await fetchJson(`ajax/simulation.php?month=${encodeURIComponent(month)}&history_months=${SIMULATION_HISTORY_MONTHS}&_=${Date.now()}`);
+        simulationSnapshotCache[month] = snapshot;
+        try { localStorage.setItem(`finance_simulation_baseline_v82_${window.FINANCE_APP?.userId || 0}_${month}`, JSON.stringify(snapshot)); } catch (_) {}
+      } catch (networkError) {
+        try {
+          const raw = localStorage.getItem(`finance_simulation_baseline_v82_${window.FINANCE_APP?.userId || 0}_${month}`);
+          snapshot = raw ? JSON.parse(raw) : null;
+          if (snapshot) simulationSnapshotCache[month] = snapshot;
+        } catch (_) { snapshot = null; }
+        if (!snapshot) throw networkError;
+      }
+    }
+    const cachedDraft = simulationReadDraft(month);
+    simulationDraft = cachedDraft || { month, ...simulationBaseline(snapshot) };
+    renderSimulationPanel();
+    simulationSaveDraft();
+  } catch (e) {
+    simulationDraft = null;
+    const incomeList = el("simulationIncomeList");
+    const expenseList = el("simulationExpenseList");
+    if (incomeList) incomeList.innerHTML = `<div class="empty compact">${esc(e.message || "Simulasi belum dapat dimuat.")}</div>`;
+    if (expenseList) expenseList.innerHTML = '<div class="empty compact">Coba lagi saat koneksi tersedia.</div>';
+    const saveState = el("simulationSaveState");
+    if (saveState) saveState.textContent = "Belum ada data simulasi pada perangkat ini.";
+  } finally {
+    simulationLoading = false;
+  }
+}
+function addSimulationItem(type) {
+  if (!simulationDraft) return;
+  simulationDraft[type].push(simulationNormaliseRow({
+    id:`manual-${type}-${Date.now()}`,
+    type,
+    name:type === "income" ? "Pemasukan lain" : "Pengeluaran lain",
+    amount:0,
+    source:"manual",
+    source_label:"Manual",
+  }, type));
+  simulationSaveDraft();
+  renderSimulationPanel();
+  requestAnimationFrame(() => {
+    const box = el(type === "income" ? "simulationIncomeList" : "simulationExpenseList");
+    box?.lastElementChild?.querySelector("[data-simulation-name]")?.focus();
+  });
+}
+function resetSimulationDraft() {
+  const month = el("simulationMonth")?.value || simulationDefaultMonth();
+  const snapshot = simulationSnapshotCache[month];
+  if (!snapshot) return;
+  if (!confirm("Kembalikan semua perubahan simulasi ke perkiraan otomatis?")) return;
+  simulationDraft = { month, ...simulationBaseline(snapshot) };
+  try { localStorage.removeItem(simulationStorageKey(month)); } catch (_) {}
+  renderSimulationPanel();
+  simulationSaveDraft();
+}
+el("simulationMonth")?.addEventListener("change", () => loadSimulationForMonth(el("simulationMonth").value, true));
+el("simulationAddIncome")?.addEventListener("click", () => addSimulationItem("income"));
+el("simulationAddExpense")?.addEventListener("click", () => addSimulationItem("expense"));
+el("simulationReset")?.addEventListener("click", resetSimulationDraft);
 
 function barRows(items, total, labelKey="category", valueKey="total") {return (items||[]).length?(items||[]).map(x=>{const v=Number(x[valueKey]||0);const pct=Number(x.percent ?? (total?Math.round(v/total*100):0));return `<div class="analytic-bar-row"><div><span>${esc(x[labelKey]||"")}</span><b>${rupiah(v)}</b></div><div class="analytic-track"><span style="width:${Math.min(100,pct)}%"></span></div><small>${pct}%</small></div>`}).join(""):'<div class="empty compact">Belum ada data.</div>';}
 function renderAnalytics(a,p){const card=el("predictionCard");if(card){
