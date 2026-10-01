@@ -933,6 +933,9 @@ async function loadFromOfflineSnapshot() {
   state.period_summary = periodSummary;
   state.offline_mode = true;
   render();
+  if (typeof updateUserNotificationBadges === "function" && Object.prototype.hasOwnProperty.call(dashboard, "notification_unread_count")) {
+    updateUserNotificationBadges(Number(dashboard.notification_unread_count || 0));
+  }
   updateConnectionUi();
   return state;
 }
@@ -993,6 +996,9 @@ async function load() {
     realtimeDraftSignature = String(dashboard.realtime?.draft_signature || realtimeDraftSignature || "");
     await cacheOnlineSnapshot(dashboard, state.transactions || [], state.chats || []);
     render();
+    if (typeof updateUserNotificationBadges === "function") {
+      updateUserNotificationBadges(Number(dashboard.notification_unread_count || 0));
+    }
     updateConnectionUi();
   } catch (err) {
     if (isNetworkError(err) || !navigator.onLine) return loadFromOfflineSnapshot();
