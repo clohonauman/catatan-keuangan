@@ -1,4 +1,4 @@
-const CACHE = 'finance-shell-v107';
+const CACHE = 'finance-shell-v108';
 const OFFLINE_SHELL_KEY = './__offline_shell__';
 const OFFLINE_ROOT_KEY = './';
 const OFFLINE_INDEX_KEY = './index.php';
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   './assets/style.css',
   './assets/app.js',
   './assets/offline-store.js',
+  './assets/currency-input.js',
   './manifest.json'
 ];
 

@@ -3422,6 +3422,7 @@ if (!function_exists('ck_icon')) {
         refresh();
     })();
     </script>
+    <script src="assets/currency-input.js?v=<?= h($assetVersion) ?>"></script>
     <script src="assets/app.js?v=<?= h($assetVersion) ?>"></script>
     <?php endif; ?>
 
