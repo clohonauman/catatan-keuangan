@@ -1,9 +1,10 @@
 name: Build V84 Production Patch
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
     branches:
-      - build/v84-notification-badge-zip
+      - patch/v84-notification-badge
 
 jobs:
   package-patch:
