@@ -42,5 +42,7 @@ echo json_encode([
     'daily_budget_settings'=>dailyBudgetSettings(),
     'learning'=>['pending'=>learningPending(),'rule_count'=>count(learningListRules()),'adaptive'=>adaptiveLearningStatus()],
     'features'=>$featureSnapshot,
-    'account'=>$realtimeAccount
+    'account'=>$realtimeAccount,
+    // Badge Pemberitahuan harus sudah tampil sebelum pengguna membuka pusat pemberitahuan.
+    'notification_unread_count'=>userNotificationUnreadCount($userId)
 ],JSON_UNESCAPED_UNICODE);
