@@ -182,22 +182,69 @@ function walletRecordFromData($d,$walletId) {
 function walletIsCreditCardRecord($w): bool {
     return is_array($w) && strtolower((string)($w['type']??''))==='credit_card';
 }
+
+/**
+ * Saldo terutang kartu kredit dihitung dari satu sumber kebenaran:
+ * tagihan awal + transaksi yang menambah utang - transaksi yang mengurangi utang.
+ * Transfer masuk ke kartu kredit adalah pembayaran, sehingga langsung
+ * mengembalikan sisa limit sebesar nominal yang dibayarkan.
+ */
+function creditCardDebtFromData($d,$walletId,$excludeTransactionId=0): int {
+    $wallet=walletRecordFromData($d,(int)$walletId);
+    if(!$wallet || !walletIsCreditCardRecord($wallet)) return 0;
+
+    $debt=max(0,(int)($wallet['opening_debt']??0));
+    foreach((array)($d['transactions']??[]) as $t){
+        if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId) continue;
+        $amount=max(0,(int)($t['amount']??0));
+        if($amount<=0) continue;
+
+        $type=(string)($t['type']??'');
+        if($type==='expense' && (int)($t['wallet_id']??0)===(int)$walletId){
+            $debt += $amount;
+        } elseif($type==='income' && (int)($t['wallet_id']??0)===(int)$walletId){
+            // Refund / kredit balik ke kartu.
+            $debt -= $amount;
+        } elseif($type==='transfer'){
+            if((int)($t['from_wallet_id']??0)===(int)$walletId){
+                // Pemakaian kartu untuk transfer/cash advance.
+                $debt += $amount;
+            }
+            if((int)($t['to_wallet_id']??0)===(int)$walletId){
+                // Pembayaran kartu: limit kembali sebesar nominal yang masuk.
+                $debt -= $amount;
+            }
+        }
+    }
+    return max(0,$debt);
+}
+
 function walletBalancesFromData($d,$excludeTransactionId=0) {
-    $balances=[];
+    $balances=[];$creditCards=[];
     foreach((array)($d['wallets']??[]) as $w) {
         $id=(int)($w['id']??0);
-        $balances[$id]=walletIsCreditCardRecord($w)
-            ? -max(0,(int)($w['opening_debt']??0))
-            : (int)($w['initial_balance']??0);
+        if(walletIsCreditCardRecord($w)){
+            $creditCards[$id]=true;
+            $balances[$id]=-creditCardDebtFromData($d,$id,$excludeTransactionId);
+        }else{
+            $balances[$id]=(int)($w['initial_balance']??0);
+        }
     }
     foreach((array)($d['transactions']??[]) as $t){
         if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId)continue;
         $type=(string)($t['type']??'');$amount=(int)($t['amount']??0);
-        if($type==='income'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)+$amount;}
-        elseif($type==='expense'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)-$amount;}
-        elseif($type==='transfer'){
+        if($type==='income'){
+            $wid=(int)($t['wallet_id']??1);
+            if(isset($creditCards[$wid])) continue;
+            $balances[$wid]=($balances[$wid]??0)+$amount;
+        }elseif($type==='expense'){
+            $wid=(int)($t['wallet_id']??1);
+            if(isset($creditCards[$wid])) continue;
+            $balances[$wid]=($balances[$wid]??0)-$amount;
+        }elseif($type==='transfer'){
             $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
-            $balances[$from]=($balances[$from]??0)-$amount;$balances[$to]=($balances[$to]??0)+$amount;
+            if(!isset($creditCards[$from])) $balances[$from]=($balances[$from]??0)-$amount;
+            if(!isset($creditCards[$to])) $balances[$to]=($balances[$to]??0)+$amount;
         }
     }
     return $balances;
@@ -221,9 +268,7 @@ function walletProtectionFromData($d,$walletId) {
 function walletCreditCardStatusFromData($d,$walletId,$excludeTransactionId=0) {
     $info=walletProtectionFromData($d,$walletId);
     if(strtolower((string)$info['type'])!=='credit_card') return null;
-    $balances=walletBalancesFromData($d,(int)$excludeTransactionId);
-    $raw=(int)($balances[(int)$walletId]??0);
-    $debt=max(0,-$raw);
+    $debt=creditCardDebtFromData($d,(int)$walletId,(int)$excludeTransactionId);
     $limit=max(0,(int)$info['credit_limit']);
     return ['name'=>$info['name'],'limit'=>$limit,'debt'=>$debt,'available'=>max(0,$limit-$debt)];
 }
