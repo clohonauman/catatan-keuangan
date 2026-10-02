@@ -5686,11 +5686,7 @@ function renderCreateTxSources(rows = null) {
   }).join("");
   box.querySelectorAll("[data-create-source-row]").forEach(row => {
     const select = row.querySelector("[data-create-source-wallet]");
-    const amountInput = row.querySelector("[data-create-source-amount]");
-    if (select && select.options.length && Number(select.value || 0) !== Number(row.dataset.walletId || 0)) {
-      const currentValue = Number(row.dataset.walletId || 0);
-      if (currentValue > 0) select.value = String(currentValue);
-    }
+    if (select && !select.value && wallets[0]) select.value = String(wallets[0].id);
     row.querySelector("[data-remove-create-source]")?.addEventListener("click", () => {
       const rowsNow = [...box.querySelectorAll("[data-create-source-row]")].map(sourceRow => ({
         wallet_id: Number(sourceRow.querySelector("[data-create-source-wallet]")?.value || 0),
