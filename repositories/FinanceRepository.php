@@ -145,7 +145,7 @@ final class FinanceRepository
         $total=(int)(clone $q)->count('*',self::db());
         $agg=(clone $q)->select([
             'income'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END),0)"),
-            'expense'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END),0)")
+            'expense'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='expense' THEN amount WHEN type='transfer' THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json,'$.fee_amount')),'0') AS UNSIGNED) ELSE 0 END),0)")
         ])->one(self::db()) ?: ['income'=>0,'expense'=>0];
         $sort=$filters['sort']??'date_desc';
         if($sort==='date_asc')$order=['transaction_date'=>SORT_ASC,'legacy_id'=>SORT_ASC];
@@ -165,7 +165,10 @@ final class FinanceRepository
 
     public static function monthlyExpenseCategories(int $userId,string $month): array {
         $from=$month.'-01';$to=date('Y-m-t',strtotime($from));
-        $rows=(new Query())->from('{{%finance_transaction}}')->select(['category','total'=>new \yii\db\Expression('SUM(amount)')])->where(['user_id'=>$userId,'type'=>'expense'])->andWhere(['between','transaction_date',$from,$to])->groupBy('category')->orderBy(['total'=>SORT_DESC])->all(self::db());
+        $rows=(new Query())->from('{{%finance_transaction}}')->select([
+            'category',
+            'total'=>new \yii\db\Expression("SUM(CASE WHEN type='expense' THEN amount WHEN type='transfer' THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json,'$.fee_amount')),'0') AS UNSIGNED) ELSE 0 END)")
+        ])->where(['user_id'=>$userId])->andWhere(['between','transaction_date',$from,$to])->andWhere(['or',['type'=>'expense'],['type'=>'transfer']])->groupBy('category')->orderBy(['total'=>SORT_DESC])->all(self::db());
         return array_map(fn($r)=>['category'=>$r['category']?:'Lainnya','total'=>(int)$r['total']],$rows);
     }
 
