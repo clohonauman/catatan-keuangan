@@ -1,9 +1,10 @@
 name: Build V86 Production Patch
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
     branches:
-      - build/v86-modal-edit-zip
+      - patch/v86-modal-edit
 
 jobs:
   package-patch:
