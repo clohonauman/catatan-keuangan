@@ -1,0 +1,25 @@
+name: Build V86 Production Patch
+
+on:
+  push:
+    branches:
+      - build/v86-modal-edit-zip
+
+jobs:
+  package-patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Package patch files
+        uses: actions/upload-artifact@v4
+        with:
+          name: catatan-keuangan-v86-modal-edit
+          if-no-files-found: error
+          path: |
+            views/site/index.php
+            web/assets/app.js
+            web/assets/style.css
+            web/sw.js
