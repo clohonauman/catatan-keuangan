@@ -1582,6 +1582,7 @@ function renderTransactions() {
     const receivableLend = t.source === "receivable_lend";
     const receivableRepay = t.source === "receivable_repayment";
     const isReceivable = receivableLend || receivableRepay;
+    const isComplexTx = (Array.isArray(t.split_sources) && t.split_sources.length > 1) || Number(t.fee_amount || 0) > 0;
     const borrowerName = String(t.receivable_borrower_name || "Peminjam");
     const sign = receivableLend ? "-" : (receivableRepay ? "+" : (t.type === "expense" ? "-" : (t.type === "income" ? "+" : "↔ ")));
     const cls = receivableLend ? "expense" : (receivableRepay ? "income" : (t.type === "expense" ? "expense" : (t.type === "income" ? "income" : "transfer")));
@@ -1618,7 +1619,9 @@ function renderTransactions() {
       ? '<span class="pending-sync-text">Menunggu sinkronisasi</span>'
       : isReceivable
         ? '<button type="button" class="tx-edit-btn" data-open-receivables="1">Kelola Piutang</button>'
-        : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
+        : isComplexTx
+          ? '<button type="button" data-delete-id="' + Number(t.id) + '">Hapus</button>'
+          : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
     const txTitle = isReceivable ? `${typeText} · ${borrowerName}` : (t.category || "Lainnya");
 
     x.innerHTML = `
