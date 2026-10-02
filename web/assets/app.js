@@ -5702,8 +5702,13 @@ function syncCreateTxType() {
   document.querySelectorAll(".create-transfer-field").forEach(x => x.hidden = !transfer);
   document.querySelectorAll(".create-standard-field").forEach(x => x.hidden = transfer);
   document.querySelectorAll(".create-expense-field").forEach(x => x.hidden = !expense);
+  document.querySelectorAll(".create-expense-wallet-field").forEach(x => x.hidden = expense);
 
   if (!transfer) fillCreateTxCategories();
+  if (expense) {
+    const rows = collectCreateTxSources();
+    if (!rows.length) renderCreateTxSources();
+  }
 
   const hint = el("createTxHint");
   if (hint) {
