@@ -1,0 +1,23 @@
+name: Build V85 Patch
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catatan-keuangan-v85-patch
+          if-no-files-found: error
+          path: |
+            legacy/ajax/features.php
+            legacy/db.php
+            legacy/finance_features.php
+            repositories/FinanceRepository.php
+            views/site/index.php
+            web/assets/app.js
+            web/sw.js
