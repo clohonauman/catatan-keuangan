@@ -385,7 +385,14 @@ function financeAppendTransactionData(&$d,$t) {
     }
     $id=(int)$d['meta']['next_transaction_id']++;
     $x=['id'=>$id,'type'=>$type,'category'=>(string)($t['category']??'Lainnya'),'amount'=>$amount,'note'=>substr(trim((string)($t['note']??'')),0,255),'transaction_date'=>(string)($t['transaction_date']??date('Y-m-d')),'created_at'=>date('Y-m-d H:i:s')];
-    if($type==='transfer'){$x['from_wallet_id']=(int)($t['from_wallet_id']??0);$x['to_wallet_id']=(int)($t['to_wallet_id']??0);}
+    if($type==='transfer'){
+        $x['from_wallet_id']=(int)($t['from_wallet_id']??0);
+        $x['to_wallet_id']=(int)($t['to_wallet_id']??0);
+        if((int)($t['fee_amount']??0)>0){
+            $x['fee_amount']=(int)$t['fee_amount'];
+            $x['fee_wallet_id']=(int)($t['fee_wallet_id']??$t['from_wallet_id']??0);
+        }
+    }
     else {$x['wallet_id']=(int)($t['wallet_id']??1);$x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));}
     if(!empty($t['source']))$x['source']=$t['source'];
     if(!empty($t['bill_id']))$x['bill_id']=(int)$t['bill_id'];
