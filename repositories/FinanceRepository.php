@@ -133,7 +133,7 @@ final class FinanceRepository
         if(!empty($filters['category']))$q->andWhere(['category'=>$filters['category']]);
         if(!empty($filters['wallet_id'])){
             $wid=(int)$filters['wallet_id'];
-            $q->andWhere(['or',['wallet_id'=>$wid],['from_wallet_id'=>$wid],['to_wallet_id'=>$wid],['like','extra_json','"fee_wallet_id":'.$wid],['like','extra_json','"split_sources":[{"wallet_id":'.$wid]]);
+            $q->andWhere(['or',['wallet_id'=>$wid],['from_wallet_id'=>$wid],['to_wallet_id'=>$wid],['like','extra_json','"fee_wallet_id":'.$wid],['like','extra_json','"wallet_id":'.$wid.',"amount"']]);
         }
         if(!empty($filters['search'])){
             $term=(string)$filters['search'];
