@@ -393,7 +393,12 @@ function financeAppendTransactionData(&$d,$t) {
             $x['fee_wallet_id']=(int)($t['fee_wallet_id']??$t['from_wallet_id']??0);
         }
     }
-    else {$x['wallet_id']=(int)($t['wallet_id']??1);$x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));}
+    else {
+        $allocations=transactionWalletAllocations((array)$t);
+        if(count($allocations)>1)$x['wallet_allocations']=$allocations;
+        else $x['wallet_id']=(int)($allocations[0]['wallet_id']??($t['wallet_id']??1));
+        $x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));
+    }
     if(!empty($t['source']))$x['source']=$t['source'];
     if(!empty($t['bill_id']))$x['bill_id']=(int)$t['bill_id'];
     if(isset($t['attachment'])&&is_array($t['attachment']))$x['attachment']=$t['attachment'];
