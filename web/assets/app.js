@@ -1496,6 +1496,10 @@ function transactionDetailMarkup(t, wallets = []) {
   const ref = pending ? `LOKAL-${String(t.id)}` : `TRX-${String(t.id).padStart(6, '0')}`;
   const sources = {bill:'Pembayaran tagihan',credit_card_bill_payment:'Pembayaran kartu kredit',recurring:'Transaksi berulang',receipt_scan:'Scan nota',chat_with_photo:'Chat dengan foto',wallet_transfer:'Transfer dompet',receivable_lend:'Piutang · memberi hutang',receivable_repayment:'Piutang · pelunasan',offline_pending:'Catatan offline',manual:'Catatan manual'};
   const source = sources[t.source] || (t.source ? String(t.source) : 'Catatan transaksi');
+  const splitSources = Array.isArray(t.split_sources) ? t.split_sources : [];
+  const splitLabel = splitSources.length ? splitSources.map(part => wallet(part.wallet_id) + ' ' + rupiah(part.amount)).join(' + ') : '';
+  const feeAmount = Number(t.fee_amount || 0);
+  const feeWallet = wallet(t.fee_wallet_id || t.from_wallet_id);
   const billRow = ((state.features || {}).bills || []).find(b => Number(b.id) === Number(t.bill_id || 0));
   const billLabel = billRow ? `${billRow.name} · ${rupiah(billRow.amount)}` : (t.bill_id ? `Tagihan #${t.bill_id}` : '');
   const field = (label, value) => `<div><dt>${esc(label)}</dt><dd>${esc(String(value))}</dd></div>`;
@@ -1503,7 +1507,9 @@ function transactionDetailMarkup(t, wallets = []) {
     ? field('Peminjam',borrowerName)+field('Dari dompet',wallet(t.from_wallet_id))+field('Tujuan','Piutang '+borrowerName)
     : receivableRepay
       ? field('Peminjam',borrowerName)+field('Sumber','Piutang '+borrowerName)+field('Masuk ke dompet',wallet(t.to_wallet_id))
-      : transfer ? field('Dari dompet',wallet(t.from_wallet_id))+field('Ke dompet',wallet(t.to_wallet_id)) : field('Dompet',wallet(t.wallet_id || 1));
+      : transfer
+        ? field('Dari dompet',wallet(t.from_wallet_id))+field('Ke dompet',wallet(t.to_wallet_id))+(feeAmount>0?field('Biaya admin',rupiah(feeAmount)+' · '+feeWallet):'')
+        : splitLabel ? field('Sumber dana',splitLabel) : field('Dompet',wallet(t.wallet_id || 1));
   const photo = photoUrl(t.attachment);
   return `<header class="tx-invoice-brand"><div><span class="tx-invoice-eyebrow">CATATAN KEUANGAN</span><h2 id="txDetailTitle">Bukti Transaksi</h2></div><span class="tx-invoice-status ${pending?'pending':''}">${pending?'Menunggu sinkronisasi':'Tercatat'}</span></header>
     <div class="tx-invoice-reference"><span>${esc(ref)}</span><span>${esc(date)}</span></div>
