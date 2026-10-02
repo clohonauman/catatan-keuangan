@@ -1754,7 +1754,8 @@ if (!function_exists('ck_icon')) {
                             <h4>Transfer antar dompet</h4><label>Dari<select
                                     id="transferFrom"></select></label><label>Ke<select
                                     id="transferTo"></select></label><label>Nominal<input type="number"
-                                    id="transferAmount" min="1" step="1000"></label><label>Keterangan<input
+                                    id="transferAmount" min="1" step="1000" inputmode="numeric"></label><label>Admin fee<input type="text"
+                                    id="transferFee" class="currency-input" inputmode="numeric" placeholder="0"></label><label>Keterangan<input
                                     id="transferNote" placeholder="Opsional"></label><button class="btn primary"
                                 type="button" id="saveTransfer">Catat Transfer</button>
                         </div>
