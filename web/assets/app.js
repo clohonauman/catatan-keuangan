@@ -5741,7 +5741,7 @@ function syncCreateTxType() {
   const hint = el("createTxHint");
   if (hint) {
     hint.textContent = transfer
-      ? "Transfer memindahkan saldo antar dompet dan tidak mengubah total saldo keseluruhan."
+      ? "Transfer memindahkan dana ke dompet tujuan. Jika ada admin fee, biaya tersebut ikut mengurangi dompet asal."
       : expense
         ? "Pengeluaran akan mengurangi saldo tersedia pada dompet yang dipilih."
         : "Pemasukan akan menambah saldo pada dompet yang dipilih.";
