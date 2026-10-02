@@ -1242,6 +1242,13 @@ function financeCreateManualTransaction(array $input): array {
         $tx['category']='Transfer Antar Dompet';
         $tx['from_wallet_id']=$from;
         $tx['to_wallet_id']=$to;
+        $feeAmount=max(0,(int)($input['fee_amount']??0));
+        $feeWalletId=(int)($input['fee_wallet_id']??$from);
+        if($feeAmount>0){
+            if(!financeWalletById($feeWalletId))throw new InvalidArgumentException('Dompet biaya admin tidak ditemukan.');
+            $tx['fee_amount']=$feeAmount;
+            $tx['fee_wallet_id']=$feeWalletId;
+        }
         $tx['spending_kind']='once';
         return addTransaction($tx);
     }
