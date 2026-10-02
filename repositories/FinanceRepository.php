@@ -204,6 +204,16 @@ final class FinanceRepository
         + COALESCE(SUM(CASE WHEN type='transfer' AND to_wallet_id=:w4 THEN amount ELSE 0 END),0) AS delta
         FROM {{%finance_transaction}} WHERE user_id=:u";
         $delta=(int)self::db()->createCommand($sql,[':u'=>$userId,':w1'=>$walletId,':w2'=>$walletId,':w3'=>$walletId,':w4'=>$walletId])->queryScalar();
+        $extraRows=(new Query())->from('{{%finance_transaction}}')->select(['type','extra_json'])->where(['user_id'=>$userId])->andWhere(['or',['like','extra_json','"split_sources"'],['like','extra_json','"fee_amount"']])->all(self::db());
+        foreach($extraRows as $row){
+            $meta=self::jdec($row['extra_json']??'',[]);
+            if(($row['type']??'')==='expense' && isset($meta['split_sources']) && is_array($meta['split_sources'])){
+                foreach($meta['split_sources'] as $part){
+                    if((int)($part['wallet_id']??0)===$walletId)$delta-=(int)($part['amount']??0);
+                }
+            }
+            if(($row['type']??'')==='transfer' && (int)($meta['fee_wallet_id']??0)===$walletId)$delta-=(int)($meta['fee_amount']??0);
+        }
         $extra=self::jdec($w['extra_json']??'',[]);
         if(strtolower((string)($w['type']??''))==='credit_card'){
             $limit=max(0,(int)($extra['credit_limit']??0));
