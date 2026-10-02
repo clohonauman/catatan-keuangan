@@ -395,7 +395,7 @@ function financeAppendTransactionData(&$d,$t) {
     }
     else {
         $allocations=transactionWalletAllocations((array)$t);
-        if(count($allocations)>1)$x['wallet_allocations']=$allocations;
+        if(count($allocations)>1)$x['split_sources']=$allocations;
         else $x['wallet_id']=(int)($allocations[0]['wallet_id']??($t['wallet_id']??1));
         $x['spending_kind']=transactionSpendingKind(array_merge($t,['type'=>$type]));
     }
