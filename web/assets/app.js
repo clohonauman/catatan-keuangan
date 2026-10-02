@@ -4488,6 +4488,225 @@ function resetWalletForm() {
   syncWalletTypeFields();
 }
 
+
+function featureEditWalletFieldSync() {
+  const type = el("featureEditWalletType")?.value || "cash";
+  const credit = type === "credit_card";
+  const standard = el("featureEditWalletStandard");
+  const card = el("featureEditWalletCredit");
+  if (standard) standard.hidden = credit;
+  if (card) card.hidden = !credit;
+}
+
+function featureEditWalletOptions(selected=0) {
+  return (featureState()?.wallets || []).map(w => {
+    const value = Number(w.id);
+    const label = `${esc(w.name)} · ${esc(walletAvailabilityLabel(w))}`;
+    return `<option value="${value}"${value===Number(selected)?" selected":""}>${label}</option>`;
+  }).join("");
+}
+
+function featureEditCategoryOptions(selected="") {
+  return (featureState()?.categories || []).map(cat => {
+    const value = String(cat.name || "");
+    return `<option value="${esc(value)}"${value.toLowerCase()===String(selected||"").toLowerCase()?" selected":""}>${esc(cat.icon || "")} ${esc(value)}</option>`;
+  }).join("");
+}
+
+function openFeatureEditModal(kind, item) {
+  const modal = el("featureEditModal");
+  const body = el("featureEditBody");
+  const title = el("featureEditTitle");
+  const subtitle = el("featureEditSubtitle");
+  if (!modal || !body || !item) return;
+
+  modal.dataset.kind = String(kind);
+  modal.dataset.id = String(item.id || 0);
+
+  if (kind === "wallet") {
+    title.textContent = "Edit Dompet & Rekening";
+    subtitle.textContent = "Ubah data dompet tanpa kembali ke bagian atas halaman.";
+    body.innerHTML = `
+      <div class="feature-edit-grid">
+        <label>Nama<input id="featureEditWalletName" value="${esc(item.name || "")}" placeholder="Contoh: BCA"></label>
+        <label>Jenis<select id="featureEditWalletType">
+          <option value="cash"${item.type==="cash"?" selected":""}>Cash</option>
+          <option value="bank"${item.type==="bank"?" selected":""}>Bank</option>
+          <option value="ewallet"${item.type==="ewallet"?" selected":""}>E-Wallet</option>
+          <option value="savings"${item.type==="savings"?" selected":""}>Tabungan</option>
+          <option value="credit_card"${item.type==="credit_card"?" selected":""}>Kartu Kredit</option>
+        </select></label>
+        <div id="featureEditWalletStandard" class="feature-edit-wide">
+          <div class="feature-edit-grid feature-edit-grid-3">
+            <label>Saldo awal<input type="number" data-currency-input id="featureEditWalletInitial" min="0" step="1000" value="${Number(item.initial_balance||0)}"></label>
+            <label>Dana disisihkan<input type="number" data-currency-input id="featureEditWalletReserved" min="0" step="1000" value="${Number(item.reserved_balance||0)}"></label>
+            <label>Saldo minimum<input type="number" data-currency-input id="featureEditWalletMinimum" min="0" step="1000" value="${Number(item.minimum_balance||0)}"></label>
+          </div>
+        </div>
+        <div id="featureEditWalletCredit" class="feature-edit-wide" hidden>
+          <div class="feature-edit-grid">
+            <label>Limit kartu kredit<input type="number" data-currency-input id="featureEditWalletCreditLimit" min="1" step="1000" value="${Number(item.credit_limit||0)}"></label>
+            <label>Saldo / tagihan terpakai awal<input type="number" data-currency-input id="featureEditWalletOpeningDebt" min="0" step="1000" value="${Number(item.opening_debt||0)}"></label>
+            <label>Tanggal penagihan rutin<input type="number" id="featureEditWalletBillingDay" min="1" max="31" step="1" value="${Number(item.billing_day||0)||""}" placeholder="Opsional"></label>
+          </div>
+          <small class="feature-edit-help">Pengeluaran kartu menambah tagihan. Transfer dari dompet ke kartu dianggap pembayaran tagihan.</small>
+        </div>
+      </div>`;
+    el("featureEditWalletType")?.addEventListener("change", featureEditWalletFieldSync);
+    featureEditWalletFieldSync();
+  } else if (kind === "category") {
+    title.textContent = "Edit Kategori";
+    subtitle.textContent = "Ubah nama, jenis, ikon, atau keyword parser.";
+    body.innerHTML = `
+      <div class="feature-edit-grid">
+        <label>Nama<input id="featureEditCategoryName" maxlength="50" value="${esc(item.name || "")}"></label>
+        <label>Jenis<select id="featureEditCategoryType">
+          <option value="expense"${item.type==="expense"?" selected":""}>Pengeluaran</option>
+          <option value="income"${item.type==="income"?" selected":""}>Pemasukan</option>
+          <option value="both"${item.type==="both"?" selected":""}>Keduanya</option>
+        </select></label>
+        <label>Icon / Emoji<input id="featureEditCategoryIcon" maxlength="8" value="${esc(item.icon || "")}" placeholder="🏍️"></label>
+        <label class="feature-edit-wide">Keyword parser<input id="featureEditCategoryKeywords" value="${esc((item.keywords || []).join(", "))}" placeholder="motor, oli, servis"></label>
+      </div>`;
+  } else if (kind === "bill") {
+    title.textContent = "Edit Tagihan";
+    subtitle.textContent = "Perbarui tagihan langsung dari popup ini.";
+    body.innerHTML = `
+      <div class="feature-edit-grid">
+        <label>Nama tagihan<input id="featureEditBillName" value="${esc(item.name || "")}" placeholder="Cicilan rumah"></label>
+        <label>Nominal<input type="number" data-currency-input id="featureEditBillAmount" min="1" step="1000" value="${Number(item.amount||0)}"></label>
+        <label>Jatuh tempo<input type="date" id="featureEditBillDueDate" value="${esc(item.due_date || "")}"></label>
+        <label>Kategori<select id="featureEditBillCategory">${featureEditCategoryOptions(item.category || "")}</select></label>
+        <label>Dompet<select id="featureEditBillWallet">${featureEditWalletOptions(item.wallet_id || 0)}</select></label>
+      </div>`;
+  } else if (kind === "recurring") {
+    title.textContent = "Edit Transaksi Berulang";
+    subtitle.textContent = "Ubah jadwal dan nominal tanpa mencari form di bagian atas.";
+    body.innerHTML = `
+      <div class="feature-edit-grid">
+        <label>Nama<input id="featureEditRecurringName" value="${esc(item.name || "")}" placeholder="Gaji bulanan"></label>
+        <label>Jenis<select id="featureEditRecurringType">
+          <option value="income"${item.type==="income"?" selected":""}>Pemasukan</option>
+          <option value="expense"${item.type==="expense"?" selected":""}>Pengeluaran</option>
+        </select></label>
+        <label>Nominal<input type="number" data-currency-input id="featureEditRecurringAmount" min="1" step="1000" value="${Number(item.amount||0)}"></label>
+        <label>Kategori<select id="featureEditRecurringCategory">${featureEditCategoryOptions(item.category || "")}</select></label>
+        <label>Dompet<select id="featureEditRecurringWallet">${featureEditWalletOptions(item.wallet_id || 0)}</select></label>
+        <label>Frekuensi<select id="featureEditRecurringFrequency">
+          <option value="monthly"${item.frequency==="monthly"?" selected":""}>Bulanan</option>
+          <option value="weekly"${item.frequency==="weekly"?" selected":""}>Mingguan</option>
+          <option value="daily"${item.frequency==="daily"?" selected":""}>Harian</option>
+        </select></label>
+        <label>Setiap<input type="number" id="featureEditRecurringInterval" min="1" step="1" value="${Number(item.interval||1)}"></label>
+        <label>Berikutnya<input type="date" id="featureEditRecurringNextRun" value="${esc(item.next_run || "")}"></label>
+      </div>`;
+  } else if (kind === "goal") {
+    title.textContent = "Edit Target Menabung";
+    subtitle.textContent = "Perbarui target, dana terkumpul, dan deadline.";
+    body.innerHTML = `
+      <div class="feature-edit-grid">
+        <label>Nama target<input id="featureEditGoalName" value="${esc(item.name || "")}" placeholder="Dana darurat"></label>
+        <label>Target<input type="number" data-currency-input id="featureEditGoalTarget" min="1" step="1000" value="${Number(item.target_amount||0)}"></label>
+        <label>Sudah terkumpul<input type="number" data-currency-input id="featureEditGoalCurrent" min="0" step="1000" value="${Number(item.current_amount||0)}"></label>
+        <label>Deadline<input type="date" id="featureEditGoalDeadline" value="${esc(item.deadline || "")}"></label>
+      </div>`;
+  } else {
+    return;
+  }
+
+  if (!modal.open) modal.showModal();
+  setTimeout(() => body.querySelector("input, select, textarea")?.focus(), 60);
+}
+
+el("featureEditWalletType")?.addEventListener("change", featureEditWalletFieldSync);
+el("featureEditClose")?.addEventListener("click", () => el("featureEditModal")?.close());
+el("featureEditCancel")?.addEventListener("click", () => el("featureEditModal")?.close());
+
+el("featureEditSave")?.addEventListener("click", async () => {
+  const modal = el("featureEditModal");
+  const kind = String(modal?.dataset.kind || "");
+  const id = Number(modal?.dataset.id || 0);
+  if (!kind || !id) return;
+  const button = el("featureEditSave");
+  const oldText = button?.textContent || "Simpan Perubahan";
+  if (button) { button.disabled = true; button.textContent = "Menyimpan..."; }
+
+  try {
+    let payload = {};
+    let message = "Perubahan berhasil disimpan";
+
+    if (kind === "wallet") {
+      const type = el("featureEditWalletType")?.value || "cash";
+      payload = {
+        action:"wallet_save", id,
+        name:el("featureEditWalletName")?.value || "",
+        type,
+        initial_balance:Number(el("featureEditWalletInitial")?.value || 0),
+        reserved_balance:Number(el("featureEditWalletReserved")?.value || 0),
+        minimum_balance:Number(el("featureEditWalletMinimum")?.value || 0),
+        credit_limit:Number(el("featureEditWalletCreditLimit")?.value || 0),
+        opening_debt:Number(el("featureEditWalletOpeningDebt")?.value || 0),
+        billing_day:Number(el("featureEditWalletBillingDay")?.value || 0)
+      };
+      message = "Dompet berhasil diperbarui";
+    } else if (kind === "category") {
+      payload = {
+        action:"category_save", id,
+        name:el("featureEditCategoryName")?.value || "",
+        type:el("featureEditCategoryType")?.value || "expense",
+        icon:el("featureEditCategoryIcon")?.value || "",
+        keywords:el("featureEditCategoryKeywords")?.value || ""
+      };
+      message = "Kategori berhasil diperbarui";
+    } else if (kind === "bill") {
+      const dueDate=el("featureEditBillDueDate")?.value || "";
+      if(!dueDate) throw new Error("Pilih tanggal jatuh tempo terlebih dahulu.");
+      payload = {
+        action:"bill_save", id,
+        name:el("featureEditBillName")?.value || "",
+        amount:Number(el("featureEditBillAmount")?.value || 0),
+        due_date:dueDate,
+        category:el("featureEditBillCategory")?.value || "Tagihan",
+        wallet_id:Number(el("featureEditBillWallet")?.value || 0),
+        reminder_days:3,
+        active:true
+      };
+      message = "Tagihan berhasil diperbarui";
+    } else if (kind === "recurring") {
+      payload = {
+        action:"recurring_save", id,
+        name:el("featureEditRecurringName")?.value || "",
+        type:el("featureEditRecurringType")?.value || "expense",
+        amount:Number(el("featureEditRecurringAmount")?.value || 0),
+        category:el("featureEditRecurringCategory")?.value || "Lainnya",
+        wallet_id:Number(el("featureEditRecurringWallet")?.value || 0),
+        frequency:el("featureEditRecurringFrequency")?.value || "monthly",
+        interval:Number(el("featureEditRecurringInterval")?.value || 1),
+        next_run:el("featureEditRecurringNextRun")?.value || "",
+        active:true
+      };
+      message = "Jadwal berulang berhasil diperbarui";
+    } else if (kind === "goal") {
+      payload = {
+        action:"goal_save", id,
+        name:el("featureEditGoalName")?.value || "",
+        target_amount:Number(el("featureEditGoalTarget")?.value || 0),
+        current_amount:Number(el("featureEditGoalCurrent")?.value || 0),
+        deadline:el("featureEditGoalDeadline")?.value || ""
+      };
+      message = "Target menabung berhasil diperbarui";
+    }
+
+    await featureAction(payload, message);
+    modal.close();
+    await load();
+  } catch (e) {
+    alert(e.message || "Perubahan gagal disimpan.");
+  } finally {
+    if (button) { button.disabled = false; button.textContent = oldText; }
+  }
+});
+
 function renderWallets(wallets) {
   const box = el("walletList"); if (!box) return;
   box.innerHTML = wallets.length ? wallets.map(w => {
