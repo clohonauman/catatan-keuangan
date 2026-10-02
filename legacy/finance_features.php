@@ -154,23 +154,9 @@ function financeWalletBalances($data=null) {
             : (int)($w['initial_balance'] ?? 0);
     }
     foreach ($d['transactions'] as $t) {
-        $type = (string)($t['type'] ?? '');
-        $amount = (int)($t['amount'] ?? 0);
-        if ($type === 'income') {
-            $wid = (int)($t['wallet_id'] ?? 1);
-            if (!isset($balances[$wid])) $balances[$wid] = 0;
-            $balances[$wid] += $amount;
-        } elseif ($type === 'expense') {
-            $wid = (int)($t['wallet_id'] ?? 1);
-            if (!isset($balances[$wid])) $balances[$wid] = 0;
-            $balances[$wid] -= $amount;
-        } elseif ($type === 'transfer') {
-            $from = (int)($t['from_wallet_id'] ?? 0);
-            $to = (int)($t['to_wallet_id'] ?? 0);
-            if (!isset($balances[$from])) $balances[$from] = 0;
-            if (!isset($balances[$to])) $balances[$to] = 0;
-            $balances[$from] -= $amount;
-            $balances[$to] += $amount;
+        foreach ($balances as $wid => $current) {
+            $delta = transactionWalletDeltaForId((array)$t, (int)$wid);
+            if ($delta !== 0) $balances[$wid] = $current + $delta;
         }
     }
     return $balances;
