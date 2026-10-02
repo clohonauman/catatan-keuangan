@@ -24,12 +24,17 @@ jobs:
 V86 Production Patch - Catatan Keuangan
 
 Timpa file berikut pada production sesuai path asli:
-1. patch/app.js             -> web/assets/app.js
-3. patch/sw.js             -> web/sw.js
-4. patch/index.php          -> views/site/index.php
+1. patch/app.js    -> web/assets/app.js
+2. patch/style.css -> web/assets/style.css
+3. patch/sw.js     -> web/sw.js
+4. patch/index.php -> views/site/index.php
 
-Setelah upload, refresh aplikasi. Bila Service Worker masih memakai cache lama,
-hapus cache situs / reload sekali lagi.
+Perubahan:
+- Header "Riwayat Piutang" menjadi satu kontrol yang rapi.
+- Tombol "Tutup" model pill dihilangkan.
+- Chevron menjadi indikator buka/tutup yang jelas.
+- Riwayat dapat dibuka/tutup dengan nyaman di desktop dan mobile.
+- Service Worker cache dinaikkan agar CSS/JS baru terbaca.
 EOF
           cd patch
           zip -r ../catatan-keuangan-v86-receivable-history-ui.zip .
