@@ -190,14 +190,29 @@ function walletBalancesFromData($d,$excludeTransactionId=0) {
             ? -max(0,(int)($w['opening_debt']??0))
             : (int)($w['initial_balance']??0);
     }
+    $existingTransactionIds = [];
     foreach((array)($d['transactions']??[]) as $t){
-        if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId)continue;
+        $txId=(int)($t['id']??0);
+        if($txId>0 && !($excludeTransactionId>0 && $txId===$excludeTransactionId))$existingTransactionIds[$txId]=true;
+        if($excludeTransactionId>0 && $txId===$excludeTransactionId)continue;
         $type=(string)($t['type']??'');$amount=(int)($t['amount']??0);
         if($type==='income'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)+$amount;}
         elseif($type==='expense'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)-$amount;}
         elseif($type==='transfer'){
             $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
             $balances[$from]=($balances[$from]??0)-$amount;$balances[$to]=($balances[$to]??0)+$amount;
+        }
+    }
+    // V86: pembayaran kartu yang masih tercatat di histori tagihan tetapi
+    // transaksi transfernya sudah tidak ada tetap mengembalikan limit kartu.
+    foreach((array)($d['bills']??[]) as $bill){
+        if(empty($bill['auto_generated']) || (($bill['bill_type']??'')!=='credit_card'))continue;
+        $cardId=(int)($bill['credit_card_wallet_id']??0);if($cardId<=0)continue;
+        foreach((array)($bill['payments']??[]) as $payment){
+            $txId=(int)($payment['transaction_id']??0);
+            if($txId>0 && isset($existingTransactionIds[$txId]))continue;
+            $paid=max(0,(int)($payment['amount']??0));
+            if($paid>0)$balances[$cardId]=($balances[$cardId]??0)+$paid;
         }
     }
     return $balances;
