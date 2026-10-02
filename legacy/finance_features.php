@@ -385,12 +385,18 @@ function financeAppendTransactionData(&$d,$t) {
     return $x;
 }
 
-function financeTransfer($from,$to,$amount,$note='',$date='') {
-    $from=(int)$from;$to=(int)$to;$amount=(int)$amount;$date=$date?:date('Y-m-d');
+function financeTransfer($from,$to,$amount,$note='',$date='',$feeAmount=0,$feeWalletId=0) {
+    $from=(int)$from;$to=(int)$to;$amount=(int)$amount;$feeAmount=max(0,(int)$feeAmount);$feeWalletId=(int)$feeWalletId;$date=$date?:date('Y-m-d');
     if($from<1||$to<1||$from===$to)throw new InvalidArgumentException('Pilih dua dompet yang berbeda.');
     if($amount<=0)throw new InvalidArgumentException('Nominal transfer harus lebih dari nol.');
     if(!financeWalletById($from)||!financeWalletById($to))throw new InvalidArgumentException('Dompet transfer tidak ditemukan.');
-    $r=financeMutate(function(&$d)use($from,$to,$amount,$note,$date){return financeAppendTransactionData($d,['type'=>'transfer','category'=>'Transfer Antar Dompet','amount'=>$amount,'note'=>$note?:'Transfer antar dompet','transaction_date'=>$date,'from_wallet_id'=>$from,'to_wallet_id'=>$to,'source'=>'wallet_transfer']);});
+    if($feeAmount>0&&$feeWalletId<=0)$feeWalletId=$from;
+    if($feeAmount>0&&!financeWalletById($feeWalletId))throw new InvalidArgumentException('Dompet biaya admin tidak ditemukan.');
+    $r=financeMutate(function(&$d)use($from,$to,$amount,$note,$date,$feeAmount,$feeWalletId){
+        $tx=['type'=>'transfer','category'=>'Transfer Antar Dompet','amount'=>$amount,'note'=>$note?:'Transfer antar dompet','transaction_date'=>$date,'from_wallet_id'=>$from,'to_wallet_id'=>$to,'source'=>'wallet_transfer'];
+        if($feeAmount>0){$tx['fee_amount']=$feeAmount;$tx['fee_wallet_id']=$feeWalletId;}
+        return financeAppendTransactionData($d,$tx);
+    });
     financeSyncCreditCardBills();
     return $r['result'];
 }
