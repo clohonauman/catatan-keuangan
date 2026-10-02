@@ -1588,13 +1588,18 @@ function renderTransactions() {
     const x = document.createElement("div");
     x.className = `tx tx-card tx-${cls}` + (t.offline_pending ? " offline-pending" : "") + (isReceivable ? " tx-receivable" : "");
 
+    const splitSources = Array.isArray(t.split_sources) ? t.split_sources : [];
+    const splitWalletLabel = splitSources.map(part => wallets[Number(part.wallet_id)] || "Dompet").join(" + ");
+    const feeLabel = Number(t.fee_amount || 0) > 0 ? " · admin " + rupiah(t.fee_amount) : "";
     const walletLabel = receivableLend
-      ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → Piutang ${borrowerName}`
+      ? String(wallets[Number(t.from_wallet_id)] || "Dompet") + " → Piutang " + borrowerName
       : receivableRepay
-        ? `Piutang ${borrowerName} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
+        ? "Piutang " + borrowerName + " → " + (wallets[Number(t.to_wallet_id)] || "Dompet")
         : isTransfer
-          ? `${wallets[Number(t.from_wallet_id)] || "Dompet"} → ${wallets[Number(t.to_wallet_id)] || "Dompet"}`
-          : (wallets[Number(t.wallet_id || 1)] || "Utama");
+          ? String(wallets[Number(t.from_wallet_id)] || "Dompet") + " → " + (wallets[Number(t.to_wallet_id)] || "Dompet") + feeLabel
+          : splitWalletLabel
+            ? "Dibayar dari " + splitWalletLabel
+            : (wallets[Number(t.wallet_id || 1)] || "Utama");
     const pattern = isReceivable ? "" : transactionPatternLabel(String(t.spending_kind || ""));
     const typeText = receivableLend ? "Memberi Hutang" : (receivableRepay ? "Pelunasan Piutang" : transactionKindLabel(String(t.type || "")));
     const displayDate = formatTransactionDate(t.transaction_date);
