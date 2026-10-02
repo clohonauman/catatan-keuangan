@@ -80,7 +80,7 @@ try {
         case 'receivable_delete': $result=financeReceivableDelete((int)($input['id']??0)); break;
         case 'wallet_save': $result=financeSaveWallet($input); break;
         case 'wallet_archive': $result=financeArchiveWallet((int)($input['id']??0)); break;
-        case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??'')); break;
+        case 'wallet_transfer': $result=financeTransfer((int)($input['from_wallet_id']??0),(int)($input['to_wallet_id']??0),(int)($input['amount']??0),(string)($input['note']??''),(string)($input['transaction_date']??''),(int)($input['fee_amount']??0),(int)($input['fee_wallet_id']??0)); break;
         case 'wallet_reorder': $result=financeReorderWallets((array)($input['wallet_ids']??[])); break;
         case 'category_save': $result=financeSaveCategory($input); break;
         case 'category_archive': $result=financeArchiveCategory((int)($input['id']??0)); break;
