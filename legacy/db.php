@@ -177,7 +177,7 @@ function transactionSpendingKind(array $t): string {
 }
 
 function transactionWalletAllocations(array $t): array {
-    $raw = $t['wallet_allocations'] ?? [];
+    $raw = $t['wallet_allocations'] ?? ($t['split_sources'] ?? []);
     if (!is_array($raw)) return [];
     $merged = [];
     foreach ($raw as $row) {
