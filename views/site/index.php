@@ -1756,7 +1756,7 @@ if (!function_exists('ck_icon')) {
                                     id="transferTo"></select></label><label>Nominal<input type="number"
                                     id="transferAmount" min="1" step="1000" inputmode="numeric"></label><label>Admin fee<input type="text"
                                     id="transferFee" class="currency-input" inputmode="numeric" placeholder="0"></label><label>Keterangan<input
-                                    id="transferNote" placeholder="Opsional"></label><button class="btn primary"
+                                    id="transferNote" placeholder="Opsional"></label><div class="manual-tx-hint" id="transferPreview">Transfer Rp0 · admin Rp0 · keluar dari asal Rp0</div><button class="btn primary"
                                 type="button" id="saveTransfer">Catat Transfer</button>
                         </div>
                     </div>
