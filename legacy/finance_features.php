@@ -1293,7 +1293,14 @@ function financeCreateManualTransaction(array $input): array {
         $tx['spending_kind']='once';
     }
 
-    $saved=addTransaction($tx);
+    $complexCreate=($type==='expense'&&!empty($tx['split_sources']))||($type==='transfer'&&!empty($tx['fee_amount']));
+    if($complexCreate){
+        $r=financeMutate(function(&$d)use($tx){return financeAppendTransactionData($d,$tx);});
+        financeSyncCreditCardBills();
+        $saved=$r['result'];
+    }else{
+        $saved=addTransaction($tx);
+    }
     if($type==='expense'&&!empty($tx['bill_id'])) $saved=financeLinkTransactionToBill((int)$saved['id'],(int)$tx['bill_id']);
     return $saved;
 }
