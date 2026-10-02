@@ -2383,6 +2383,23 @@ if (!function_exists('ck_icon')) {
         </div>
     </dialog>
 
+    <dialog id="featureEditModal" class="feature-edit-dialog">
+        <div class="modal-card feature-edit-card">
+            <div class="modal-head">
+                <div>
+                    <h3 id="featureEditTitle">Edit Data</h3>
+                    <p class="modal-subtitle" id="featureEditSubtitle">Ubah data lalu simpan.</p>
+                </div>
+                <button class="icon-btn" type="button" id="featureEditClose" aria-label="Tutup">×</button>
+            </div>
+            <div class="feature-edit-body" id="featureEditBody"></div>
+            <div class="modal-actions">
+                <button class="btn secondary" type="button" id="featureEditCancel">Batal</button>
+                <button class="btn primary" type="button" id="featureEditSave">Simpan Perubahan</button>
+            </div>
+        </div>
+    </dialog>
+
     <dialog id="transactionCreateModal" class="transaction-edit-dialog transaction-create-dialog">
         <div class="modal-card transaction-edit-card">
             <div class="modal-head">
