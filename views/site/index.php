@@ -1876,10 +1876,17 @@ if (!function_exists('ck_icon')) {
                     </div>
 
                     <div class="feature-card receivable-history-card">
-                        <div class="feature-toolbar receivable-list-toolbar">
-                            <div><b>Riwayat Piutang</b><small>Riwayat mengikuti filter Rekap & PDF di atas.</small></div>
+                        <button type="button" class="receivable-history-toggle is-open" id="toggleReceivableHistory"
+                            aria-expanded="true" aria-controls="receivableHistoryContent">
+                            <span class="receivable-history-toggle-copy">
+                                <b>Riwayat Piutang</b>
+                                <small>Riwayat mengikuti filter Rekap & PDF di atas.</small>
+                            </span>
+                            <span class="receivable-history-toggle-icon" aria-hidden="true">⌄</span>
+                        </button>
+                        <div class="receivable-history-content" id="receivableHistoryContent">
+                            <div class="receivable-history-list" id="receivableHistoryList"><div class="empty compact">Belum ada riwayat.</div></div>
                         </div>
-                        <div class="receivable-history-list" id="receivableHistoryList"><div class="empty compact">Belum ada riwayat.</div></div>
                     </div>
                 </section>
                 <section class="finance-tab-panel" data-finance-panel="budgets" hidden>
