@@ -1,0 +1,54 @@
+name: Package V86 Credit Limit Patch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "legacy/finance_features.php"
+      - "legacy/db.php"
+      - ".github/workflows/package-v86-patch.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PHP syntax
+        run: |
+          php -l legacy/finance_features.php
+          php -l legacy/db.php
+
+      - name: Package patch
+        run: |
+          rm -rf dist
+          mkdir -p dist/legacy
+          cp legacy/finance_features.php dist/legacy/
+          cp legacy/db.php dist/legacy/
+          cat > dist/INSTALL.txt <<'EOF'
+Catatan Keuangan V86 - Restore Limit Kartu Kredit Setelah Pembayaran
+
+File:
+- legacy/finance_features.php
+- legacy/db.php
+
+Perubahan:
+1. Pembayaran tagihan kartu kredit mengembalikan pemakaian limit.
+2. Data lama yang masih memiliki bill->payments tetapi transaksi transfer pembayarannya
+   tidak lagi tersedia tetap diperhitungkan sebagai pengurang pemakaian limit.
+3. Pembayaran yang transaksinya masih ada tidak dihitung dua kali.
+
+Salin file sesuai struktur folder aplikasi setelah backup.
+EOF
+          cd dist
+          zip -r ../catatan-keuangan-v86-credit-limit-restore.zip legacy INSTALL.txt
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: catatan-keuangan-v86-credit-limit-restore
+          path: catatan-keuangan-v86-credit-limit-restore.zip
