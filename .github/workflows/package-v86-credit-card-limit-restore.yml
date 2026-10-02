@@ -1,0 +1,32 @@
+name: Package V86 Credit Card Limit Patch
+
+on:
+  push:
+    branches:
+      - patch/v86-credit-card-limit-restore
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package patch
+        run: |
+          set -e
+          rm -rf dist
+          mkdir -p dist/legacy
+          cp legacy/db.php dist/legacy/db.php
+          cp legacy/finance_features.php dist/legacy/finance_features.php
+          printf '%s\n'             'Catatan Keuangan V86 - Credit Card Limit Restore'             ''             'Patch ini memperbaiki mekanisme agar pembayaran tagihan kartu kredit mengembalikan ruang limit yang sudah digunakan.'             ''             'Instalasi:'             '1. Backup file legacy/db.php dan legacy/finance_features.php.'             '2. Upload kedua file dari folder legacy sesuai struktur aplikasi.'             '3. Hard refresh browser setelah upload.'             ''             'File patch:'             'legacy/db.php'             'legacy/finance_features.php'             > dist/INSTALL.txt
+          cd dist
+          zip -r ../catatan-keuangan-v86-credit-card-limit-restore.zip legacy INSTALL.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: catatan-keuangan-v86-credit-card-limit-restore
+          path: catatan-keuangan-v86-credit-card-limit-restore.zip
+          if-no-files-found: error
+          retention-days: 14
