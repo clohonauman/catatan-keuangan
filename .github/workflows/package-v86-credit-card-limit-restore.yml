@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - patch/v86-credit-card-limit-restore
+  pull_request:
+    branches:
+      - main
 
 jobs:
   package:
