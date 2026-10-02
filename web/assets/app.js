@@ -5636,6 +5636,64 @@ function fillCreateTxCategories() {
   else if ([...select.options].some(o => o.value === "Lainnya")) select.value = "Lainnya";
 }
 
+function createTxSourceOptions(selected = 0) {
+  const wallets = (featureState()?.wallets || []).filter(w => !w.archived);
+  return wallets.map(w => optionHtml(String(w.id), String(w.name || "") + " · " + walletAvailabilityLabel(w))).join("");
+}
+
+function renderCreateTxSources(rows = null) {
+  const box = el("createTxSourceList");
+  if (!box) return;
+  const wallets = (featureState()?.wallets || []).filter(w => !w.archived);
+  if (!wallets.length) { box.innerHTML = '<div class="empty compact">Belum ada dompet aktif.</div>'; return; }
+  const current = Array.isArray(rows) && rows.length ? rows : (() => {
+    const preferred = wallets.find(w => w.is_default) || wallets[0];
+    return [{ wallet_id: Number(preferred?.id || wallets[0]?.id || 0), amount: Number(el("createTxAmount")?.value || 0) }];
+  })();
+  box.innerHTML = current.map((row, index) => {
+    const selected = Number(row?.wallet_id || wallets[0]?.id || 0);
+    return '<div class="feature-form-grid" data-create-source-row style="margin:0 0 8px;grid-template-columns:minmax(0,1fr) minmax(120px,.8fr) auto">' +
+      '<label>Dompet<select data-create-source-wallet>' + createTxSourceOptions(selected) + '</select></label>' +
+      '<label>Nominal<input type="text" class="currency-input" inputmode="numeric" data-create-source-amount value="' + Number(row?.amount || 0) + '"></label>' +
+      '<button type="button" class="btn secondary" data-remove-create-source aria-label="Hapus sumber dana">' + (index === 0 ? "×" : "Hapus") + '</button>' +
+      '</div>';
+  }).join("");
+  box.querySelectorAll("[data-create-source-row]").forEach(row => {
+    row.querySelector("[data-remove-create-source]")?.addEventListener("click", () => {
+      const rowsNow = [...box.querySelectorAll("[data-create-source-row]")].map(sourceRow => ({
+        wallet_id: Number(sourceRow.querySelector("[data-create-source-wallet]")?.value || 0),
+        amount: Number(sourceRow.querySelector("[data-create-source-amount]")?.value || 0)
+      }));
+      if (rowsNow.length <= 1) return;
+      const index = [...box.querySelectorAll("[data-create-source-row]")].indexOf(row);
+      renderCreateTxSources(rowsNow.filter((_, i) => i !== index));
+    });
+    row.querySelector("[data-create-source-amount]")?.addEventListener("input", syncCreateTxSourceSummary);
+    row.querySelector("[data-create-source-wallet]")?.addEventListener("change", syncCreateTxSourceSummary);
+  });
+  syncCreateTxSourceSummary();
+}
+
+function collectCreateTxSources() {
+  return [...document.querySelectorAll("#createTxSourceList [data-create-source-row]")].map(row => ({
+    wallet_id: Number(row.querySelector("[data-create-source-wallet]")?.value || 0),
+    amount: Number(row.querySelector("[data-create-source-amount]")?.value || 0)
+  })).filter(row => row.wallet_id > 0 && row.amount > 0);
+}
+
+function syncCreateTxSourceSummary() {
+  const total = Number(el("createTxAmount")?.value || 0);
+  const allocated = collectCreateTxSources().reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const summary = el("createTxSourceSummary");
+  if (summary) summary.textContent = "Alokasi " + rupiah(allocated) + " dari " + rupiah(total) + (allocated === total ? " · sesuai" : " · belum sesuai");
+  const preview = el("transferPreview");
+  if (preview && el("transferAmount")) {
+    const amount = Number(el("transferAmount").value || 0);
+    const fee = Number(el("transferFee")?.value || 0);
+    preview.textContent = "Transfer " + rupiah(amount) + " · admin " + rupiah(fee) + " · keluar dari asal " + rupiah(amount + fee);
+  }
+}
+
 function syncCreateTxType() {
   const type = el("createTxType")?.value || "expense";
   const transfer = type === "transfer";
