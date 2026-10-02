@@ -5664,7 +5664,7 @@ function fillCreateTxCategories() {
 
 function createTxSourceOptions(selected = 0) {
   const wallets = (featureState()?.wallets || []).filter(w => !w.archived);
-  return wallets.map(w => optionHtml(String(w.id), String(w.name || "") + " · " + walletAvailabilityLabel(w))).join("");
+  return wallets.map(w => optionHtml(String(w.id), String(w.name || "") + " · " + walletAvailabilityLabel(w), Number(w.id) === Number(selected))).join("");
 }
 
 function renderCreateTxSources(rows = null) {
