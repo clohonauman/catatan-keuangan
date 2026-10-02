@@ -1276,6 +1276,11 @@ function financeCreateManualTransaction(array $input): array {
         if(!in_array($kind,['daily','once','recurring'],true)) $kind='once';
         $tx['spending_kind']=$kind;
 
+        if(isset($input['split_sources']) && is_array($input['split_sources'])){
+            $tx['split_sources']=$input['split_sources'];
+            unset($tx['wallet_id']);
+        }
+
         $billId=max(0,(int)($input['bill_id']??0));
         if($billId>0){
             $bill=financeBillById($billId);
