@@ -4466,8 +4466,20 @@ el("receivableInterestAmount")?.addEventListener("input",updateReceivableInteres
 el("resetReceivableFilters")?.addEventListener("click",resetReceivableFilters);
 el("downloadReceivableCsv")?.addEventListener("click",downloadReceivableCsv);
 el("downloadReceivablePdf")?.addEventListener("click",downloadReceivablePdf);
+
+function setReceivableHistoryOpen(open=true){
+  const btn=el("toggleReceivableHistory");
+  const content=el("receivableHistoryContent");
+  if(!btn||!content)return;
+  const isOpen=Boolean(open);
+  btn.classList.toggle("is-open",isOpen);
+  btn.setAttribute("aria-expanded",isOpen?"true":"false");
+  content.hidden=!isOpen;
+}
+el("toggleReceivableHistory")?.addEventListener("click",()=>setReceivableHistoryOpen(!(el("toggleReceivableHistory")?.getAttribute("aria-expanded")==="true")));
 document.querySelectorAll("[data-receivable-form-mode]").forEach(btn=>btn.addEventListener("click",()=>setReceivableMobileMode(btn.dataset.receivableFormMode)));
 setReceivableMobileMode("lend");
+setReceivableHistoryOpen(true);
 
 function syncWalletTypeFields() {
   const credit = String(el("walletType")?.value || "") === "credit_card";
