@@ -179,11 +179,36 @@ function financeWalletBalances($data=null) {
 function financeWalletsWithBalances() {
     $d = financeReadData();
     $balances = financeWalletBalances($d);
+
+    // V86: jaga kompatibilitas data lama. Bila histori pembayaran kartu kredit
+    // tersimpan di bill->payments tetapi transaksi transfer pembayarannya tidak
+    // lagi tersedia di daftar transaksi, nominal pembayaran tersebut tetap harus
+    // mengurangi pemakaian limit. Transaksi yang masih ada tidak dihitung dua kali.
+    $existingTransactionIds = [];
+    foreach ((array)($d['transactions'] ?? []) as $tx) {
+        $txId = (int)($tx['id'] ?? 0);
+        if ($txId > 0) $existingTransactionIds[$txId] = true;
+    }
+    $legacyCreditPayments = [];
+    foreach ((array)($d['bills'] ?? []) as $bill) {
+        if (!financeIsAutoCreditCardBill((array)$bill)) continue;
+        $cardId = (int)($bill['credit_card_wallet_id'] ?? 0);
+        if ($cardId <= 0) continue;
+        foreach ((array)($bill['payments'] ?? []) as $payment) {
+            $txId = (int)($payment['transaction_id'] ?? 0);
+            if ($txId > 0 && isset($existingTransactionIds[$txId])) continue;
+            $paid = max(0, (int)($payment['amount'] ?? 0));
+            if ($paid > 0) $legacyCreditPayments[$cardId] = ($legacyCreditPayments[$cardId] ?? 0) + $paid;
+        }
+    }
+
     $out = [];
     foreach ($d['wallets'] as $w) {
         if (!empty($w['archived'])) continue;
-        $gross=(int)($balances[(int)$w['id']] ?? 0);
+        $walletId = (int)$w['id'];
+        $gross=(int)($balances[$walletId] ?? 0);
         if(strtolower((string)($w['type']??''))==='credit_card'){
+            $gross += (int)($legacyCreditPayments[$walletId] ?? 0);
             $limit=max(0,(int)($w['credit_limit']??0));
             $debt=max(0,-$gross);
             $w['balance']=-$debt;
