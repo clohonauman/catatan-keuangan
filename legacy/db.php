@@ -65,9 +65,10 @@ function setDailyBudgetSettings($raw) {
 function dailyExpenseTotal($date) {
     $total = 0;
     foreach (allTransactions() as $t) {
-        if (($t['type'] ?? '') !== 'expense') continue;
         if ((string)($t['transaction_date'] ?? '') !== (string)$date) continue;
-        $total += (int)($t['amount'] ?? 0);
+        $type=(string)($t['type'] ?? '');
+        if ($type === 'expense') $total += (int)($t['amount'] ?? 0);
+        elseif ($type === 'transfer') $total += transactionTransferFee((array)$t)['amount'];
     }
     return $total;
 }
@@ -175,6 +176,64 @@ function transactionSpendingKind(array $t): string {
     return 'daily';
 }
 
+function transactionWalletAllocations(array $t): array {
+    $raw = $t['wallet_allocations'] ?? [];
+    if (!is_array($raw)) return [];
+    $merged = [];
+    foreach ($raw as $row) {
+        if (!is_array($row)) continue;
+        $walletId = (int)($row['wallet_id'] ?? 0);
+        $amount = max(0, (int)($row['amount'] ?? 0));
+        if ($walletId <= 0 || $amount <= 0) continue;
+        if (!isset($merged[$walletId])) $merged[$walletId] = 0;
+        $merged[$walletId] += $amount;
+    }
+    $out = [];
+    foreach ($merged as $walletId => $amount) {
+        $out[] = ['wallet_id' => (int)$walletId, 'amount' => (int)$amount];
+    }
+    return $out;
+}
+
+function transactionTransferFee(array $t): array {
+    $amount = max(0, (int)($t['fee_amount'] ?? 0));
+    if ($amount <= 0) return ['amount' => 0, 'wallet_id' => 0];
+    $walletId = (int)($t['fee_wallet_id'] ?? $t['from_wallet_id'] ?? 0);
+    return ['amount' => $amount, 'wallet_id' => max(0, $walletId)];
+}
+
+function transactionWalletDeltaForId(array $t, int $walletId): int {
+    if ($walletId <= 0) return 0;
+    $type = (string)($t['type'] ?? '');
+    $amount = max(0, (int)($t['amount'] ?? 0));
+
+    if ($type === 'income') {
+        return (int)($t['wallet_id'] ?? 0) === $walletId ? $amount : 0;
+    }
+
+    if ($type === 'expense') {
+        $allocations = transactionWalletAllocations($t);
+        if ($allocations) {
+            foreach ($allocations as $row) {
+                if ((int)$row['wallet_id'] === $walletId) return -(int)$row['amount'];
+            }
+            return 0;
+        }
+        return (int)($t['wallet_id'] ?? 1) === $walletId ? -$amount : 0;
+    }
+
+    if ($type === 'transfer') {
+        $delta = 0;
+        if ((int)($t['from_wallet_id'] ?? 0) === $walletId) $delta -= $amount;
+        if ((int)($t['to_wallet_id'] ?? 0) === $walletId) $delta += $amount;
+        $fee = transactionTransferFee($t);
+        if ((int)$fee['wallet_id'] === $walletId) $delta -= (int)$fee['amount'];
+        return $delta;
+    }
+
+    return 0;
+}
+
 function walletRecordFromData($d,$walletId) {
     foreach((array)($d['wallets']??[]) as $w) if((int)($w['id']??0)===(int)$walletId) return $w;
     return null;
@@ -192,12 +251,9 @@ function walletBalancesFromData($d,$excludeTransactionId=0) {
     }
     foreach((array)($d['transactions']??[]) as $t){
         if($excludeTransactionId>0 && (int)($t['id']??0)===(int)$excludeTransactionId)continue;
-        $type=(string)($t['type']??'');$amount=(int)($t['amount']??0);
-        if($type==='income'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)+$amount;}
-        elseif($type==='expense'){$wid=(int)($t['wallet_id']??1);$balances[$wid]=($balances[$wid]??0)-$amount;}
-        elseif($type==='transfer'){
-            $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
-            $balances[$from]=($balances[$from]??0)-$amount;$balances[$to]=($balances[$to]??0)+$amount;
+        foreach($balances as $wid=>$current) {
+            $delta=transactionWalletDeltaForId((array)$t,(int)$wid);
+            if($delta!==0)$balances[$wid]=$current+$delta;
         }
     }
     return $balances;
@@ -270,6 +326,7 @@ function summary() {
     foreach($d['transactions'] as $t){
         if(($t['type']??'')==='income')$income+=(int)$t['amount'];
         elseif(($t['type']??'')==='expense')$expense+=(int)$t['amount'];
+        elseif(($t['type']??'')==='transfer')$expense+=transactionTransferFee((array)$t)['amount'];
     }
 
     $initial=0;$reserved=0;$minimum=0;$available=0;$gross=0;$creditLimit=0;$creditDebt=0;$creditAvailable=0;
@@ -339,17 +396,52 @@ function updateTransaction($id, $patch) {
             if(($t['type']??'')==='transfer'){
                 if(isset($patch['from_wallet_id']))$t['from_wallet_id']=(int)$patch['from_wallet_id'];
                 if(isset($patch['to_wallet_id']))$t['to_wallet_id']=(int)$patch['to_wallet_id'];
-                unset($t['wallet_id'],$t['spending_kind'],$t['bill_id']);
+                $feeAmount=max(0,(int)($patch['fee_amount']??0));
+                if($feeAmount>0){
+                    $feeWallet=(int)($patch['fee_wallet_id']??$t['from_wallet_id']??0);
+                    $t['fee_amount']=$feeAmount;
+                    $t['fee_wallet_id']=$feeWallet>0?$feeWallet:(int)$t['from_wallet_id'];
+                }else{
+                    unset($t['fee_amount'],$t['fee_wallet_id']);
+                }
+                unset($t['wallet_id'],$t['wallet_allocations'],$t['spending_kind'],$t['bill_id']);
             } else {
-                if(isset($patch['wallet_id']))$t['wallet_id']=(int)$patch['wallet_id'];
+                if(array_key_exists('wallet_allocations',$patch) && is_array($patch['wallet_allocations']) && count($patch['wallet_allocations'])){
+                    $allocations=[];
+                    foreach($patch['wallet_allocations'] as $row){
+                        if(!is_array($row)) continue;
+                        $wid=(int)($row['wallet_id']??0);$amt=max(0,(int)($row['amount']??0));
+                        if($wid<=0||$amt<=0) continue;
+                        $allocations[$wid]=($allocations[$wid]??0)+$amt;
+                    }
+                    $normalized=[];
+                    foreach($allocations as $wid=>$amt)$normalized[]=['wallet_id'=>(int)$wid,'amount'=>(int)$amt];
+                    $sum=array_sum(array_map(fn($x)=>(int)$x['amount'],$normalized));
+                    if($sum!==(int)($t['amount']??0)) throw new InvalidArgumentException('Total alokasi sumber dana harus sama dengan nominal transaksi.');
+                    $t['wallet_allocations']=$normalized;
+                    unset($t['wallet_id']);
+                }else{
+                    unset($t['wallet_allocations']);
+                    if(isset($patch['wallet_id']))$t['wallet_id']=(int)$patch['wallet_id'];
+                }
                 if(isset($patch['spending_kind']) && in_array($patch['spending_kind'],['daily','once','recurring'],true)) $t['spending_kind']=$patch['spending_kind'];
                 elseif(!isset($t['spending_kind'])) $t['spending_kind']=transactionSpendingKind($t);
                 if(array_key_exists('bill_id',$patch)) { if((int)$patch['bill_id']>0)$t['bill_id']=(int)$patch['bill_id']; else unset($t['bill_id']); }
-                unset($t['from_wallet_id'],$t['to_wallet_id']);
+                unset($t['from_wallet_id'],$t['to_wallet_id'],$t['fee_amount'],$t['fee_wallet_id']);
             }
-            if(($t['type']??'')==='expense')assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),(int)($t['amount']??0),$id);
-            elseif(($t['type']??'')==='transfer'){
-                assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),(int)($t['amount']??0),$id);
+            if(($t['type']??'')==='expense'){
+                $allocations=transactionWalletAllocations((array)$t);
+                if($allocations){
+                    foreach($allocations as $row) assertWalletSpendAllowedData($d,(int)$row['wallet_id'],(int)$row['amount'],$id);
+                }else{
+                    assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),(int)($t['amount']??0),$id);
+                }
+            } elseif(($t['type']??'')==='transfer'){
+                $fee=transactionTransferFee((array)$t);
+                $from=(int)($t['from_wallet_id']??0);
+                $spend=$from>0 && (int)$fee['wallet_id']===$from ? (int)$t['amount']+(int)$fee['amount'] : (int)$t['amount'];
+                assertWalletSpendAllowedData($d,$from,$spend,$id);
+                if((int)$fee['amount']>0 && (int)$fee['wallet_id']!==$from) assertWalletSpendAllowedData($d,(int)$fee['wallet_id'],(int)$fee['amount'],$id);
                 assertWalletCreditPaymentAllowedData($d,(int)($t['to_wallet_id']??0),(int)($t['amount']??0),$id);
             }
             $t['updated_at']=date('Y-m-d H:i:s');
