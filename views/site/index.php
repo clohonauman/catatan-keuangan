@@ -2412,9 +2412,19 @@ if (!function_exists('ck_icon')) {
                 <label class="create-standard-field">Kategori
                     <select id="createTxCategory"></select>
                 </label>
-                <label class="create-standard-field">Dompet
+                <label class="create-standard-field create-expense-wallet-field">Dompet
                     <select id="createTxWallet"></select>
                 </label>
+                <div class="create-expense-field full" id="createTxSplitBox">
+                    <div class="feature-card" style="margin:0;padding:14px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+                            <div><b>Sumber dana</b><small style="display:block;color:#667085">Satu transaksi bisa dibayar dari beberapa dompet.</small></div>
+                            <button type="button" class="btn secondary" id="addCreateTxSource">+ Dompet</button>
+                        </div>
+                        <div id="createTxSourceList"></div>
+                        <div class="manual-tx-hint" id="createTxSourceSummary">Alokasi Rp0 dari Rp0</div>
+                    </div>
+                </div>
                 <label class="create-expense-field">Pola
                     <select id="createTxSpendingKind">
                         <option value="daily">Harian</option>
