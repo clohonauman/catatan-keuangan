@@ -490,15 +490,22 @@ function financeSyncCreditCardBillsData(array &$d): bool {
         $txId = (int)($tx['id'] ?? 0);
 
         if ($type === 'expense') {
-            $addUsage((int)($tx['wallet_id'] ?? 0), $date, $amount, $txId);
+            $allocations=transactionWalletAllocations((array)$tx);
+            if($allocations){
+                foreach($allocations as $row)$addUsage((int)$row['wallet_id'],$date,(int)$row['amount'],$txId);
+            }else{
+                $addUsage((int)($tx['wallet_id'] ?? 0),$date,$amount,$txId);
+            }
         } elseif ($type === 'income') {
             // Refund / kredit balik ke kartu mengurangi tagihan siklus yang sama.
             $wid = (int)($tx['wallet_id'] ?? 0);
             if (isset($cards[$wid])) $addUsage($wid, $date, -$amount, $txId);
         } elseif ($type === 'transfer') {
             // Transfer keluar dari kartu dianggap penggunaan limit/cash advance.
-            $from = (int)($tx['from_wallet_id'] ?? 0);
-            if (isset($cards[$from])) $addUsage($from, $date, $amount, $txId);
+            $from=(int)($tx['from_wallet_id'] ?? 0);
+            $fee=transactionTransferFee((array)$tx);
+            if(isset($cards[$from]))$addUsage($from,$date,$amount+((int)$fee['wallet_id']===$from?(int)$fee['amount']:0),$txId);
+            if((int)$fee['amount']>0&&(int)$fee['wallet_id']!==$from&&isset($cards[(int)$fee['wallet_id']]))$addUsage((int)$fee['wallet_id'],$date,(int)$fee['amount'],$txId);
         }
     }
 
