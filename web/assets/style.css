@@ -3642,3 +3642,229 @@ dialog[open]>.feature-toast.in-dialog{
 .receivable-loan-item-actions{display:flex;gap:6px;flex:0 0 auto}
 .receivable-loan-item-actions button{white-space:nowrap}
 @media(max-width:760px){.receivable-loan-item-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.receivable-loan-item-actions button{width:100%}}
+
+
+
+/* ===== V86 - Piutang Mobile UX & Compact Filters ===== */
+.receivable-filter-card,
+.receivable-history-card{
+  padding:0;
+  overflow:hidden;
+}
+.receivable-filter-summary,
+.receivable-history-summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-width:0;
+  padding:13px 16px;
+  cursor:pointer;
+}
+.receivable-filter-summary::-webkit-details-marker,
+.receivable-history-summary::-webkit-details-marker{
+  display:none;
+}
+.receivable-filter-summary>div,
+.receivable-history-summary>div{
+  min-width:0;
+}
+.receivable-filter-summary b,
+.receivable-history-summary b{
+  display:block;
+  font-size:13px;
+  color:var(--text);
+}
+.receivable-filter-summary small,
+.receivable-history-summary small{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.4;
+}
+.receivable-filter-summary::after,
+.receivable-history-summary::after{
+  content:"⌄";
+  flex:0 0 auto;
+  color:#667085;
+  font-size:15px;
+  line-height:1;
+  transition:transform .18s ease;
+}
+.receivable-filter-card[open]>.receivable-filter-summary::after,
+.receivable-history-card[open]>.receivable-history-summary::after{
+  transform:rotate(180deg);
+}
+.receivable-filter-summary-meta{
+  margin-left:auto;
+  flex:0 0 auto;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#f2f5fa;
+  color:#667085;
+  font-size:9px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.receivable-filter-body{
+  display:grid;
+  gap:10px;
+  padding:0 16px 16px;
+}
+.receivable-filter-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.receivable-filter-toolbar>span{
+  min-width:0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.4;
+}
+.receivable-filter-toolbar .secondary-btn{
+  flex:0 0 auto;
+  padding:7px 9px;
+  font-size:10px;
+}
+.receivable-history-summary>span{
+  flex:0 0 auto;
+  font-size:0;
+  color:#667085;
+}
+.receivable-history-summary>span::after{
+  content:"Buka";
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#f2f5fa;
+  color:#667085;
+  font-size:9px;
+  font-weight:800;
+}
+.receivable-history-card[open]>.receivable-history-summary>span::after{
+  content:"Tutup";
+}
+.receivable-history-body{
+  padding:0 16px 16px;
+}
+.receivable-history-body .receivable-history-list{
+  margin-top:0;
+}
+.receivable-mobile-mode{
+  box-shadow:0 5px 16px rgba(16,24,40,.08);
+}
+.receivable-person-actions{
+  flex-wrap:wrap;
+}
+@media(max-width:760px){
+  .receivable-panel{gap:9px}
+  .receivable-hero{padding:12px;border-radius:15px;gap:10px}
+  .receivable-hero h3{font-size:18px}
+  .receivable-hero p{font-size:10px;line-height:1.4}
+  .receivable-hero-actions{gap:6px}
+  .receivable-hero-actions .btn{min-height:40px;padding:8px 10px;font-size:10px}
+  .receivable-summary-grid{grid-template-columns:1fr 1fr;gap:6px}
+  .receivable-summary-card{padding:9px 10px;border-radius:13px}
+  .receivable-summary-card span{font-size:9px;margin-bottom:3px}
+  .receivable-summary-card b{font-size:12px}
+  .receivable-summary-card.emphasis{
+    grid-column:1/-1;
+    order:-1;
+    padding:11px 12px;
+  }
+  .receivable-summary-card.emphasis b{font-size:17px}
+  .receivable-summary-card:last-child{grid-column:1/-1}
+  .receivable-mobile-mode{
+    position:sticky;
+    top:0;
+    z-index:12;
+    padding:3px;
+    border-radius:12px;
+    background:rgba(247,249,252,.94);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+  }
+  .receivable-mobile-mode button{
+    min-height:38px;
+    padding:8px 5px;
+    font-size:10px;
+    border-radius:9px;
+  }
+  .receivable-form-card{
+    padding:12px!important;
+    border-radius:14px!important;
+    gap:8px;
+  }
+  .receivable-form-card .feature-toolbar{
+    padding-bottom:2px;
+  }
+  .receivable-form-card .feature-toolbar>div b{
+    font-size:14px;
+  }
+  .receivable-form-card .feature-toolbar>div small{
+    font-size:9px;
+  }
+  .receivable-filter-summary,
+  .receivable-history-summary{
+    padding:11px 12px;
+  }
+  .receivable-filter-summary b,
+  .receivable-history-summary b{
+    font-size:12px;
+  }
+  .receivable-filter-summary small,
+  .receivable-history-summary small{
+    font-size:9px;
+  }
+  .receivable-filter-summary-meta{
+    padding:4px 7px;
+    font-size:8px;
+  }
+  .receivable-filter-body{
+    gap:9px;
+    padding:0 12px 12px;
+  }
+  .receivable-filter-toolbar{
+    align-items:flex-start;
+  }
+  .receivable-filter-toolbar>span{
+    font-size:9px;
+  }
+  .receivable-filter-grid{
+    gap:8px;
+  }
+  .receivable-filter-grid label{
+    gap:4px;
+    font-size:10px;
+  }
+  .receivable-filter-grid input,
+  .receivable-filter-grid select{
+    min-height:42px;
+    padding:9px 10px;
+    border-radius:11px;
+    font-size:13px;
+  }
+  .receivable-history-body{
+    padding:0 12px 12px;
+  }
+  .receivable-person-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+  .receivable-person-actions .btn{
+    width:100%;
+    margin:0;
+  }
+  .receivable-person-actions .btn.primary{
+    grid-column:1/-1;
+  }
+  .receivable-history-card .receivable-entry{
+    border-radius:11px;
+    padding:9px 10px;
+  }
+}

@@ -147,33 +147,9 @@ function financeDefaultWalletId() {
 function financeWalletBalances($data=null) {
     $d = is_array($data) ? $data : financeReadData();
     financeEnsureFeatureData($d);
-    $balances = [];
-    foreach ($d['wallets'] as $w) {
-        $balances[(int)$w['id']] = strtolower((string)($w['type']??''))==='credit_card'
-            ? -max(0,(int)($w['opening_debt']??0))
-            : (int)($w['initial_balance'] ?? 0);
-    }
-    foreach ($d['transactions'] as $t) {
-        $type = (string)($t['type'] ?? '');
-        $amount = (int)($t['amount'] ?? 0);
-        if ($type === 'income') {
-            $wid = (int)($t['wallet_id'] ?? 1);
-            if (!isset($balances[$wid])) $balances[$wid] = 0;
-            $balances[$wid] += $amount;
-        } elseif ($type === 'expense') {
-            $wid = (int)($t['wallet_id'] ?? 1);
-            if (!isset($balances[$wid])) $balances[$wid] = 0;
-            $balances[$wid] -= $amount;
-        } elseif ($type === 'transfer') {
-            $from = (int)($t['from_wallet_id'] ?? 0);
-            $to = (int)($t['to_wallet_id'] ?? 0);
-            if (!isset($balances[$from])) $balances[$from] = 0;
-            if (!isset($balances[$to])) $balances[$to] = 0;
-            $balances[$from] -= $amount;
-            $balances[$to] += $amount;
-        }
-    }
-    return $balances;
+    // Satu sumber perhitungan saldo/limit kartu kredit dipakai bersama seluruh
+    // endpoint agar pembayaran tagihan benar-benar mengembalikan ruang limit.
+    return walletBalancesFromData($d);
 }
 
 function financeWalletsWithBalances() {

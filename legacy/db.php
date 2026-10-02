@@ -182,6 +182,54 @@ function walletRecordFromData($d,$walletId) {
 function walletIsCreditCardRecord($w): bool {
     return is_array($w) && strtolower((string)($w['type']??''))==='credit_card';
 }
+function walletCreditCardDebtFromData($d,$walletId,$excludeTransactionId=0) {
+    $walletId=(int)$walletId;
+    $card=walletRecordFromData($d,$walletId);
+    if(!walletIsCreditCardRecord($card)) return 0;
+
+    $debt=max(0,(int)($card['opening_debt']??0));
+    $transactionsById=[];
+    foreach((array)($d['transactions']??[]) as $t){
+        $txId=(int)($t['id']??0);
+        if($txId>0)$transactionsById[$txId]=$t;
+        if($excludeTransactionId>0 && $txId===$excludeTransactionId)continue;
+        $type=(string)($t['type']??'');
+        $amount=max(0,(int)($t['amount']??0));
+        if($amount<=0)continue;
+        if($type==='expense' && (int)($t['wallet_id']??0)===$walletId){
+            $debt+=$amount;
+        }elseif($type==='income' && (int)($t['wallet_id']??0)===$walletId){
+            $debt-=$amount;
+        }elseif($type==='transfer'){
+            $from=(int)($t['from_wallet_id']??0);
+            $to=(int)($t['to_wallet_id']??0);
+            if($from===$walletId)$debt+=$amount;
+            elseif($to===$walletId)$debt-=$amount;
+        }
+    }
+
+    // Fallback untuk data lama/legacy: bila tagihan kartu tercatat lunas tetapi
+    // pembayaran belum memiliki transaksi transfer yang mengkredit kartu,
+    // pembayaran tetap harus mengembalikan ruang limit kartu.
+    foreach((array)($d['bills']??[]) as $bill){
+        if(empty($bill['auto_generated']) || ($bill['bill_type']??'')!=='credit_card')continue;
+        if((int)($bill['credit_card_wallet_id']??0)!==$walletId)continue;
+        foreach((array)($bill['payments']??[]) as $payment){
+            $paid=max(0,(int)($payment['amount']??0));
+            if($paid<=0)continue;
+            $txId=(int)($payment['transaction_id']??0);
+            $represented=false;
+            if($txId>0 && isset($transactionsById[$txId])){
+                $tx=$transactionsById[$txId];
+                $represented=(($tx['type']??'')==='transfer'
+                    && (int)($tx['to_wallet_id']??0)===$walletId
+                    && (int)($tx['amount']??0)>0);
+            }
+            if(!$represented)$debt-=$paid;
+        }
+    }
+    return max(0,$debt);
+}
 function walletBalancesFromData($d,$excludeTransactionId=0) {
     $balances=[];
     foreach((array)($d['wallets']??[]) as $w) {
@@ -199,6 +247,10 @@ function walletBalancesFromData($d,$excludeTransactionId=0) {
             $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);
             $balances[$from]=($balances[$from]??0)-$amount;$balances[$to]=($balances[$to]??0)+$amount;
         }
+    }
+    foreach((array)($d['wallets']??[]) as $w){
+        $id=(int)($w['id']??0);
+        if(walletIsCreditCardRecord($w))$balances[$id]=-walletCreditCardDebtFromData($d,$id,$excludeTransactionId);
     }
     return $balances;
 }

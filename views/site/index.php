@@ -1765,8 +1765,8 @@ if (!function_exists('ck_icon')) {
                     <div class="receivable-hero">
                         <div>
                             <span class="receivable-kicker">PIUTANG PRIBADI</span>
-                            <h3>Memberi Hutang, Bunga & Pelunasan</h3>
-                            <p>Uang yang dipinjamkan mengurangi saldo dompet, pelunasan mengembalikan saldo, sedangkan bunga manual hanya menambah nilai piutang tanpa memengaruhi saldo.</p>
+                            <h3>Piutang</h3>
+                            <p>Catat pemberian hutang, pelunasan, dan bunga dalam satu tempat.</p>
                         </div>
                         <div class="receivable-hero-actions">
                             <button type="button" class="btn secondary" id="downloadReceivableCsv">CSV</button>
@@ -1785,7 +1785,7 @@ if (!function_exists('ck_icon')) {
                     <div class="receivable-mobile-mode" role="tablist" aria-label="Mode pencatatan piutang">
                         <button type="button" class="is-active" data-receivable-form-mode="lend">Beri Hutang</button>
                         <button type="button" data-receivable-form-mode="repayment">Pelunasan</button>
-                        <button type="button" data-receivable-form-mode="interest">Tambah Bunga</button>
+                        <button type="button" data-receivable-form-mode="interest">Bunga</button>
                     </div>
                     <div class="two-col-feature receivable-form-grid">
                         <div class="feature-card receivable-form-card" data-receivable-form="lend">
@@ -1852,21 +1852,29 @@ if (!function_exists('ck_icon')) {
                         </div>
                     </div>
 
-                    <div class="feature-card receivable-filter-card">
-                        <div class="feature-toolbar">
-                            <div><b>Filter Rekap & PDF</b><small>Filter yang sama dipakai untuk tampilan riwayat dan file PDF.</small></div>
-                            <button type="button" class="secondary-btn" id="resetReceivableFilters">Reset</button>
+                    <details class="feature-card receivable-filter-card">
+                        <summary class="receivable-filter-summary">
+                            <div>
+                                <b>Filter Rekap & PDF</b>
+                                <small id="receivableFilterSummaryText">Gunakan filter seperlunya agar rekap tetap ringkas.</small>
+                            </div>
+                            <span class="receivable-filter-summary-meta" id="receivableFilterSummaryMeta">Tanpa filter</span>
+                        </summary>
+                        <div class="receivable-filter-body">
+                            <div class="receivable-filter-toolbar">
+                                <span id="receivableFilterStatusText">Menampilkan seluruh data piutang.</span>
+                                <button type="button" class="secondary-btn" id="resetReceivableFilters">Reset</button>
+                            </div>
+                            <div class="receivable-filter-grid">
+                                <label>Peminjam<select id="receivableFilterBorrower"><option value="">Semua peminjam</option></select></label>
+                                <label>Status<select id="receivableFilterStatus"><option value="all">Semua status</option><option value="active">Belum lunas</option><option value="overdue">Lewat jatuh tempo</option><option value="paid">Sudah lunas</option></select></label>
+                                <label>Jenis<select id="receivableFilterAction"><option value="all">Semua transaksi</option><option value="lend">Pemberian hutang</option><option value="interest">Bunga</option><option value="repayment">Pelunasan</option></select></label>
+                                <label>Dari tanggal<input type="date" id="receivableFilterFrom"></label>
+                                <label>Sampai tanggal<input type="date" id="receivableFilterTo"></label>
+                                <label>Dompet<select id="receivableFilterWallet"><option value="0">Semua dompet</option></select></label>
+                            </div>
                         </div>
-                        <div class="receivable-filter-grid">
-                            <label>Peminjam<select id="receivableFilterBorrower"><option value="">Semua peminjam</option></select></label>
-                            <label>Status<select id="receivableFilterStatus"><option value="all">Semua status</option><option value="active">Belum lunas</option><option value="overdue">Lewat jatuh tempo</option><option value="paid">Sudah lunas</option></select></label>
-                            <label>Jenis<select id="receivableFilterAction"><option value="all">Semua transaksi</option><option value="lend">Pemberian hutang</option><option value="interest">Bunga</option><option value="repayment">Pelunasan</option></select></label>
-                            <label>Dari tanggal<input type="date" id="receivableFilterFrom"></label>
-                            <label>Sampai tanggal<input type="date" id="receivableFilterTo"></label>
-                            <label>Dompet<select id="receivableFilterWallet"><option value="0">Semua dompet</option></select></label>
-                        </div>
-                        <div class="receivable-filter-status" id="receivableFilterStatusText">Menampilkan seluruh data piutang.</div>
-                    </div>
+                    </details>
 
                     <div class="feature-card receivable-recap-card">
                         <div class="feature-toolbar receivable-list-toolbar">
@@ -1875,12 +1883,15 @@ if (!function_exists('ck_icon')) {
                         <div class="receivable-people-list" id="receivablePeopleList"><div class="empty compact">Belum ada data piutang.</div></div>
                     </div>
 
-                    <div class="feature-card receivable-history-card">
-                        <div class="feature-toolbar receivable-list-toolbar">
+                    <details class="feature-card receivable-history-card">
+                        <summary class="receivable-history-summary">
                             <div><b>Riwayat Piutang</b><small>Riwayat mengikuti filter Rekap & PDF di atas.</small></div>
+                            <span>Show</span>
+                        </summary>
+                        <div class="receivable-history-body">
+                            <div class="receivable-history-list" id="receivableHistoryList"><div class="empty compact">Belum ada riwayat.</div></div>
                         </div>
-                        <div class="receivable-history-list" id="receivableHistoryList"><div class="empty compact">Belum ada riwayat.</div></div>
-                    </div>
+                    </details>
                 </section>
                 <section class="finance-tab-panel" data-finance-panel="budgets" hidden>
                     <div class="two-col-feature">

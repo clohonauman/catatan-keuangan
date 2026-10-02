@@ -133,7 +133,7 @@ final class FinanceRepository
         if(!empty($filters['category']))$q->andWhere(['category'=>$filters['category']]);
         if(!empty($filters['wallet_id'])){
             $wid=(int)$filters['wallet_id'];
-            $q->andWhere(['or',['wallet_id'=>$wid],['from_wallet_id'=>$wid],['to_wallet_id'=>$wid]]);
+            $q->andWhere(['or',['wallet_id'=>$wid],['from_wallet_id'=>$wid],['to_wallet_id'=>$wid],['like','extra_json','"fee_wallet_id":'.$wid],['like','extra_json','"wallet_id":'.$wid.',"amount"']]);
         }
         if(!empty($filters['search'])){
             $term=(string)$filters['search'];
@@ -145,7 +145,7 @@ final class FinanceRepository
         $total=(int)(clone $q)->count('*',self::db());
         $agg=(clone $q)->select([
             'income'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END),0)"),
-            'expense'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END),0)")
+            'expense'=>new \yii\db\Expression("COALESCE(SUM(CASE WHEN type='expense' THEN amount WHEN type='transfer' THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json,'$.fee_amount')),'0') AS UNSIGNED) ELSE 0 END),0)")
         ])->one(self::db()) ?: ['income'=>0,'expense'=>0];
         $sort=$filters['sort']??'date_desc';
         if($sort==='date_asc')$order=['transaction_date'=>SORT_ASC,'legacy_id'=>SORT_ASC];
@@ -165,7 +165,10 @@ final class FinanceRepository
 
     public static function monthlyExpenseCategories(int $userId,string $month): array {
         $from=$month.'-01';$to=date('Y-m-t',strtotime($from));
-        $rows=(new Query())->from('{{%finance_transaction}}')->select(['category','total'=>new \yii\db\Expression('SUM(amount)')])->where(['user_id'=>$userId,'type'=>'expense'])->andWhere(['between','transaction_date',$from,$to])->groupBy('category')->orderBy(['total'=>SORT_DESC])->all(self::db());
+        $rows=(new Query())->from('{{%finance_transaction}}')->select([
+            'category',
+            'total'=>new \yii\db\Expression("SUM(CASE WHEN type='expense' THEN amount WHEN type='transfer' THEN CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json,'$.fee_amount')),'0') AS UNSIGNED) ELSE 0 END)")
+        ])->where(['user_id'=>$userId])->andWhere(['between','transaction_date',$from,$to])->andWhere(['or',['type'=>'expense'],['type'=>'transfer']])->groupBy('category')->orderBy(['total'=>SORT_DESC])->all(self::db());
         return array_map(fn($r)=>['category'=>$r['category']?:'Lainnya','total'=>(int)$r['total']],$rows);
     }
 
@@ -194,6 +197,11 @@ final class FinanceRepository
         }catch(\Throwable $e){if($tx->getIsActive())$tx->rollBack();throw $e;}
     }
 
+    private static function walletExists(int $userId,int $walletId): bool {
+        if($walletId<=0)return false;
+        return (new Query())->from('{{%wallet}}')->where(['user_id'=>$userId,'legacy_id'=>$walletId,'archived'=>false])->exists(self::db());
+    }
+
     private static function walletAvailableForInsert(int $userId,int $walletId): array {
         $w=(new Query())->from('{{%wallet}}')->where(['user_id'=>$userId,'legacy_id'=>$walletId])->one(self::db());
         if(!$w)throw new \InvalidArgumentException('Dompet transaksi tidak ditemukan.');
@@ -204,6 +212,16 @@ final class FinanceRepository
         + COALESCE(SUM(CASE WHEN type='transfer' AND to_wallet_id=:w4 THEN amount ELSE 0 END),0) AS delta
         FROM {{%finance_transaction}} WHERE user_id=:u";
         $delta=(int)self::db()->createCommand($sql,[':u'=>$userId,':w1'=>$walletId,':w2'=>$walletId,':w3'=>$walletId,':w4'=>$walletId])->queryScalar();
+        $extraRows=(new Query())->from('{{%finance_transaction}}')->select(['type','extra_json'])->where(['user_id'=>$userId])->andWhere(['or',['like','extra_json','"split_sources"'],['like','extra_json','"fee_amount"']])->all(self::db());
+        foreach($extraRows as $row){
+            $meta=self::jdec($row['extra_json']??'',[]);
+            if(($row['type']??'')==='expense' && isset($meta['split_sources']) && is_array($meta['split_sources'])){
+                foreach($meta['split_sources'] as $part){
+                    if((int)($part['wallet_id']??0)===$walletId)$delta-=(int)($part['amount']??0);
+                }
+            }
+            if(($row['type']??'')==='transfer' && (int)($meta['fee_wallet_id']??0)===$walletId)$delta-=(int)($meta['fee_amount']??0);
+        }
         $extra=self::jdec($w['extra_json']??'',[]);
         if(strtolower((string)($w['type']??''))==='credit_card'){
             $limit=max(0,(int)($extra['credit_limit']??0));

@@ -3943,6 +3943,8 @@ function selectFinanceTab(tab) {
   updateFinanceCenterHeading(tab);
   document.querySelectorAll("[data-finance-tab]").forEach(b => b.classList.toggle("active", b.dataset.financeTab === tab));
   document.querySelectorAll("[data-finance-panel]").forEach(p => p.hidden = p.dataset.financePanel !== tab);
+  const financeContent = financeCenter?.querySelector(".finance-content");
+  if (financeContent) financeContent.scrollTo({ top: 0, behavior: "auto" });
   if (tab === "premium") loadSubscriptionPanel();
   if (tab === "simulation") loadSimulationForMonth(el("simulationMonth")?.value || simulationDefaultMonth());
   if (isSuperAdminFinanceTab(tab)) { loadAdminPanel(); refreshAdminNotifications(true); }
@@ -4204,7 +4206,24 @@ function renderReceivables(raw={}) {
     <div class="receivable-summary-card"><span>Peminjam aktif</span><b>${activeVisible} orang</b></div>`;
 
   const filterStatus = el("receivableFilterStatusText");
-  if (filterStatus) filterStatus.textContent = `Menampilkan ${view.people.length} peminjam dan ${view.entries.length} catatan sesuai filter. PDF akan memakai filter yang sama.`;
+  if (filterStatus) filterStatus.textContent = `Menampilkan ${view.people.length} peminjam dan ${view.entries.length} catatan sesuai filter.`;
+  const filterSummaryMeta = el("receivableFilterSummaryMeta");
+  const filterSummaryText = el("receivableFilterSummaryText");
+  if (filterSummaryMeta || filterSummaryText) {
+    const f = receivableFilterValues();
+    const activeFilterCount = [
+      f.borrower,
+      f.status !== "all" ? f.status : "",
+      f.action !== "all" ? f.action : "",
+      f.from,
+      f.to,
+      f.wallet ? String(f.wallet) : ""
+    ].filter(Boolean).length;
+    if (filterSummaryMeta) filterSummaryMeta.textContent = activeFilterCount ? `${activeFilterCount} filter aktif` : "Tanpa filter";
+    if (filterSummaryText) filterSummaryText.textContent = activeFilterCount
+      ? "Filter sedang diterapkan pada rekap, riwayat, CSV, dan PDF."
+      : "Gunakan filter seperlunya agar rekap tetap ringkas.";
+  }
 
   const lendBorrowerSelect = el("receivableLendBorrowerSelect");
   if (lendBorrowerSelect) {
@@ -4327,10 +4346,25 @@ function updateReceivableLendBorrowerMode() {
   }
 }
 
-function setReceivableMobileMode(mode="lend") {
+function setReceivableMobileMode(mode="lend", options={}) {
   mode = ["lend","repayment","interest"].includes(mode) ? mode : "lend";
   document.querySelectorAll("[data-receivable-form-mode]").forEach(b=>b.classList.toggle("is-active",b.dataset.receivableFormMode===mode));
   document.querySelectorAll("[data-receivable-form]").forEach(card=>card.classList.toggle("mobile-form-hidden",card.dataset.receivableForm!==mode));
+
+  if (options.scroll === false || !window.matchMedia("(max-width: 760px)").matches) return;
+  const content = financeCenter?.querySelector(".finance-content");
+  const panel = document.querySelector('[data-finance-panel="receivables"]');
+  const target = panel?.querySelector(`[data-receivable-form="${mode}"]`);
+  const stickyTabs = panel?.querySelector(".receivable-mobile-mode");
+  if (!content || !target || !stickyTabs) return;
+
+  window.requestAnimationFrame(() => {
+    const contentRect = content.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const stickyHeight = stickyTabs.getBoundingClientRect().height || 0;
+    const targetTop = content.scrollTop + (targetRect.top - contentRect.top) - stickyHeight - 10;
+    content.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+  });
 }
 
 function receivableEnsureOnline() {
@@ -4467,7 +4501,7 @@ el("resetReceivableFilters")?.addEventListener("click",resetReceivableFilters);
 el("downloadReceivableCsv")?.addEventListener("click",downloadReceivableCsv);
 el("downloadReceivablePdf")?.addEventListener("click",downloadReceivablePdf);
 document.querySelectorAll("[data-receivable-form-mode]").forEach(btn=>btn.addEventListener("click",()=>setReceivableMobileMode(btn.dataset.receivableFormMode)));
-setReceivableMobileMode("lend");
+setReceivableMobileMode("lend", { scroll: false });
 
 function syncWalletTypeFields() {
   const credit = String(el("walletType")?.value || "") === "credit_card";
