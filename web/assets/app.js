@@ -805,8 +805,13 @@ function localFilterTransactions(items) {
     if (txFilters.wallet_id) {
       const wid = Number(txFilters.wallet_id);
       if (type === "transfer") {
-        if (Number(t.from_wallet_id || 0) !== wid && Number(t.to_wallet_id || 0) !== wid) return false;
-      } else if (Number(t.wallet_id || 1) !== wid) return false;
+        if (Number(t.from_wallet_id || 0) !== wid && Number(t.to_wallet_id || 0) !== wid && Number(t.fee_wallet_id || 0) !== wid) return false;
+      } else {
+        const parts = Array.isArray(t.split_sources) ? t.split_sources : [];
+        if (parts.length) {
+          if (!parts.some(part => Number(part?.wallet_id || 0) === wid)) return false;
+        } else if (Number(t.wallet_id || 1) !== wid) return false;
+      }
     }
     if (txFilters.search) {
       const hay = `${t.note || ""} ${t.category || ""} ${t.amount || ""}`.toLowerCase();
