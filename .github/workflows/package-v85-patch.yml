@@ -1,9 +1,10 @@
 name: Build V85 Production Patch
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
     branches:
-      - build/v85-split-wallet-transfer-fee-zip
+      - patch/v85-split-wallet-transfer-fee-zip
 
 jobs:
   package-patch:
