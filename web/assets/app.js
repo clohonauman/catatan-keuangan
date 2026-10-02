@@ -5814,16 +5814,27 @@ el("saveTransactionCreate")?.addEventListener("click", async () => {
   if (type === "transfer") {
     payload.from_wallet_id = Number(el("createTxFromWallet")?.value || 0);
     payload.to_wallet_id = Number(el("createTxToWallet")?.value || 0);
+    payload.fee_amount = Number(el("createTxFee")?.value || 0);
     if (!payload.from_wallet_id || !payload.to_wallet_id) return alert("Pilih dompet asal dan tujuan.");
     if (payload.from_wallet_id === payload.to_wallet_id) return alert("Dompet asal dan tujuan harus berbeda.");
+    if (payload.fee_amount < 0) return alert("Biaya admin tidak valid.");
   } else {
-    payload.wallet_id = Number(el("createTxWallet")?.value || 0);
     payload.category = el("createTxCategory")?.value || "Lainnya";
-    if (!payload.wallet_id) return alert("Pilih dompet transaksi.");
-
     if (type === "expense") {
       payload.spending_kind = el("createTxSpendingKind")?.value || "once";
       payload.bill_id = Number(el("createTxBill")?.value || 0);
+      const sources = collectCreateTxSources();
+      const allocated = sources.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      if (!sources.length) return alert("Pilih minimal satu dompet sumber dana.");
+      if (allocated !== amount) return alert("Total sumber dana harus sama dengan nominal transaksi.");
+      if (sources.length > 1) {
+        payload.split_sources = sources;
+      } else {
+        payload.wallet_id = Number(sources[0].wallet_id || 0);
+      }
+    } else {
+      payload.wallet_id = Number(el("createTxWallet")?.value || 0);
+      if (!payload.wallet_id) return alert("Pilih dompet transaksi.");
     }
   }
 
