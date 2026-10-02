@@ -344,7 +344,21 @@ function financeSetMonthlyBudget($categoryId,$limit,$month='') {
 
 function financeMonthlyBudgetStatus($month='') {
     $month=financeMonthKey($month); $budgets=financeMonthlyBudgets($month); $spent=[];
-    foreach(allTransactions() as $t){if(($t['type']??'')!=='expense'||strpos((string)($t['transaction_date']??''),$month)!==0)continue;$name=(string)($t['category']??'Lainnya');$spent[strtolower($name)]=($spent[strtolower($name)]??0)+(int)($t['amount']??0);}
+    foreach(allTransactions() as $t){
+        if(strpos((string)($t['transaction_date']??''),$month)!==0)continue;
+        $type=(string)($t['type']??'');
+        if($type==='expense'){
+            $name=(string)($t['category']??'Lainnya');
+            $key=strtolower($name);
+            $spent[$key]=($spent[$key]??0)+(int)($t['amount']??0);
+        }elseif($type==='transfer'){
+            $fee=transactionTransferFee((array)$t);
+            if((int)$fee['amount']>0){
+                $key=strtolower('Transfer Antar Dompet');
+                $spent[$key]=($spent[$key]??0)+(int)$fee['amount'];
+            }
+        }
+    }
     $out=[];
     foreach($budgets as $b){$cat=financeCategoryById((int)$b['category_id']);if(!$cat)continue;$used=(int)($spent[strtolower((string)$cat['name'])]??0);$limit=(int)$b['limit'];$pct=$limit>0?(int)round($used/$limit*100):0;$out[]=['category_id'=>(int)$cat['id'],'category'=>$cat['name'],'icon'=>$cat['icon'],'limit'=>$limit,'spent'=>$used,'remaining'=>max(0,$limit-$used),'over'=>max(0,$used-$limit),'percent'=>$pct,'status'=>$used>$limit?'exceeded':($pct>=80?'warning':'safe')];}
     return $out;
