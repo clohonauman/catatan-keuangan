@@ -367,10 +367,21 @@ function financeMonthlyBudgetStatus($month='') {
 function financeAppendTransactionData(&$d,$t) {
     $type=(string)($t['type']??'expense');
     $amount=max(0,(int)($t['amount']??0));
-    if($type==='expense') assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
-    elseif($type==='transfer'){
-        assertWalletSpendAllowedData($d,(int)($t['from_wallet_id']??0),$amount);
-        assertWalletCreditPaymentAllowedData($d,(int)($t['to_wallet_id']??0),$amount);
+    if($type==='expense'){
+        $allocations=transactionWalletAllocations((array)$t);
+        if($allocations){
+            $sum=0;
+            foreach($allocations as $row){$sum+=(int)$row['amount'];assertWalletSpendAllowedData($d,(int)$row['wallet_id'],(int)$row['amount']);}
+            if($sum!==$amount)throw new InvalidArgumentException('Total alokasi sumber dana harus sama dengan nominal transaksi.');
+        }else{
+            assertWalletSpendAllowedData($d,(int)($t['wallet_id']??1),$amount);
+        }
+    }elseif($type==='transfer'){
+        $from=(int)($t['from_wallet_id']??0);$to=(int)($t['to_wallet_id']??0);$fee=transactionTransferFee((array)$t);
+        $spend=$amount+((int)$fee['wallet_id']===$from?(int)$fee['amount']:0);
+        assertWalletSpendAllowedData($d,$from,$spend);
+        if((int)$fee['amount']>0&&(int)$fee['wallet_id']!==$from)assertWalletSpendAllowedData($d,(int)$fee['wallet_id'],(int)$fee['amount']);
+        assertWalletCreditPaymentAllowedData($d,$to,$amount);
     }
     $id=(int)$d['meta']['next_transaction_id']++;
     $x=['id'=>$id,'type'=>$type,'category'=>(string)($t['category']??'Lainnya'),'amount'=>$amount,'note'=>substr(trim((string)($t['note']??'')),0,255),'transaction_date'=>(string)($t['transaction_date']??date('Y-m-d')),'created_at'=>date('Y-m-d H:i:s')];
