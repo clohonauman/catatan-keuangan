@@ -4524,7 +4524,19 @@ el("saveWallet")?.addEventListener("click", async()=>{try{
   resetWalletForm(); await load();
 }catch(e){alert(e.message)}});
 
-el("saveTransfer")?.addEventListener("click", async()=>{try{await featureAction({action:"wallet_transfer",from_wallet_id:Number(el("transferFrom").value),to_wallet_id:Number(el("transferTo").value),amount:Number(el("transferAmount").value||0),note:el("transferNote").value},"Transfer dicatat");el("transferAmount").value="";el("transferNote").value="";await load();}catch(e){alert(e.message)}});
+el("saveTransfer")?.addEventListener("click", async()=>{try{
+  const fee=Number(el("transferFee")?.value||0);
+  await featureAction({
+    action:"wallet_transfer",
+    from_wallet_id:Number(el("transferFrom").value),
+    to_wallet_id:Number(el("transferTo").value),
+    amount:Number(el("transferAmount").value||0),
+    fee_amount:fee,
+    note:el("transferNote").value
+  },"Transfer dicatat");
+  el("transferAmount").value="";el("transferFee").value="";el("transferNote").value="";
+  await load();
+}catch(e){alert(e.message)} });
 
 function renderCategories(categories, budgets) {
   const box=el("categoryList"); if(!box)return;
