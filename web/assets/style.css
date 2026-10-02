@@ -3587,6 +3587,33 @@ dialog[open]>.feature-toast.in-dialog{
 }
 
 
+/* ===== V86 - Piutang history header cleanup ===== */
+.receivable-history-card{padding:0!important;overflow:hidden}
+.receivable-history-toggle{
+  appearance:none;-webkit-appearance:none;width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  border:0;background:transparent;padding:15px 16px;text-align:left;color:inherit;cursor:pointer;font:inherit
+}
+.receivable-history-toggle:hover{background:var(--surface-2)}
+.receivable-history-toggle:focus-visible{outline:3px solid rgba(23,92,211,.16);outline-offset:-3px}
+.receivable-history-toggle-copy{min-width:0}
+.receivable-history-toggle-copy b{display:block;font-size:14px;line-height:1.25}
+.receivable-history-toggle-copy small{display:block;margin-top:3px;color:var(--muted);font-size:11px;line-height:1.45}
+.receivable-history-toggle-icon{
+  width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface-2);color:#667085;font-size:18px;font-weight:800;line-height:1;
+  transform:rotate(180deg);transition:transform .18s ease,background .18s ease
+}
+.receivable-history-toggle:hover .receivable-history-toggle-icon{background:#fff;color:var(--primary)}
+.receivable-history-toggle:not(.is-open) .receivable-history-toggle-icon{transform:rotate(0)}
+.receivable-history-content{border-top:1px solid var(--line);padding:0 16px 16px}
+.receivable-history-content[hidden]{display:none!important}
+.receivable-history-content .receivable-history-list{margin-top:12px}
+@media(max-width:760px){
+  .receivable-history-toggle{padding:14px}
+  .receivable-history-toggle-icon{width:30px;height:30px;flex-basis:30px;border-radius:9px}
+  .receivable-history-content{padding:0 13px 13px}
+}
+
 /* ===== V71 - PDF Piutang download feedback ===== */
 .btn-inline-spinner{
   display:inline-block;
