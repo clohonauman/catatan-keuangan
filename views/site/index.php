@@ -2444,6 +2444,9 @@ if (!function_exists('ck_icon')) {
                 <label class="create-transfer-field" hidden>Ke dompet
                     <select id="createTxToWallet"></select>
                 </label>
+                <label class="create-transfer-field" hidden>Admin fee
+                    <input type="text" id="createTxFee" class="currency-input" inputmode="numeric" placeholder="0">
+                </label>
 
                 <label class="full">Keterangan
                     <input id="createTxNote" maxlength="255" placeholder="Opsional, misalnya: Isi Pertamax">
