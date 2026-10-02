@@ -1,0 +1,46 @@
+name: Build V86 Receivable UI Patch ZIP
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package patch
+        run: |
+          mkdir -p patch
+          cp web/assets/app.js patch/app.js
+          cp web/assets/style.css patch/style.css
+          cp web/sw.js patch/sw.js
+          cp views/site/index.php patch/index.php
+          cat > patch/INSTALL.txt <<'EOF'
+V86 - Rapikan Header Riwayat Piutang
+
+Timpa file berikut sesuai path asli:
+1. patch/app.js    -> web/assets/app.js
+2. patch/style.css -> web/assets/style.css
+3. patch/sw.js     -> web/sw.js
+4. patch/index.php -> views/site/index.php
+
+Perubahan:
+- Header "Riwayat Piutang" dibuat menjadi satu kontrol yang rapi.
+- Tombol "Tutup" model pill dihilangkan.
+- Chevron menjadi indikator buka/tutup yang jelas.
+- Riwayat dapat dibuka/tutup tanpa layout yang berantakan, termasuk mobile.
+- Service Worker cache dinaikkan ke v109.
+EOF
+          cd patch
+          zip -r ../catatan-keuangan-v86-receivable-history-ui.zip .
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: catatan-keuangan-v86-receivable-history-ui
+          path: catatan-keuangan-v86-receivable-history-ui.zip
+          if-no-files-found: error
