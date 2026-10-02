@@ -194,6 +194,11 @@ final class FinanceRepository
         }catch(\Throwable $e){if($tx->getIsActive())$tx->rollBack();throw $e;}
     }
 
+    private static function walletExists(int $userId,int $walletId): bool {
+        if($walletId<=0)return false;
+        return (new Query())->from('{{%wallet}}')->where(['user_id'=>$userId,'legacy_id'=>$walletId,'archived'=>false])->exists(self::db());
+    }
+
     private static function walletAvailableForInsert(int $userId,int $walletId): array {
         $w=(new Query())->from('{{%wallet}}')->where(['user_id'=>$userId,'legacy_id'=>$walletId])->one(self::db());
         if(!$w)throw new \InvalidArgumentException('Dompet transaksi tidak ditemukan.');
