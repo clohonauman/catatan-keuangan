@@ -198,19 +198,26 @@ final class FinanceRepository
         $w=(new Query())->from('{{%wallet}}')->where(['user_id'=>$userId,'legacy_id'=>$walletId])->one(self::db());
         if(!$w)throw new \InvalidArgumentException('Dompet transaksi tidak ditemukan.');
         $sql="SELECT
-          COALESCE(SUM(CASE WHEN type='income' AND wallet_id=:w1 THEN amount ELSE 0 END),0)
-        - COALESCE(SUM(CASE WHEN type='expense' AND wallet_id=:w2 THEN amount ELSE 0 END),0)
-        - COALESCE(SUM(CASE WHEN type='transfer' AND from_wallet_id=:w3 THEN amount ELSE 0 END),0)
-        + COALESCE(SUM(CASE WHEN type='transfer' AND to_wallet_id=:w4 THEN amount ELSE 0 END),0) AS delta
+          COALESCE(SUM(CASE WHEN type='income' AND wallet_id=:w1 THEN amount ELSE 0 END),0) AS income_amount,
+          COALESCE(SUM(CASE WHEN type='expense' AND wallet_id=:w2 THEN amount ELSE 0 END),0) AS expense_amount,
+          COALESCE(SUM(CASE WHEN type='transfer' AND from_wallet_id=:w3 THEN amount ELSE 0 END),0) AS transfer_out_amount,
+          COALESCE(SUM(CASE WHEN type='transfer' AND to_wallet_id=:w4 THEN amount ELSE 0 END),0) AS transfer_in_amount
         FROM {{%finance_transaction}} WHERE user_id=:u";
-        $delta=(int)self::db()->createCommand($sql,[':u'=>$userId,':w1'=>$walletId,':w2'=>$walletId,':w3'=>$walletId,':w4'=>$walletId])->queryScalar();
+        $deltaRow=self::db()->createCommand($sql,[':u'=>$userId,':w1'=>$walletId,':w2'=>$walletId,':w3'=>$walletId,':w4'=>$walletId])->queryOne() ?: [];
+        $income=(int)($deltaRow['income_amount']??0);
+        $expense=(int)($deltaRow['expense_amount']??0);
+        $transferOut=(int)($deltaRow['transfer_out_amount']??0);
+        $transferIn=(int)($deltaRow['transfer_in_amount']??0);
+        $delta=$income-$expense-$transferOut+$transferIn;
+
         $extra=self::jdec($w['extra_json']??'',[]);
         if(strtolower((string)($w['type']??''))==='credit_card'){
             $limit=max(0,(int)($extra['credit_limit']??0));
             $openingDebt=max(0,(int)($extra['opening_debt']??0));
-            $raw=-$openingDebt+$delta;
-            $debt=max(0,-$raw);
-            return ['name'=>(string)$w['name'],'type'=>'credit_card','gross'=>$raw,'debt'=>$debt,'limit'=>$limit,'available'=>max(0,$limit-$debt)];
+            // Transfer masuk ke kartu kredit adalah pembayaran dan langsung
+            // mengurangi utang, sehingga sisa limit bertambah dengan nominal pembayaran.
+            $debt=max(0,$openingDebt+$expense+$transferOut-$income-$transferIn);
+            return ['name'=>(string)$w['name'],'type'=>'credit_card','gross'=>-$debt,'debt'=>$debt,'limit'=>$limit,'available'=>max(0,$limit-$debt)];
         }
         $gross=(int)$w['initial_balance']+$delta;$reserved=max(0,(int)$w['reserved_balance']);$minimum=max(0,(int)$w['minimum_balance']);
         return ['name'=>(string)$w['name'],'type'=>(string)($w['type']??'cash'),'gross'=>$gross,'reserved'=>$reserved,'minimum'=>$minimum,'available'=>max(0,$gross-$reserved-$minimum)];
