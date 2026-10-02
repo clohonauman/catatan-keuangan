@@ -1,4 +1,4 @@
-name: Build V86 Receivable History UI Patch ZIP
+name: Build V86 Receivable History UI Patch ZIP v2
 
 on:
   pull_request:
