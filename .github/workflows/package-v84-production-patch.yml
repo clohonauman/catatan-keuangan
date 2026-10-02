@@ -1,10 +1,10 @@
-name: Build V86 Production Patch ZIP
+name: Build V86 Receivable History UI Patch ZIP
 
 on:
   pull_request:
     types: [opened, synchronize]
     branches:
-      - patch/v86-notification-badge
+      - patch/v84-notification-badge
 
 jobs:
   package:
@@ -25,8 +25,7 @@ V86 Production Patch - Catatan Keuangan
 
 Timpa file berikut pada production sesuai path asli:
 1. patch/app.js             -> web/assets/app.js
-3. patch/currency-input.js   -> web/assets/currency-input.js
-4. patch/sw.js               -> web/sw.js
+3. patch/sw.js             -> web/sw.js
 4. patch/index.php          -> views/site/index.php
 
 Setelah upload, refresh aplikasi. Bila Service Worker masih memakai cache lama,
