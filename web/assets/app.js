@@ -5729,8 +5729,10 @@ function resetCreateTransactionForm() {
   if (el("createTxNote")) el("createTxNote").value = "";
   if (el("createTxSpendingKind")) el("createTxSpendingKind").value = "once";
   if (el("createTxBill")) el("createTxBill").value = "0";
+  if (el("createTxFee")) el("createTxFee").value = "";
 
   renderFeatureSelectOptions();
+  renderCreateTxSources();
   fillCreateTxCategories();
 
   const wallets = featureState()?.wallets || [];
@@ -5757,6 +5759,25 @@ el("addTransactionBtn")?.addEventListener("click", async () => {
 });
 
 el("createTxType")?.addEventListener("change", syncCreateTxType);
+el("addCreateTxSource")?.addEventListener("click", () => {
+  const rows = collectCreateTxSources();
+  const total = Number(el("createTxAmount")?.value || 0);
+  const current = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  rows.push({ wallet_id: 0, amount: Math.max(0, total - current) });
+  renderCreateTxSources(rows);
+});
+el("createTxAmount")?.addEventListener("input", () => {
+  const rows = collectCreateTxSources();
+  if (rows.length === 1 && (Number(rows[0].amount || 0) === 0 || !rows[0].amount)) {
+    rows[0].amount = Number(el("createTxAmount")?.value || 0);
+    renderCreateTxSources(rows);
+  } else {
+    syncCreateTxSourceSummary();
+  }
+});
+el("transferAmount")?.addEventListener("input", syncCreateTxSourceSummary);
+el("transferFee")?.addEventListener("input", syncCreateTxSourceSummary);
+el("createTxFee")?.addEventListener("input", syncCreateTxSourceSummary);
 el("closeTransactionCreate")?.addEventListener("click", () => { activeInboxEditId = 0; resetManualTransactionTitle(); txCreateModal?.close(); });
 el("cancelTransactionCreate")?.addEventListener("click", () => { activeInboxEditId = 0; resetManualTransactionTitle(); txCreateModal?.close(); });
 
