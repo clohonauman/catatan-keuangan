@@ -619,7 +619,12 @@ function authLogin($username, $password)
     $username = trim((string)$username);
     authLoginThrottleAssert($username);
 
+    // Login accepts either username or email address. Keep the same password
+    // verification and throttling behavior for both identifiers.
     $user = authFindUserByUsername($username);
+    if (!$user && filter_var($username, FILTER_VALIDATE_EMAIL)) {
+        $user = authFindUserByEmail($username);
+    }
     if (!$user || empty($user['password_hash']) || !password_verify((string)$password, (string)$user['password_hash'])) {
         authLoginThrottleFailure($username);
         throw new RuntimeException('Username atau password salah.');

@@ -25,7 +25,7 @@ $initialJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLAS
         </div>
         <div class="planning-header-actions">
             <span class="premium-chip">Premium</span>
-            <a class="header-link" href="<?= h($baseUrl) ?>/index.php?app=chooser">Pilih Aplikasi</a>
+            <a class="header-link" href="<?= h($baseUrl) ?>/index.php?r=site%2Findex&amp;app=chooser">Pilih Aplikasi</a>
             <form method="post" action="<?= h($baseUrl) ?>/index.php">
                 <input type="hidden" name="<?= h(Yii::$app->request->csrfParam) ?>" value="<?= h($csrfToken) ?>">
                 <input type="hidden" name="action" value="set_preferred_app">

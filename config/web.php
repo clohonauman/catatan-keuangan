@@ -6,6 +6,7 @@ if(YII_ENV==='prod' && (strlen($appKey)<32 || $appKey==='CHANGE_ME_TO_A_LONG_RAN
 }
 $config = [
     'id' => 'catatan-keuangan',
+    'defaultRoute' => 'app-portal/index',
     'basePath' => dirname(__DIR__),
     'bootstrap' => ['log'],
     'timeZone' => 'Asia/Makassar',

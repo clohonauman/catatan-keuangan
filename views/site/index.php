@@ -663,20 +663,137 @@ if (!function_exists('ck_icon')) {
         }
     }
 
-    .google-auth-divider{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:#98a2b3;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
-    .google-auth-divider:before,.google-auth-divider:after{content:"";height:1px;flex:1;background:#e4e7ec}
-    .google-auth-box{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;margin-top:4px}
-    #googleLoginButton{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px}
-    .google-auth-help{margin:0;max-width:360px;text-align:center;color:#667085;font-size:12px;line-height:1.55}
-    .google-auth-status{margin:0;color:#475467;font-size:13px;text-align:center;line-height:1.5}
-    .google-auth-not-configured{border:1px solid #e4e7ec;background:#f8fafc;color:#667085;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5;text-align:center;margin-top:16px}
-    .google-auth-form[hidden]{display:none!important}
-    .google-native-signin-button{display:flex;align-items:center;justify-content:center;gap:12px;width:min(100%,320px);min-height:44px;padding:0 16px;border:1px solid #747775;border-radius:4px;background:#fff;color:#1f1f1f;font-family:Arial,Roboto,sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(60,64,67,.18);transition:background .15s,border-color .15s}
-    .google-native-signin-button:hover{background:#f8faff;border-color:#5f6368}
-    .google-native-signin-button:focus-visible{outline:3px solid rgba(66,133,244,.3);outline-offset:2px}
-    .google-native-signin-button:disabled{opacity:.6;cursor:wait}
-    .google-native-signin-button svg{width:18px;height:18px;flex:0 0 18px}
-    @media(max-width:420px){#googleLoginButton{transform:scale(.96);transform-origin:center}}
+
+    /* v2.6.2 VISUAL ONLY — authentication pages */
+    .auth-shell {
+        position: relative !important;
+        isolation: isolate;
+        background:
+            radial-gradient(ellipse at 12% 10%, rgba(61, 126, 245, .17), transparent 38%),
+            radial-gradient(ellipse at 88% 88%, rgba(124, 92, 245, .10), transparent 34%),
+            linear-gradient(145deg, #f7f9fe 0%, #edf3fc 52%, #f7f8fd 100%) !important;
+    }
+    .auth-shell::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: radial-gradient(rgba(23, 92, 211, .12) .7px, transparent .7px);
+        background-size: 18px 18px;
+        opacity: .23;
+        mask-image: linear-gradient(to bottom right, #000, transparent 72%);
+    }
+    .auth-card {
+        position: relative !important;
+        width: min(440px, 100%) !important;
+        padding: clamp(25px, 4vw, 38px) !important;
+        border: 1px solid rgba(255, 255, 255, .96) !important;
+        border-radius: 29px !important;
+        background: rgba(255, 255, 255, .94) !important;
+        box-shadow: 0 28px 85px rgba(24, 45, 86, .14), 0 3px 12px rgba(24, 45, 86, .04) !important;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        overflow: hidden;
+    }
+    .auth-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 5px;
+        background: linear-gradient(90deg, #175cd3 0%, #4f83f1 55%, #8e7bf1 100%);
+    }
+    .auth-brand { margin-bottom: 27px !important; }
+    .auth-logo {
+        display: grid !important;
+        place-items: center !important;
+        width: 68px !important;
+        height: 68px !important;
+        margin: 0 auto 15px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        border: 1px solid #e4ebf7 !important;
+        border-radius: 21px !important;
+        background: linear-gradient(145deg, #f6f9ff, #eaf1ff) !important;
+        box-shadow: 0 10px 24px rgba(23, 92, 211, .13) !important;
+        font-size: 0 !important;
+    }
+    .auth-logo img {
+        display: block !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    .auth-brand h1 {
+        color: #18243a !important;
+        font-size: clamp(25px, 4vw, 29px) !important;
+        font-weight: 850 !important;
+        letter-spacing: -.85px !important;
+        line-height: 1.14 !important;
+    }
+    .auth-brand p { color: #7c879b !important; font-size: 12.5px !important; line-height: 1.55 !important; }
+    .auth-card h2 { margin: 8px 0 7px !important; color: #1c2940 !important; font-size: 22px !important; font-weight: 820 !important; letter-spacing: -.45px !important; }
+    .auth-card > .muted { margin-top: 0; line-height: 1.6; color: #778399 !important; }
+    .auth-form { gap: 9px !important; }
+    .auth-form label { margin-top: 8px !important; color: #44536a !important; font-size: 12px !important; font-weight: 780 !important; }
+    .auth-form input:not([type="hidden"]):not([type="checkbox"]) {
+        min-height: 49px;
+        padding: 12px 14px !important;
+        border: 1px solid #dce4f0 !important;
+        border-radius: 14px !important;
+        background: #fbfcff !important;
+        color: #19283f !important;
+        font-size: 15px !important;
+        box-shadow: inset 0 1px 1px rgba(18, 37, 68, .015);
+        transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    .auth-form input:not([type="hidden"]):not([type="checkbox"]):hover { border-color: #c8d5e9 !important; }
+    .auth-form input:not([type="hidden"]):not([type="checkbox"]):focus {
+        border-color: #7fa7f6 !important;
+        background: #fff !important;
+        box-shadow: 0 0 0 4px rgba(23, 92, 211, .10) !important;
+    }
+    .auth-form input::placeholder { color: #a0aabc !important; }
+    .auth-form .secret-field { border-radius: 14px; }
+    .auth-form .secret-field input { padding-right: 48px !important; }
+    .auth-form .wide, .auth-form button.wide, .auth-form .btn.wide {
+        min-height: 49px;
+        border-radius: 14px !important;
+        font-size: 14px !important;
+        font-weight: 800 !important;
+        letter-spacing: -.1px;
+    }
+    .auth-form .btn.primary, .auth-form button.primary {
+        background: linear-gradient(135deg, #2563d9 0%, #174fb7 100%) !important;
+        box-shadow: 0 10px 20px rgba(23, 92, 211, .20) !important;
+    }
+    .auth-form .btn.primary:hover, .auth-form button.primary:hover { filter: brightness(1.035); box-shadow: 0 13px 25px rgba(23, 92, 211, .24) !important; }
+    .forgot-password-row { margin-top: 1px; }
+    .forgot-password-row a { color: #1b5ecf !important; font-size: 11px; font-weight: 750; text-decoration: none; }
+    .forgot-password-row a:hover, .auth-switch a:hover, .auth-legal-links a:hover { text-decoration: underline; }
+    .auth-switch { margin: 19px 0 0 !important; color: #78859a !important; font-size: 12px !important; line-height: 1.6; }
+    .auth-switch a { color: #175cd3 !important; font-weight: 800 !important; }
+    .auth-legal-links { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 19px; padding-top: 15px; border-top: 1px solid #edf1f7; color: #adb5c2; font-size: 10px; }
+    .auth-legal-links a { color: #8b96a8 !important; text-decoration: none; }
+    .auth-card .alert.error { padding: 12px 14px; border-radius: 14px; line-height: 1.5; box-shadow: none; }
+    .auth-card .alert.success { padding: 12px 14px; border-radius: 14px; line-height: 1.5; }
+    .google-login-separator { margin: 18px 0 14px !important; color: #9aa5b5 !important; font-size: 11px !important; font-weight: 700; }
+    .google-login-area { gap: 9px !important; }
+    #googleSignInButton { width: 100% !important; min-height: 44px !important; justify-content: center !important; }
+    #googleSignInButton > div, #googleSignInButton iframe { max-width: 100% !important; }
+    .google-login-hint { color: #929daf !important; font-size: 10px !important; }
+    @media (max-width: 520px) {
+        .auth-shell { padding: max(16px, env(safe-area-inset-top)) 13px max(28px, env(safe-area-inset-bottom)) !important; }
+        .auth-card { width: 100% !important; padding: 27px 21px 23px !important; border-radius: 25px !important; }
+        .auth-brand { margin-bottom: 23px !important; }
+        .auth-logo { width: 60px !important; height: 60px !important; border-radius: 18px !important; }
+        .auth-brand h1 { font-size: 25px !important; }
+        .auth-form label { margin-top: 6px !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .auth-form input, .auth-form button { transition: none !important; }
+    }
+
     </style>
     <?php endif; ?>
 </head>
@@ -793,7 +910,7 @@ if (!function_exists('ck_icon')) {
             <p class="auth-switch">Sudah punya akun? <a href="index.php">Login</a></p>
             <?php else: ?>
             <h2>Login</h2>
-            <p class="muted">Masuk dengan username dan password. Setelah itu perangkat ini bisa menggunakan PIN.</p>
+            <p class="muted">Masuk dengan username dan password atau akun Google yang emailnya sudah terverifikasi.</p>
             <form method="post" class="auth-form" id="loginForm" data-login-form><?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?><input type="hidden" name="action" value="login">
                 <label>Username</label><input name="username" required autocomplete="username">
                 <label>Password</label>
@@ -808,103 +925,65 @@ if (!function_exists('ck_icon')) {
                     <span class="login-submit-loading" aria-hidden="true"><span class="login-submit-spinner"></span><span>Memproses...</span></span>
                 </button>
             </form>
-            <?php if (!empty($googleClientId)): ?>
-            <div class="google-auth-divider"><span>atau</span></div>
-            <div class="google-auth-box">
-                <div id="googleLoginButton" aria-label="Masuk dengan Google"></div>
-                <p class="google-auth-help">Gunakan akun Google dengan email terverifikasi yang sudah terhubung ke akun Catatan Keuangan Anda.</p>
-                <p class="google-auth-status" id="googleLoginStatus" role="status" aria-live="polite" hidden></p>
+            <?php if (!empty($googleClientId) && !empty($googleNonce)): ?>
+            <div class="google-login-separator" aria-hidden="true"><span>atau</span></div>
+            <div class="google-login-area">
+                <div id="googleSignInButton" aria-label="Login dengan Google"></div>
+                <button type="button" id="googleNativeSignInButton" class="btn-google-native" hidden>Masuk dengan Google</button>
+                <p class="google-login-hint" id="googleLoginHint">Gunakan akun Google dengan email terverifikasi.</p>
             </div>
-            <form method="post" id="googleLoginForm" class="google-auth-form" hidden>
+            <form method="post" action="index.php?r=site%2Findex" id="googleLoginForm" data-google-login-form hidden>
                 <?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                 <input type="hidden" name="action" value="google_login">
-                <input type="hidden" name="google_nonce" value="<?= h((string)$googleLoginNonce) ?>">
-                <input type="hidden" name="credential" id="googleLoginCredential" value="">
+                <input type="hidden" name="credential" id="googleIdToken" value="">
             </form>
+            <style>
+              [hidden]{display:none!important}
+              .google-login-separator{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:#98a2b3;font-size:11px}
+              .google-login-separator:before,.google-login-separator:after{content:"";height:1px;flex:1;background:#e7ebf2}
+              .google-login-area{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:42px}
+              #googleSignInButton,#googleNativeSignInButton{width:100%;display:flex;justify-content:center;min-height:40px}
+              #googleSignInButton>div{max-width:100%}
+              .btn-google-native{align-items:center;justify-content:center;border:1px solid #dadce0;border-radius:6px;background:#fff;color:#3c4043;font-weight:600;cursor:pointer;padding:10px 14px}
+              .google-login-hint{margin:0;color:#929daf;font-size:10px;text-align:center;line-height:1.5}
+            </style>
             <script>
             (function(){
-                var clientId = <?= json_encode((string)$googleClientId, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-                var nonce = <?= json_encode((string)$googleLoginNonce, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-                var initialized = false;
-                var nativeInProgress = false;
-                function setStatus(message){var node=document.getElementById('googleLoginStatus');if(node){node.hidden=!message;node.textContent=message||'';}}
-                function nativeBridgeAvailable(){return !!(window.AndroidGoogleSignIn && typeof window.AndroidGoogleSignIn.signIn === 'function');}
-                function setButtonBusy(busy){
-                    var box=document.getElementById('googleLoginButton');
-                    if(!box)return;
-                    if(busy){box.setAttribute('aria-busy','true');box.style.opacity='.68';box.style.pointerEvents='none';}
-                    else{box.removeAttribute('aria-busy');box.style.opacity='';box.style.pointerEvents='';}
-                    var button=box.querySelector('button');if(button)button.disabled=!!busy;
-                }
-                function submitGoogleCredential(credential){
-                    credential = typeof credential === 'string' ? credential : '';
-                    if(!credential){setStatus('Google tidak mengembalikan kredensial. Silakan coba lagi.');setButtonBusy(false);nativeInProgress=false;return;}
-                    var form=document.getElementById('googleLoginForm');
-                    var input=document.getElementById('googleLoginCredential');
-                    if(!form || !input){setStatus('Form login Google tidak tersedia. Muat ulang halaman dan coba lagi.');setButtonBusy(false);nativeInProgress=false;return;}
-                    input.value=credential;
-                    setStatus('Memverifikasi akun Google…');
-                    setButtonBusy(true);
-                    HTMLFormElement.prototype.submit.call(form);
-                }
-                function renderNativeGoogleButton(button){
-                    if(!button || button.dataset.nativeGoogleReady==='1')return;
-                    button.dataset.nativeGoogleReady='1';
-                    button.innerHTML='<button type="button" id="googleNativeSignInButton" class="google-native-signin-button"><svg aria-hidden="true" viewBox="0 0 48 48" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.57 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.74 7.18l7.65 5.93c4.47-4.13 7.13-10.21 7.13-17.58z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.75-4.59l-7.98-6.19A23.91 23.91 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.27-8.25 2.27-6.26 0-11.57-4.07-13.47-9.72l-7.98 6.19C6.51 43.62 14.62 48 24 48z"/></svg><span>Masuk dengan Google</span></button>';
-                    var nativeButton=document.getElementById('googleNativeSignInButton');
-                    if(nativeButton)nativeButton.addEventListener('click',function(){
-                        if(!nativeBridgeAvailable()){setStatus('Login Google native tidak tersedia. Perbarui aplikasi Android Anda.');return;}
-                        if(nativeInProgress)return;
-                        nativeInProgress=true;setButtonBusy(true);setStatus('Memilih akun Google…');
-                        try{window.AndroidGoogleSignIn.signIn(nonce,clientId);}
-                        catch(error){nativeInProgress=false;setButtonBusy(false);setStatus('Login Google belum dapat dimulai. Silakan coba lagi.');}
-                    });
-                }
-                window.ckGoogleNativeSignInSuccess=function(credential){submitGoogleCredential(credential);};
-                window.ckGoogleNativeSignInError=function(message){nativeInProgress=false;setButtonBusy(false);setStatus(message||'Login Google belum berhasil. Silakan coba lagi.');};
-                window.ckGoogleNativeSignInProgress=function(message){setStatus(message||'Memilih akun Google…');};
-                window.ckGoogleLoginInit = function(){
-                    var button=document.getElementById('googleLoginButton');
-                    if(!button)return false;
-                    // APK baru menggunakan Credential Manager native, bukan browser OAuth eksternal.
-                    if(nativeBridgeAvailable()){
-                        if(!initialized){initialized=true;renderNativeGoogleButton(button);}
-                        return true;
-                    }
-                    if(initialized || !window.google || !google.accounts || !google.accounts.id)return false;
-                    initialized=true;
-                    google.accounts.id.initialize({
-                        client_id: clientId,
-                        nonce: nonce,
-                        auto_select: false,
-                        cancel_on_tap_outside: true,
-                        callback: function(response){
-                            var credential=response&&response.credential?String(response.credential):'';
-                            submitGoogleCredential(credential);
-                        }
-                    });
-                    google.accounts.id.renderButton(button,{type:'standard',theme:'outline',size:'large',text:'signin_with',shape:'rectangular',logo_alignment:'left',width:320});
-                    setStatus('');
-                    return true;
-                };
-                window.ckGoogleLoginLoadError=function(){if(nativeBridgeAvailable())return;setStatus('Tidak dapat memuat layanan Google. Periksa koneksi internet dan coba lagi.');};
-                if(nativeBridgeAvailable()){
-                    window.ckGoogleLoginInit();
-                }else{
-                    if(window.google&&window.google.accounts&&window.google.accounts.id)window.ckGoogleLoginInit();
-                    var script=document.createElement('script');
-                    script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;
-                    script.onload=function(){if(!window.ckGoogleLoginInit())setTimeout(function(){window.ckGoogleLoginInit();},350);};
-                    script.onerror=function(){window.ckGoogleLoginLoadError();};
-                    document.head.appendChild(script);
-                    window.addEventListener('load',function(){if(!window.ckGoogleLoginInit())window.setTimeout(function(){if(!window.ckGoogleLoginInit())window.ckGoogleLoginLoadError();},3500);},{once:true});
-                }
+              var clientId=<?= json_encode($googleClientId, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+              var nonce=<?= json_encode($googleNonce, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+              var form=document.getElementById('googleLoginForm');
+              var token=document.getElementById('googleIdToken');
+              var hint=document.getElementById('googleLoginHint');
+              var webButton=document.getElementById('googleSignInButton');
+              var nativeButton=document.getElementById('googleNativeSignInButton');
+              function submitToken(value){
+                if(!value||typeof value!=='string'){if(hint)hint.textContent='Google tidak mengembalikan token login. Silakan coba kembali.';return;}
+                token.value=value;
+                form.submit();
+              }
+              window.ckGoogleNativeSignInSuccess=submitToken;
+              window.ckGoogleNativeSignInError=function(message){if(hint)hint.textContent=message||'Login Google belum berhasil. Silakan coba lagi.';};
+              if(window.AndroidGoogleSignIn && typeof window.AndroidGoogleSignIn.signIn==='function'){
+                if(webButton)webButton.hidden=true;
+                if(nativeButton){nativeButton.hidden=false;nativeButton.addEventListener('click',function(){
+                  if(hint)hint.textContent='Menghubungkan ke Google…';
+                  try{window.AndroidGoogleSignIn.signIn(nonce,clientId);}catch(e){window.ckGoogleNativeSignInError('Login Google belum dapat dimulai. Muat ulang halaman lalu coba lagi.');}
+                });}
+                return;
+              }
+              var boot=function(){
+                if(!window.google||!google.accounts||!google.accounts.id){if(hint)hint.textContent='Login Google belum dapat dimuat. Silakan muat ulang halaman.';return;}
+                google.accounts.id.initialize({client_id:clientId,nonce:nonce,auto_select:false,cancel_on_tap_outside:true,callback:function(response){
+                  if(!response||!response.credential){if(hint)hint.textContent='Google belum mengembalikan token login. Silakan coba kembali.';return;}
+                  submitToken(response.credential);
+                }});
+                google.accounts.id.renderButton(webButton,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',logo_alignment:'left',width:320});
+              };
+              var script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;script.onload=boot;script.onerror=function(){if(hint)hint.textContent='Login Google sementara tidak dapat dimuat. Gunakan username dan password.';};document.head.appendChild(script);
             })();
             </script>
-            <?php else: ?>
-            <div class="google-auth-not-configured">Login dengan Google belum diaktifkan. Admin perlu mengatur GOOGLE_CLIENT_ID untuk menampilkan tombol ini.</div>
             <?php endif; ?>
-            <p class="auth-switch">Belum punya akun? <a href="?mode=register">Buat akun</a></p>
+            <p class="auth-switch">Belum punya akun? <a href="index.php?r=site%2Findex&amp;mode=register">Buat akun</a></p>
             <?php endif; ?>
             <div class="auth-legal-links"><a href="privacy-policy.php">Kebijakan Privasi</a><span>·</span><a
                     href="delete-account.php">Hapus Akun</a></div>
@@ -1009,6 +1088,11 @@ if (!function_exists('ck_icon')) {
         </div>
         <div class="sidebar-section-label">MENU UTAMA</div>
         <nav class="sidebar-menu" aria-label="Menu akun">
+            <a class="sidebar-menu-item sidebar-link" href="<?= h(\yii\helpers\Url::to(['/app-portal'])) ?>">
+                <span class="sidebar-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-13h6V4h-6v3Z" />
+                    </svg></span><span><b>Daftar Aplikasi</b><small>Kembali ke galeri aplikasi</small></span><span class="sidebar-arrow">›</span>
+            </a>
             <button type="button" class="sidebar-menu-item sidebar-menu-item-active" id="sidebarSummary">
                 <span class="sidebar-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-13h6V4h-6v3Z" />
