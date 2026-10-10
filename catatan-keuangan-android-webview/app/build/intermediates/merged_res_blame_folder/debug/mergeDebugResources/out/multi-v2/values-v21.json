@@ -4,6 +4,25 @@
             "outputFile": "com.charlie.finance.app-mergeDebugResources-2:/values-v21/values-v21.xml",
             "map": [
                 {
+                    "source": "/Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/res/values-v21/values-v21.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "9",
+                        "endColumns": "12",
+                        "endOffsets": "543"
+                    },
+                    "to": {
+                        "startLines": "268",
+                        "startColumns": "4",
+                        "startOffsets": "19151",
+                        "endLines": "275",
+                        "endColumns": "12",
+                        "endOffsets": "19639"
+                    }
+                },
+                {
                     "source": "/Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/res/values-v21/values-v21.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,13",
@@ -14,12 +33,12 @@
                         "endOffsets": "168,232,299,363,479,605,731,859,1031,1383"
                     },
                     "to": {
-                        "startLines": "2,3,4,5,264,265,266,267,268,271",
+                        "startLines": "2,3,4,5,264,265,266,267,276,279",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4",
-                        "startOffsets": "55,173,237,304,18655,18771,18897,19023,19151,19323",
-                        "endLines": "2,3,4,5,264,265,266,267,270,275",
+                        "startOffsets": "55,173,237,304,18655,18771,18897,19023,19644,19816",
+                        "endLines": "2,3,4,5,264,265,266,267,278,283",
                         "endColumns": "117,63,66,63,115,125,125,127,12,12",
-                        "endOffsets": "168,232,299,363,18766,18892,19018,19146,19318,19670"
+                        "endOffsets": "168,232,299,363,18766,18892,19018,19146,19811,20163"
                     }
                 },
                 {

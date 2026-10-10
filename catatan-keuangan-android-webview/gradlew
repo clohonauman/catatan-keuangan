@@ -89,6 +89,73 @@ APP_BASE_NAME=${0##*/}
 APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s
 ' "$PWD" ) || exit
 
+# Catatan Keuangan: repair stale SDK paths and bootstrap setup when required.
+catatan_sdk_from_properties() {
+    if [ -f "$APP_HOME/local.properties" ]; then
+        sed -n 's/^sdk\.dir=//p' "$APP_HOME/local.properties" | tail -n 1 | sed 's/\\ / /g; s/\\:/\:/g; s/\\\\/\\/g'
+    fi
+}
+catatan_looks_like_sdk() {
+    [ -d "$1" ] && { [ -d "$1/platforms" ] || [ -d "$1/platform-tools" ] || [ -d "$1/build-tools" ] || [ -d "$1/cmdline-tools" ] || [ -d "$1/tools" ]; }
+}
+catatan_has_build_tools() {
+    sdk_root="$1"
+    [ -d "$sdk_root/build-tools/35.0.0" ] && return 0
+    for bt in "$sdk_root"/build-tools/35.*; do [ -d "$bt" ] && return 0; done
+    return 1
+}
+catatan_write_local_properties() {
+    sdk_path="$1"
+    escaped_sdk_path=$(printf '%s' "$sdk_path" | sed 's/\\/\\\\/g; s/ /\\ /g; s/:/\\:/g')
+    printf 'sdk.dir=%s\n' "$escaped_sdk_path" > "$APP_HOME/local.properties"
+}
+catatan_detect_sdk() {
+    sdk=""
+    local_sdk=$(catatan_sdk_from_properties || true)
+    if [ -n "$local_sdk" ] && catatan_looks_like_sdk "$local_sdk"; then
+        sdk="$local_sdk"
+    elif [ -n "${ANDROID_HOME:-}" ] && catatan_looks_like_sdk "$ANDROID_HOME"; then
+        sdk="$ANDROID_HOME"
+    elif [ -n "${ANDROID_SDK_ROOT:-}" ] && catatan_looks_like_sdk "$ANDROID_SDK_ROOT"; then
+        sdk="$ANDROID_SDK_ROOT"
+    elif catatan_looks_like_sdk "$HOME/Library/Android/sdk"; then
+        sdk="$HOME/Library/Android/sdk"
+    elif catatan_looks_like_sdk "$HOME/Android/Sdk"; then
+        sdk="$HOME/Android/Sdk"
+    fi
+
+    # A stale local.properties should not mask a valid SDK elsewhere.
+    if [ -n "$sdk" ]; then
+        sdk=$(cd "$sdk" && pwd -P)
+        if [ ! -f "$APP_HOME/local.properties" ] || [ "$local_sdk" != "$sdk" ]; then
+            catatan_write_local_properties "$sdk"
+        fi
+    fi
+
+    # No SDK found, or the required compile components are absent: start the guided setup.
+    if [ -z "$sdk" ] || [ ! -d "$sdk/platforms/android-35" ] || ! catatan_has_build_tools "$sdk" || [ ! -d "$sdk/platform-tools" ]; then
+        if [ -x "$APP_HOME/setup-android.sh" ]; then
+            echo "Android SDK belum siap. Menjalankan setup-android.sh..." >&2
+            "$APP_HOME/setup-android.sh" || exit $?
+            sdk=$(catatan_sdk_from_properties || true)
+        fi
+    fi
+
+    if [ -z "$sdk" ] || ! catatan_looks_like_sdk "$sdk"; then
+        echo "ERROR: Android SDK tidak terdeteksi. Jalankan ./setup-android.sh dari folder android-project." >&2
+        exit 1
+    fi
+    if [ ! -d "$sdk/platforms/android-35" ] || ! catatan_has_build_tools "$sdk" || [ ! -d "$sdk/platform-tools" ]; then
+        echo "ERROR: Android SDK Platform 35 / Build Tools 35.x / Platform Tools belum lengkap di: $sdk" >&2
+        echo "Jalankan ./setup-android.sh untuk memasang komponen SDK yang dibutuhkan." >&2
+        exit 1
+    fi
+    if [ ! -f "$APP_HOME/local.properties" ] || [ "$local_sdk" != "$sdk" ]; then
+        catatan_write_local_properties "$sdk"
+    fi
+}
+catatan_detect_sdk
+
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
 

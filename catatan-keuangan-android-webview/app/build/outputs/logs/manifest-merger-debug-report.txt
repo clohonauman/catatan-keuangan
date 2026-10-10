@@ -15,10 +15,21 @@ ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuang
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:2:1-52:12
+MERGED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:17:1-52:12
+MERGED from [com.google.android.libraries.identity.googleid:googleid:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/0927a3ba405b8fc450d3d12911414a94/transformed/googleid-1.2.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.credentials:credentials:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f4db6587d7d87d164be7d6b04c62e4c4/transformed/credentials-1.6.0/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.biometric:biometric:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/dab816dfab2d053d9959217446d976c9/transformed/biometric-1.1.0/AndroidManifest.xml:17:1-29:12
 MERGED from [androidx.appcompat:appcompat:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/313b7d5dbe5dc9219fc547695506f52e/transformed/appcompat-1.2.0/AndroidManifest.xml:17:1-24:12
+MERGED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:17:1-40:12
+MERGED from [com.google.android.gms:play-services-auth-blockstore:16.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/95d531c3fefc5f41fae016c13736368e/transformed/play-services-auth-blockstore-16.4.0/AndroidManifest.xml:2:1-9:12
+MERGED from [com.google.android.gms:play-services-fido:21.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e9c6c909f18d172a80129979df06546d/transformed/play-services-fido-21.0.0/AndroidManifest.xml:2:1-10:12
+MERGED from [com.google.android.gms:play-services-identity-credentials:16.0.0-alpha08] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/2e8be341faff944c12974725d6c9d461/transformed/play-services-identity-credentials-16.0.0-alpha08/AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.gms:play-services-auth-api-phone:18.0.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/216509be13b2754577ed964ecfd7affb/transformed/play-services-auth-api-phone-18.0.2/AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.gms:play-services-auth-base:18.0.10] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5b50dff80d7c7e630d0375602f42a1b2/transformed/play-services-auth-base-18.0.10/AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f2a6b48e9a6cb6e056c7b13574ad3934/transformed/play-services-tasks-18.2.0/AndroidManifest.xml:2:1-5:12
+MERGED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:16:1-26:12
 MERGED from [androidx.fragment:fragment:1.9.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/ef053a33e3961ec87e636d993dd85d4a/transformed/fragment-1.9.0/AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.loader:loader:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/084a750bd95de8b03c30a62db7c865b0/transformed/loader-1.0.0/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/7a17fcb820eb6f9d68b4346d0296d65d/transformed/viewpager-1.0.0/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.appcompat:appcompat-resources:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/75bf6e238f30e08aa7091daa7f89966e/transformed/appcompat-resources-1.2.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/dd4d41628e5e0c081b523aaadd165524/transformed/drawerlayout-1.0.0/AndroidManifest.xml:17:1-22:12
@@ -27,8 +38,8 @@ MERGED from [androidx.activity:activity-ktx:1.8.1] /Users/charlielohonauman/.gra
 MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f4d6d889c656ef21402da9e1a993c40b/transformed/savedstate-ktx-1.2.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1dd8e8e41fc6a9097a1299149cab3417/transformed/lifecycle-runtime-ktx-2.6.2/AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/810f9500d14f632b71cb6cf0c1a8ab7b/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1c5e27c2a66d1c0846db20e772dabbe6/transformed/lifecycle-viewmodel-ktx-2.6.2/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.loader:loader:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/189df389fd6f82952d31cd0cc944a1f3/transformed/loader-1.1.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/22a8ec787f47654381fd448fc0dedaa1/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/72cdbfa9b3887f6c05c6acd092da487c/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/39199f8ba8b037a40395507dbae61e10/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:2:1-7:12
@@ -89,6 +100,20 @@ ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuang
 application
 ADDED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:5-51:19
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:11:5-51:19
+MERGED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:23:5-50:19
+MERGED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:23:5-50:19
+MERGED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:22:5-38:19
+MERGED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:22:5-38:19
+MERGED from [com.google.android.gms:play-services-auth-blockstore:16.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/95d531c3fefc5f41fae016c13736368e/transformed/play-services-auth-blockstore-16.4.0/AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-auth-blockstore:16.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/95d531c3fefc5f41fae016c13736368e/transformed/play-services-auth-blockstore-16.4.0/AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-fido:21.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e9c6c909f18d172a80129979df06546d/transformed/play-services-fido-21.0.0/AndroidManifest.xml:7:5-8:19
+MERGED from [com.google.android.gms:play-services-fido:21.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e9c6c909f18d172a80129979df06546d/transformed/play-services-fido-21.0.0/AndroidManifest.xml:7:5-8:19
+MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:4:5-6:19
+MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:4:5-6:19
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f2a6b48e9a6cb6e056c7b13574ad3934/transformed/play-services-tasks-18.2.0/AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f2a6b48e9a6cb6e056c7b13574ad3934/transformed/play-services-tasks-18.2.0/AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:20:5-24:19
+MERGED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:20:5-24:19
 MERGED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:5-89
 MERGED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:28:5-89
 MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/80cbc4dba6c47357d96551e666b341e2/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
@@ -161,14 +186,36 @@ uses-sdk
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml
 INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml
+MERGED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:21:5-44
+MERGED from [com.google.android.libraries.identity.googleid:googleid:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/0927a3ba405b8fc450d3d12911414a94/transformed/googleid-1.2.1/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.libraries.identity.googleid:googleid:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/0927a3ba405b8fc450d3d12911414a94/transformed/googleid-1.2.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.credentials:credentials:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f4db6587d7d87d164be7d6b04c62e4c4/transformed/credentials-1.6.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.credentials:credentials:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f4db6587d7d87d164be7d6b04c62e4c4/transformed/credentials-1.6.0/AndroidManifest.xml:5:5-44
 MERGED from [androidx.biometric:biometric:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/dab816dfab2d053d9959217446d976c9/transformed/biometric-1.1.0/AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.biometric:biometric:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/dab816dfab2d053d9959217446d976c9/transformed/biometric-1.1.0/AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.appcompat:appcompat:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/313b7d5dbe5dc9219fc547695506f52e/transformed/appcompat-1.2.0/AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.appcompat:appcompat:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/313b7d5dbe5dc9219fc547695506f52e/transformed/appcompat-1.2.0/AndroidManifest.xml:20:5-22:41
+MERGED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.gms:play-services-auth-blockstore:16.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/95d531c3fefc5f41fae016c13736368e/transformed/play-services-auth-blockstore-16.4.0/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-auth-blockstore:16.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/95d531c3fefc5f41fae016c13736368e/transformed/play-services-auth-blockstore-16.4.0/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-fido:21.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e9c6c909f18d172a80129979df06546d/transformed/play-services-fido-21.0.0/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-fido:21.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e9c6c909f18d172a80129979df06546d/transformed/play-services-fido-21.0.0/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-identity-credentials:16.0.0-alpha08] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/2e8be341faff944c12974725d6c9d461/transformed/play-services-identity-credentials-16.0.0-alpha08/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-identity-credentials:16.0.0-alpha08] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/2e8be341faff944c12974725d6c9d461/transformed/play-services-identity-credentials-16.0.0-alpha08/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-auth-api-phone:18.0.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/216509be13b2754577ed964ecfd7affb/transformed/play-services-auth-api-phone-18.0.2/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-auth-api-phone:18.0.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/216509be13b2754577ed964ecfd7affb/transformed/play-services-auth-api-phone-18.0.2/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-auth-base:18.0.10] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5b50dff80d7c7e630d0375602f42a1b2/transformed/play-services-auth-base-18.0.10/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-auth-base:18.0.10] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5b50dff80d7c7e630d0375602f42a1b2/transformed/play-services-auth-base-18.0.10/AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f2a6b48e9a6cb6e056c7b13574ad3934/transformed/play-services-tasks-18.2.0/AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/f2a6b48e9a6cb6e056c7b13574ad3934/transformed/play-services-tasks-18.2.0/AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:18:5-43
 MERGED from [androidx.fragment:fragment:1.9.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/ef053a33e3961ec87e636d993dd85d4a/transformed/fragment-1.9.0/AndroidManifest.xml:5:5-44
 MERGED from [androidx.fragment:fragment:1.9.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/ef053a33e3961ec87e636d993dd85d4a/transformed/fragment-1.9.0/AndroidManifest.xml:5:5-44
-MERGED from [androidx.loader:loader:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/084a750bd95de8b03c30a62db7c865b0/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.loader:loader:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/084a750bd95de8b03c30a62db7c865b0/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
 MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/7a17fcb820eb6f9d68b4346d0296d65d/transformed/viewpager-1.0.0/AndroidManifest.xml:20:5-44
 MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/7a17fcb820eb6f9d68b4346d0296d65d/transformed/viewpager-1.0.0/AndroidManifest.xml:20:5-44
 MERGED from [androidx.appcompat:appcompat-resources:1.2.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/75bf6e238f30e08aa7091daa7f89966e/transformed/appcompat-resources-1.2.0/AndroidManifest.xml:20:5-22:41
@@ -185,10 +232,10 @@ MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/charlielohonauman/.gra
 MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1dd8e8e41fc6a9097a1299149cab3417/transformed/lifecycle-runtime-ktx-2.6.2/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1dd8e8e41fc6a9097a1299149cab3417/transformed/lifecycle-runtime-ktx-2.6.2/AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/810f9500d14f632b71cb6cf0c1a8ab7b/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/810f9500d14f632b71cb6cf0c1a8ab7b/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1c5e27c2a66d1c0846db20e772dabbe6/transformed/lifecycle-viewmodel-ktx-2.6.2/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1c5e27c2a66d1c0846db20e772dabbe6/transformed/lifecycle-viewmodel-ktx-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/189df389fd6f82952d31cd0cc944a1f3/transformed/loader-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.loader:loader:1.1.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/189df389fd6f82952d31cd0cc944a1f3/transformed/loader-1.1.0/AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/22a8ec787f47654381fd448fc0dedaa1/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/22a8ec787f47654381fd448fc0dedaa1/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.6.2] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/72cdbfa9b3887f6c05c6acd092da487c/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml:20:5-44
@@ -227,6 +274,84 @@ MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/charlielo
 		INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml
 	android:minSdkVersion
 		INJECTED from /Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml
+service#androidx.credentials.playservices.CredentialProviderMetadataHolder
+ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:24:9-32:19
+	android:enabled
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:26:13-35
+	android:exported
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:27:13-37
+	tools:ignore
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:28:13-60
+	android:name
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:25:13-94
+meta-data#androidx.credentials.CREDENTIAL_PROVIDER_KEY
+ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:29:13-31:104
+	android:value
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:31:17-101
+	android:name
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:30:17-76
+activity#androidx.credentials.playservices.controllers.identityauth.HiddenActivity
+ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:34:9-41:20
+	android:fitsSystemWindows
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:39:13-45
+	android:enabled
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:38:13-37
+	android:configChanges
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:36:13-87
+	android:theme
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:40:13-48
+	android:name
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:35:13-101
+activity#androidx.credentials.playservices.controllers.identitycredentials.IdentityCredentialApiHiddenActivity
+ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:42:9-49:20
+	android:fitsSystemWindows
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:47:13-45
+	android:enabled
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:45:13-35
+	android:exported
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:46:13-37
+	android:configChanges
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:44:13-87
+	android:theme
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:48:13-48
+	android:name
+		ADDED from [androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:43:13-129
+activity#com.google.android.gms.auth.api.signin.internal.SignInHubActivity
+ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:23:9-27:75
+	android:excludeFromRecents
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:25:13-46
+	android:exported
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:26:13-37
+	android:theme
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:27:13-72
+	android:name
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:24:13-93
+service#com.google.android.gms.auth.api.signin.RevocationBoundService
+ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:33:9-37:51
+	android:exported
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:35:13-36
+	android:visibleToInstantApps
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:37:13-48
+	android:permission
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:36:13-107
+	android:name
+		ADDED from [com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:34:13-89
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:21:9-23:69
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:23:13-66
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:22:13-58
 permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.15.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/1da178102bbfe53a1029a731a7521401/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
 	android:protectionLevel

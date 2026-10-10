@@ -11,6 +11,7 @@ function subscriptionFail(string $message, int $code=400): void {
     exit;
 }
 
+$action = '';
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode(['ok'=>true,'subscription'=>subscriptionUserSnapshot($user)], JSON_UNESCAPED_UNICODE);
@@ -61,6 +62,17 @@ try {
         exit;
     }
 
+    if ($action === 'create_qris_invoice') {
+        $order = subscriptionCreateQrisInvoice($user, $input);
+        echo json_encode([
+            'ok'=>true,
+            'message'=>'QRIS berhasil dibuat. Scan QR menggunakan aplikasi bank atau e-wallet; status akan diperbarui otomatis.',
+            'order'=>subscriptionOrderForClient($order),
+            'subscription'=>subscriptionUserSnapshot(authCurrentUser()),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($action === 'upload_proof') {
         if (!$multipart) throw new InvalidArgumentException('Upload bukti bayar harus menggunakan form data.');
         if (!isset($_FILES['proof'])) throw new InvalidArgumentException('Pilih gambar bukti pembayaran.');
@@ -76,7 +88,22 @@ try {
 
     throw new InvalidArgumentException('Aksi berlangganan tidak dikenali.');
 } catch (InvalidArgumentException $e) {
+    // Input/business validation errors remain actionable (invalid plan, coupon, or open invoice).
     subscriptionFail($e->getMessage(), 422);
 } catch (Throwable $e) {
+    if ($action === 'create_qris_invoice') {
+        $details = (string)$e->getMessage();
+        $safePrefix = 'Pembayaran QRIS belum dapat disiapkan saat ini.';
+
+        // The QRIS helper already logged the original provider response with an invoice reference.
+        if (strpos($details, $safePrefix) === 0) {
+            subscriptionFail($details, 503);
+        }
+
+        // Protect customers from PHP/provider/configuration errors before an invoice is created.
+        $reference = subscriptionQrisSupportReference();
+        Yii::error('QRIS checkout request failed [reference='.$reference.']: '.$details, __METHOD__);
+        subscriptionFail(subscriptionQrisPublicFailureMessage($reference), 503);
+    }
     subscriptionFail($e->getMessage(), 500);
 }

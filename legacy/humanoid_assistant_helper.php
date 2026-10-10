@@ -596,6 +596,13 @@ function humanoidEditPendingConfirmation(string $message,array $pending): ?array
     $id=(int)($pending['id']??0);
     $r=financeMutate(function(&$d)use($id,$indexes,$amount,$wallet,$date,$type,$kind,$category,$note,&$changes){
         if(empty($d['pending_chat_confirmation'])||(int)($d['pending_chat_confirmation']['id']??0)!==$id)throw new InvalidArgumentException('Konfirmasi transaksi sudah tidak tersedia.');
+        // Kompatibilitas pending lama: sebelum koreksi pertama, bekukan baseline
+        // parser agar Adaptive Learning tetap dapat membandingkan hasil awal
+        // dengan hasil yang dipilih user.
+        if(!isset($d['pending_chat_confirmation']['original_drafts']) || !is_array($d['pending_chat_confirmation']['original_drafts'])){
+            $baseline=json_decode(json_encode((array)($d['pending_chat_confirmation']['drafts']??[]),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),true);
+            $d['pending_chat_confirmation']['original_drafts']=is_array($baseline)?$baseline:(array)($d['pending_chat_confirmation']['drafts']??[]);
+        }
         foreach($indexes as $idx){
             if(!isset($d['pending_chat_confirmation']['drafts'][$idx]))continue;
             $draft=&$d['pending_chat_confirmation']['drafts'][$idx];

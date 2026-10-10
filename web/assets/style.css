@@ -3081,6 +3081,11 @@ dialog[open]>.feature-toast.in-dialog{
 /* V45 - Backup & Restore pada Maintenance */
 .maintenance-backup-zone{display:grid;gap:14px;border-top:1px solid var(--border,#e5e7eb);padding-top:18px}.maintenance-backup-head>div{display:grid;gap:4px}.maintenance-backup-head small,.maintenance-backup-card small,.maintenance-backup-note{color:var(--muted,#667085);font-size:12px;line-height:1.55}.maintenance-backup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.maintenance-backup-card{display:grid;gap:12px;border:1px solid var(--border,#e5e7eb);background:var(--card,#fff);border-radius:16px;padding:16px}.maintenance-backup-card>div{display:grid;gap:4px}.maintenance-backup-card form{display:grid;gap:9px}.maintenance-backup-card input[type=file]{width:100%;border:1px dashed var(--border,#d0d5dd);border-radius:12px;padding:10px;background:var(--bg-soft,#f8fafc);color:inherit}.maintenance-backup-card .btn{text-align:center;justify-content:center}.danger-outline{border:1px solid #e5484d!important;background:transparent!important;color:#c9343a!important}.danger-outline:hover{background:rgba(229,72,77,.08)!important}.maintenance-backup-note{padding:11px 13px;border-radius:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22)}@media(max-width:780px){.maintenance-backup-grid{grid-template-columns:1fr}}
 
+
+/* V53 - Bills grouped by payment status: unpaid first, paid collapsed */
+.bill-section{display:grid;gap:8px;margin-top:10px}.bill-section:first-child{margin-top:0}
+.bill-section-head,.bill-section-paid>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #e5eaf1;border-radius:12px;background:#f8fafc;list-style:none;cursor:default}.bill-section-paid>summary{cursor:pointer}.bill-section-head>div,.bill-section-paid>summary>span:first-child{display:grid;gap:2px;min-width:0}.bill-section-head b,.bill-section-paid>summary b{font-size:11px}.bill-section-head small,.bill-section-paid>summary small{font-size:9px;color:#8792a3}.bill-section-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:#eaf1ff;color:#1858bf;font-size:10px;font-weight:850;flex:0 0 auto}.bill-section-unpaid .bill-section-head{border-color:#f1d7b0;background:#fffaf2}.bill-section-unpaid .bill-section-count{background:#fff0d6;color:#9a6700}.bill-section-paid>summary .bill-section-count{background:#eaf8ef;color:#087443}.bill-section-paid>summary::-webkit-details-marker{display:none}.bill-section-paid>summary:after{content:'⌄';font-size:13px;color:#667085;margin-left:auto;transform:rotate(0deg);transition:transform .15s ease}.bill-section-paid[open]>summary:after{transform:rotate(180deg)}.bill-section-list{display:grid;gap:8px}
+
 /* =========================================================
    V51 - MOBILE BILL / CREDIT CARD BILL LAYOUT
    ========================================================= */
@@ -3866,5 +3871,105 @@ dialog[open]>.feature-toast.in-dialog{
   .receivable-history-card .receivable-entry{
     border-radius:11px;
     padding:9px 10px;
+  }
+}
+
+/* QRIS Premium checkout — Midtrans dynamic QR */
+.premium-payment-methods{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0 14px}
+.premium-payment-method{display:grid;grid-template-columns:38px minmax(0,1fr) 20px;align-items:center;gap:10px;padding:12px;border:1px solid var(--line,#e5e7eb);border-radius:13px;background:#fff;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.premium-payment-method[hidden]{display:none!important}
+.premium-payment-method.is-selected{border-color:#175cd3;background:#f4f8ff;box-shadow:0 0 0 2px rgba(23,92,211,.08)}
+.premium-payment-method>input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.premium-payment-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#eef4ff;color:#175cd3;font-size:22px;font-weight:800}
+.premium-payment-method:nth-child(2) .premium-payment-icon{background:#f2f4f7;color:#475467}
+.premium-payment-copy{min-width:0}
+.premium-payment-copy b{display:block;font-size:12px;color:#101828}
+.premium-payment-copy small{display:block;margin-top:4px;color:#667085;font-size:10px;line-height:1.45;font-weight:400}
+.premium-payment-check{display:grid;place-items:center;width:20px;height:20px;border:1px solid #d0d5dd;border-radius:50%;font-size:0;color:#fff}
+.premium-payment-method.is-selected .premium-payment-check{background:#175cd3;border-color:#175cd3;font-size:12px}
+#premiumBankFields[hidden]{display:none!important}
+.premium-qris-card{display:grid;justify-items:center;gap:8px;margin:16px 0;padding:16px 12px;border:1px solid #b9d3ff;border-radius:16px;background:linear-gradient(180deg,#f8fbff,#fff)}
+.premium-qris-image-wrap{display:grid;place-items:center;min-height:220px;width:min(100%,290px);padding:8px;background:#fff;border:1px solid #e4eaf3;border-radius:12px}
+.premium-qris-image{display:block;max-width:100%;width:260px;height:auto;object-fit:contain}
+.premium-qris-image-wrap img{display:block;max-width:100%;max-height:290px;width:260px;height:auto;object-fit:contain}
+.premium-qris-card>b{color:#101828;font-size:14px;text-align:center}
+.premium-qris-card>small{max-width:320px;color:#667085;font-size:10px;line-height:1.5;text-align:center}
+.premium-qris-image-error{padding:12px;color:#b42318;font-size:11px;line-height:1.5;text-align:center}
+.premium-qris-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.premium-order-status.expired,.premium-invoice-box.expired .premium-invoice-notice{color:#92400e;background:#fffaeb}
+.premium-order-status.failed,.premium-invoice-box.failed .premium-invoice-notice{color:#b42318;background:#fff1f0}
+@media(max-width:520px){.premium-qris-card{padding:12px 8px}.premium-qris-image-wrap{min-height:190px}.premium-qris-image-wrap img{width:220px;max-height:240px}.premium-qris-actions{grid-template-columns:1fr}.premium-qris-actions .btn{width:100%}}
+
+
+/* V256 — Finance Center dialog sizing and manual-payment scroll containment */
+/* Keep the dialog itself fixed in the viewport. Only .finance-content may scroll,
+   so expanding the manual bank form never scrolls the header out of view or leaves
+   a blank strip underneath the content card. */
+#financeCenter.finance-center-dialog{
+  height:min(92vh,940px)!important;
+  height:min(92dvh,940px)!important;
+  max-height:calc(100vh - 24px)!important;
+  max-height:calc(100dvh - 24px)!important;
+  padding:0!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+  overscroll-behavior:contain;
+}
+#financeCenter .finance-center-card{
+  display:flex!important;
+  flex-direction:column!important;
+  width:100%!important;
+  height:100%!important;
+  max-height:100%!important;
+  min-height:0!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+}
+#financeCenter .finance-center-head,
+#financeCenter .finance-tabs{
+  flex:0 0 auto!important;
+}
+#financeCenter .finance-content{
+  flex:1 1 auto!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;
+  scroll-padding-bottom:28px;
+}
+#financeCenter #premiumBankFields:not([hidden]){
+  display:block!important;
+  height:auto!important;
+  min-height:0!important;
+  overflow:visible!important;
+}
+#financeCenter .premium-checkout-card,
+#financeCenter .premium-invoice-card{
+  min-width:0;
+}
+@media(max-width:760px){
+  #financeCenter.finance-center-dialog{
+    inset:0!important;
+    margin:0!important;
+    width:100%!important;
+    height:var(--app-vh,100vh)!important;
+    height:var(--app-vh,100dvh)!important;
+    max-height:var(--app-vh,100vh)!important;
+    max-height:var(--app-vh,100dvh)!important;
+    border-radius:0!important;
+  }
+  #financeCenter .finance-center-card{
+    height:100%!important;
+    max-height:100%!important;
+  }
+  #financeCenter .finance-center-head{
+    padding-top:calc(14px + env(safe-area-inset-top));
+  }
+  #financeCenter .finance-content{
+    padding-bottom:calc(28px + env(safe-area-inset-bottom))!important;
   }
 }

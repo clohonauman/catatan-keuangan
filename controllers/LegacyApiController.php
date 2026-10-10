@@ -13,7 +13,7 @@ class LegacyApiController extends Controller
     private const JSON_ENDPOINTS = [
         'admin','admin_notifications','backup','chats','dashboard','delete_message',
         'delete_transaction','devices','edit_transaction','email_notifications',
-        'features','finance','learning','notifications','realtime','settings','simulation','subscription',
+        'features','finance','learning','notifications','offline_snapshot','realtime','settings','simulation','subscription',
         'transactions',
     ];
 

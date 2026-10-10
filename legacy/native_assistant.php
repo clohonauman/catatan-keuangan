@@ -319,6 +319,10 @@ function categoryFor(string $chunk, string $type): string {
 function typeFor(string $chunk): string {
     $c=norm($chunk);
 
+    // Tarik/ambil tunai dari rekening adalah perpindahan saldo ke dompet tunai,
+    // bukan pengeluaran tunai yang hilang dari pencatatan dompet.
+    if(preg_match('/\b(?:tarik\s*tunai|ambil\s*tunai|cash\s*withdrawal|withdraw(?:al)?)\b/u',$c)) return 'transfer';
+
     // Pemberian uang kepada user = pemasukan. Pola ini sengaja diperiksa
     // sebelum kata umum agar "Utari kasih uang tunai 50rb" tidak dianggap
     // pengeluaran. Sebaliknya "saya kasih Utari 50rb" tetap pengeluaran.
@@ -337,6 +341,17 @@ function typeFor(string $chunk): string {
     ] as $w) {
         if(containsText($c,$w)) return 'income';
     }
+    // Hanya klasifikasikan sebagai transfer jika benar-benar memindahkan
+    // saldo antar dompet. "Transfer ke adik/teman" tetap pengeluaran.
+    if(preg_match('/\b(?:transfer|tf|pindah(?:kan)?|memindahkan|mutasi)\b/u',$c)) {
+        $explicit=nativeExplicitTransferWallets($c);
+        $from=(int)($explicit['from_wallet_id']??0);
+        $to=(int)($explicit['to_wallet_id']??0);
+        $pairKnown=$from>0 && $to>0 && $from!==$to;
+        $explicitWalletMove=(bool)preg_match('/\b(?:antar\s+(?:dompet|rekening)|pindah(?:kan)?\s+(?:saldo|uang))\b/u',$c);
+        if($pairKnown||$explicitWalletMove) return 'transfer';
+    }
+
     return 'expense';
 }
 
@@ -922,35 +937,112 @@ function calculatorReply(string $message): ?string {
     }
 }
 
+/**
+ * Menemukan klausa biaya admin/fee yang terpisah dari nominal transaksi utama.
+ * Hasil clean_message tidak lagi berisi nominal fee sehingga parser transaksi
+ * tidak menganggapnya sebagai transaksi utama kedua yang generik.
+ */
+function nativeExtractAdminFeeClause(string $message): ?array {
+    $amountPattern='(?:rp\\.?\\s*)?(?:\\d{1,3}(?:[\\.,]\\d{3})+|\\d+(?:[\\.,]\\d+)?)(?:\\s*(?:juta|jt|ribu|rb|k))?';
+    $feeWords='(?:biaya\\s*(?:admin(?:istrasi)?(?:\\s+bank)?|administrasi|transfer|bank)|admin(?:istrasi)?(?:\\s+bank)?|administrasi|fee(?:\\s+bank)?|charge(?:\\s+bank)?)';
+    $patterns=[
+        '/(?P<clause>(?:\\s*(?:dan|serta|ditambah|plus|dengan|[+,;])\\s*)?(?:(?:ada|kena|dikenakan|terkena|termasuk)\\s+)?'.$feeWords.'(?:nya)?\\s*(?:(?:sebesar|senilai|nominal(?:nya)?|adalah|:|=)\\s*)?(?P<amount>'.$amountPattern.')(?:\\s+rupiah)?)/iu',
+        '/(?P<clause>(?:\\s*(?:dan|serta|ditambah|plus|dengan|[+,;])\\s*)?(?P<amount>'.$amountPattern.')\\s*(?:untuk\\s*)?'.$feeWords.'(?:nya)?)/iu',
+    ];
+    foreach($patterns as $pattern){
+        if(!preg_match($pattern,$message,$m,PREG_OFFSET_CAPTURE))continue;
+        $amountText=(string)($m['amount'][0]??'');
+        $amount=transactionAmountFromText($amountText,true);
+        if($amount<=0)continue;
+        $clause=(string)($m['clause'][0]??'');$offset=(int)($m['clause'][1]??-1);
+        if($offset<0||$clause==='')continue;
+        $clean=substr($message,0,$offset). ' '.substr($message,$offset+strlen($clause));
+        $clean=preg_replace('/\\s*(?:dan|serta|ditambah|plus|dengan)\\s*$/iu','',$clean);
+        $clean=preg_replace('/\\s+/u',' ',$clean);
+        $clean=trim((string)$clean," \t\n\r\0\x0B,;.+");
+        $clean=preg_replace('/\\s+([,.!?;])/u','$1',$clean);
+        return ['amount'=>$amount,'clean_message'=>(string)$clean,'clause'=>$clause,'offset'=>$offset];
+    }
+    return null;
+}
+
+function nativeCashWalletId(int $excludeWalletId=0): int {
+    $wallets=function_exists('financeWallets')?financeWallets():[];
+    // Nama eksplisit lebih tepercaya daripada sekadar tipe cash karena banyak
+    // akun lama mempunyai dompet default bernama "Utama" dengan tipe cash.
+    foreach((array)$wallets as $wallet){
+        if(!empty($wallet['archived']))continue;
+        $id=(int)($wallet['id']??0);if($id<=0||$id===$excludeWalletId)continue;
+        $name=norm((string)($wallet['name']??''));
+        if(preg_match('/\\b(?:uang\\s*tunai|tunai|cash)\\b/u',$name))return $id;
+    }
+    foreach((array)$wallets as $wallet){
+        if(!empty($wallet['archived']))continue;
+        $id=(int)($wallet['id']??0);if($id<=0||$id===$excludeWalletId)continue;
+        if(strtolower((string)($wallet['type']??''))==='cash')return $id;
+    }
+    return 0;
+}
+
+function nativeWalletIdFromPhrase(string $text): int {
+    $text=trim($text);
+    if($text!=='' && function_exists('walletMentionForText')){
+        $wallet=walletMentionForText($text);
+        if(is_array($wallet))return (int)($wallet['id']??0);
+    }
+    return 0;
+}
+
+/** Resolve source/destination when the user says "dari BCA ke SeaBank". */
+function nativeExplicitTransferWallets(string $text): array {
+    if(!preg_match('/\\b(?:dari|from)\\s+(.+?)(?:\\s+\\b(?:ke|menuju|into)\\s+(.+?))?(?:[,;.]|$)/iu',$text,$m))return [];
+    $fromText=trim((string)($m[1]??''));$toText=trim((string)($m[2]??''));
+    $from=$fromText!==''?nativeWalletIdFromPhrase($fromText):0;
+    $to=$toText!==''?nativeWalletIdFromPhrase($toText):0;
+    return ['from_wallet_id'=>$from,'to_wallet_id'=>$to,'from_text'=>$fromText,'to_text'=>$toText];
+}
+
+function nativeFallbackNonCashWalletId(int $excludeWalletId=0): int {
+    $wallets=function_exists('financeWallets')?financeWallets():[];
+    foreach((array)$wallets as $w){
+        if(!empty($w['archived']))continue;
+        $id=(int)($w['id']??0);if($id<=0||$id===$excludeWalletId)continue;
+        if(in_array(strtolower((string)($w['type']??'')),['credit_card','receivable'],true))continue;
+        $name=norm((string)($w['name']??''));
+        if(!preg_match('/\\b(?:tunai|cash|uang\\s*tunai)\\b/u',$name))return $id;
+    }
+    foreach((array)$wallets as $w){
+        if(!empty($w['archived']))continue;
+        $id=(int)($w['id']??0);if($id>0&&$id!==$excludeWalletId&&!in_array(strtolower((string)($w['type']??'')),['credit_card','receivable'],true))return $id;
+    }
+    return function_exists('financeDefaultWalletId')?(int)financeDefaultWalletId():0;
+}
+
 function extractTransactions(string $message): array {
     $message = normalizeChatMessage($message);
     // Pertanyaan dengan angka/tanggal tidak boleh mencatat transaksi.
     if (smartIsQuestion($message)) return [];
-    // Pesan kalkulator tidak boleh dianggap sebagai transaksi keuangan.
-    if (isCalculationMessage($message)) return [];
-    if (isPlan($message)) return [];
+    // Pesan kalkulator dan rencana tidak boleh menjadi transaksi.
+    if (isCalculationMessage($message) || isPlan($message)) return [];
+
+    $adminFee=nativeExtractAdminFeeClause($message);
+    $parseMessage=$adminFee?(string)$adminFee['clean_message']:$message;
+    if(trim($parseMessage)==='')return []; // Jangan membuat expense admin tanpa transaksi utama.
 
     $date = detectDate($message);
     $out = [];
-
-    // Pisah hanya pada kata penghubung transaksi, bukan pada koma/titik.
-    // Ini penting agar 1,1jt dan 1.100.000 tidak terpotong.
-    $chunks = preg_split('/\s*(?:;|\bdan\b|\bserta\b|\blalu\b|\bterus\b|\bkemudian\b)\s*/ui', $message, -1, PREG_SPLIT_NO_EMPTY);
+    // Pemisahan tetap toleran terhadap beberapa transaksi dalam satu kalimat.
+    $chunks = preg_split('/\\s*(?:;|\\bdan\\b|\\bserta\\b|\\blalu\\b|\\bterus\\b|\\bkemudian\\b)\\s*/ui', $parseMessage, -1, PREG_SPLIT_NO_EMPTY);
 
     foreach($chunks as $chunk) {
-        // Pilih kandidat uang terbaik, bukan sekadar angka pertama. Dengan ini
-        // "BBM Pertamax DL2755CD 50rb" tetap membaca Rp50.000, sedangkan 2755
-        // dikenali sebagai bagian plat kendaraan.
         $amount = transactionAmountFromText($chunk,true);
         if ($amount <= 0) continue;
-
         $type = typeFor($chunk);
         $cat = categoryFor($chunk, $type);
-        $note = trim(preg_replace('/\s+/u',' ',$chunk));
-
+        $note = trim(preg_replace('/\\s+/u',' ',$chunk));
         $out[] = [
             'type'=>$type,
-            'category'=>$cat,
+            'category'=>$type==='transfer'?'Transfer Antar Dompet':$cat,
             'amount'=>$amount,
             'note'=>substr($note,0,255),
             'transaction_date'=>$date,
@@ -958,8 +1050,70 @@ function extractTransactions(string $message): array {
             'spending_kind'=>spendingKindForText($chunk,$type)
         ];
     }
+    if(!$out)return [];
 
-    return adaptiveApplyToDrafts($message,$out);
+    // Terapkan learning pada transaksi inti saja; biaya admin dibuat setelahnya
+    // agar tidak ikut mengubah kategori atau dompetnya secara independen.
+    $out=adaptiveApplyToDrafts($parseMessage,$out);
+
+    // Tarik tunai harus dimodelkan sebagai transfer rekening -> dompet tunai.
+    $isCashWithdrawal=(bool)preg_match('/\\b(?:tarik\\s*tunai|ambil\\s*tunai|cash\\s*withdrawal|withdraw(?:al)?)\\b/iu',$parseMessage);
+    foreach($out as $i=>&$draft){
+        $chunkText=(string)($draft['note']??$parseMessage);
+        if($isCashWithdrawal && $i===0){
+            $explicit=nativeExplicitTransferWallets($chunkText);
+            $from=(int)($explicit['from_wallet_id']??0);
+            if($from<=0)$from=nativeFallbackNonCashWalletId();
+            $to=(int)($explicit['to_wallet_id']??0);
+            if($to<=0)$to=nativeCashWalletId($from);
+            $draft['type']='transfer';$draft['category']='Transfer Antar Dompet';
+            $draft['from_wallet_id']=$from;$draft['to_wallet_id']=$to;
+            $draft['cash_withdrawal']=true;
+            $draft['spending_kind']='once';unset($draft['wallet_id']);
+            if($to<=0)$draft['cash_withdrawal_missing_wallet']=true;
+        } elseif(($draft['type']??'')==='transfer'){
+            $explicit=nativeExplicitTransferWallets($chunkText);
+            $from=(int)($explicit['from_wallet_id']??0);$to=(int)($explicit['to_wallet_id']??0);
+            if($from>0 && $to>0 && $from!==$to){
+                $draft['from_wallet_id']=$from;$draft['to_wallet_id']=$to;
+                unset($draft['wallet_id']);
+            }elseif($from>0){
+                $draft['from_wallet_id']=$from;
+                if(!isset($draft['wallet_id']))$draft['wallet_id']=$from;
+            }
+            $draft['category']='Transfer Antar Dompet';$draft['spending_kind']='once';
+        }
+    }
+    unset($draft);
+
+    if($adminFee && (int)$adminFee['amount']>0){
+        // Satu nominal admin ditautkan ke transaksi inti terdekat sebelumnya.
+        // Untuk satu kalimat transaksi tunggal, ini selalu baris utama tersebut.
+        $parentIndex=count($out)-1;
+        foreach($out as $idx=>$row){
+            $rowNote=(string)($row['note']??'');
+            $isTransferParent=(($row['type']??'')==='transfer') && (
+                preg_match('/\b(?:transfer|tf|pindah(?:kan)?|memindahkan|mutasi|tarik\s*tunai|ambil\s*tunai)\b/iu',$rowNote)
+                || ((int)($row['from_wallet_id']??0)>0 && (int)($row['to_wallet_id']??0)>0)
+            );
+            if(!empty($row['cash_withdrawal'])||$isTransferParent){$parentIndex=$idx;break;}
+        }
+        $parent=$out[$parentIndex];
+        $feeWallet=(string)($parent['type']??'')==='transfer'
+            ?(int)($parent['from_wallet_id']??$parent['wallet_id']??0)
+            :(int)($parent['wallet_id']??$parent['from_wallet_id']??0);
+        if($feeWallet<=0)$feeWallet=walletForText((string)($parent['note']??$parseMessage));
+        $feeLabel=!empty($parent['cash_withdrawal'])?'Biaya admin tarik tunai':((($parent['type']??'')==='transfer')?'Biaya admin transfer':'Biaya admin transaksi');
+        $parentNote=trim((string)($parent['note']??''));
+        $out[]=[
+            'type'=>'expense','category'=>'Biaya Administrasi Bank','amount'=>(int)$adminFee['amount'],
+            'note'=>substr($feeLabel.($parentNote!==''?' · '.$parentNote:''),0,255),
+            'transaction_date'=>(string)($parent['transaction_date']??$date),
+            'wallet_id'=>$feeWallet,'spending_kind'=>'once','source'=>'chat_admin_fee',
+            'admin_fee_auto_wallet'=>true,'admin_fee_parent_index'=>$parentIndex
+        ];
+    }
+    return $out;
 }
 
 function dateRangeFor(string $message): array {

@@ -25,6 +25,7 @@ function financeDefaultCategories() {
         ['id'=>11,'name'=>'Bonus','type'=>'income','icon'=>'🎁','keywords'=>['bonus','thr','insentif'],'archived'=>false],
         ['id'=>12,'name'=>'Transfer','type'=>'income','icon'=>'↔️','keywords'=>['transfer','dikirim','kiriman','masuk','terima'],'archived'=>false],
         ['id'=>13,'name'=>'Penjualan','type'=>'income','icon'=>'🏷️','keywords'=>['jual','penjualan'],'archived'=>false],
+        ['id'=>14,'name'=>'Biaya Administrasi Bank','type'=>'expense','icon'=>'🏦','keywords'=>['biaya admin','biaya administrasi','admin bank','biaya transfer'],'archived'=>false],
     ];
 }
 
@@ -68,7 +69,7 @@ function financeEnsureFeatureData(&$d) {
     if (!isset($d['meta']) || !is_array($d['meta'])) $d['meta'] = [];
     foreach ([
         'next_wallet_id'=>2,
-        'next_category_id'=>14,
+        'next_category_id'=>15,
         'next_bill_id'=>1,
         'next_recurring_id'=>1,
         'next_goal_id'=>1,
@@ -80,6 +81,17 @@ function financeEnsureFeatureData(&$d) {
         $max = 0;
         foreach ((array)$d[$pair[0]] as $item) $max = max($max, (int)($item['id'] ?? 0));
         $d['meta'][$pair[1]] = max((int)$d['meta'][$pair[1]], $max + 1);
+    }
+
+    // Tambahkan kategori sistem secara lazy ke akun lama tanpa migration DB.
+    $hasAdminFeeCategory=false;
+    foreach((array)$d['categories'] as $cat){
+        if(strcasecmp((string)($cat['name']??''),'Biaya Administrasi Bank')===0){$hasAdminFeeCategory=true;break;}
+    }
+    if(!$hasAdminFeeCategory){
+        $newCategoryId=(int)$d['meta']['next_category_id'];
+        $d['categories'][]=['id'=>$newCategoryId,'name'=>'Biaya Administrasi Bank','type'=>'expense','icon'=>'🏦','keywords'=>['biaya admin','biaya administrasi','admin bank','biaya transfer'],'archived'=>false];
+        $d['meta']['next_category_id']=$newCategoryId+1;
     }
 
     // V52: urutan dompet tersimpan per akun melalui sort_order di extra_json wallet.
@@ -1029,14 +1041,32 @@ function financeSetPendingChatConfirmation(array $drafts,$sourceMessage='',$warn
             $draft['spending_kind']='once';
             $draft['bill_candidates']=[];
         } else {
-            $draft['spending_kind']=transactionSpendingKind($draft);
-            $draft['bill_candidates']=financeBillCandidatesForTransaction($draft);
+            if(!empty($draft['admin_fee_auto_wallet'])){
+                // Biaya admin adalah biaya sekali bayar, bukan tagihan berulang.
+                $draft['spending_kind']='once';
+                $draft['bill_candidates']=[];
+            } else {
+                $draft['spending_kind']=transactionSpendingKind($draft);
+                $draft['bill_candidates']=financeBillCandidatesForTransaction($draft);
+            }
         }
         $rows[]=$draft;
     }
     $r=financeMutate(function(&$d)use($rows,$sourceMessage,$warning){
         $id=(int)$d['meta']['next_confirmation_id']++;
-        $d['pending_chat_confirmation']=['id'=>$id,'message'=>substr((string)$sourceMessage,0,500),'warning'=>substr((string)$warning,0,250),'drafts'=>$rows,'created_at'=>date('Y-m-d H:i:s')];
+        // Simpan salinan hasil parser sebelum user melakukan koreksi pada kartu.
+        // Draft aktif boleh berubah, tetapi baseline ini harus tetap utuh agar
+        // Adaptive Learning dapat mengetahui apa yang awalnya ditebak sistem.
+        $originalRows=json_decode(json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),true);
+        if(!is_array($originalRows))$originalRows=$rows;
+        $d['pending_chat_confirmation']=[
+            'id'=>$id,
+            'message'=>substr((string)$sourceMessage,0,500),
+            'warning'=>substr((string)$warning,0,250),
+            'drafts'=>$rows,
+            'original_drafts'=>$originalRows,
+            'created_at'=>date('Y-m-d H:i:s')
+        ];
         return $d['pending_chat_confirmation'];
     });return $r['result'];
 }
@@ -1104,14 +1134,28 @@ function financeConfirmPendingChat($confirmationId,array $overrides=[]){
         }
         $draft['bill_id']=$billId;$prepared[]=$draft;
     }
-    // Validasi saldo seluruh draft lebih dulu agar konfirmasi multi-transaksi tidak tersimpan sebagian.
+    // Biaya admin otomatis selalu memakai dompet sumber dari transaksi terkait,
+    // termasuk setelah pengguna mengubah dompet asal pada kartu konfirmasi.
+    foreach($prepared as $i=>$draft){
+        if(empty($draft['admin_fee_auto_wallet']))continue;
+        $parentIndex=(int)($draft['admin_fee_parent_index']??-1);
+        if($parentIndex<0||!isset($prepared[$parentIndex]))throw new InvalidArgumentException('Transaksi utama untuk biaya admin tidak ditemukan.');
+        $parent=$prepared[$parentIndex];
+        $linkedWallet=($parent['type']??'')==='transfer'
+            ?(int)($parent['from_wallet_id']??$parent['wallet_id']??0)
+            :(int)($parent['wallet_id']??$parent['from_wallet_id']??0);
+        if($linkedWallet<=0||!financeWalletById($linkedWallet))throw new InvalidArgumentException('Dompet untuk biaya admin tidak valid.');
+        $prepared[$i]['wallet_id']=$linkedWallet;
+    }
+    // Validasi saldo gabungan seluruh draft lebih dulu agar transaksi inti dan
+    // biaya admin tidak pernah tersimpan separuh jika saldo total tidak cukup.
     $requiredByWallet=[];
     foreach($prepared as $draft){
         $receivableAction=(string)($draft['receivable_action']??'');
         if($receivableAction==='lend')$wid=(int)($draft['wallet_id']??0);
         elseif($receivableAction==='repayment')continue;
         else {
-            $type=(string)($draft['type']??'expense');
+            $type=(string)($draft['type']??'');
             if($type==='expense')$wid=(int)($draft['wallet_id']??financeDefaultWalletId());
             elseif($type==='transfer')$wid=(int)($draft['from_wallet_id']??0);
             else continue;

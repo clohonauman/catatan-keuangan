@@ -167,6 +167,12 @@ try {
 
     $drafts=$message!==''?extractTransactions($message):[];
     $usedReceipt=false;$receiptDetection=['amount'=>0,'score'=>0,'line'=>''];$warning='';
+    foreach($drafts as $draftRow){
+        if(!empty($draftRow['cash_withdrawal_missing_wallet'])){
+            $warning='Dompet tunai belum ditemukan. Pilih dompet tujuan pada draft tarik tunai sebelum menyimpan, atau tambahkan dompet bertipe Tunai terlebih dahulu.';
+            break;
+        }
+    }
     if($attachment&&$mode!=='attachment'){
         $serverDetection=detectReceiptAmountFromText($ocrText);
         $receiptDetection=($ocrAmountClient>0&&$ocrScoreClient>=(int)$serverDetection['score'])?['amount'=>$ocrAmountClient,'score'=>$ocrScoreClient,'line'=>trim((string)($input['ocr_line']??''))]:$serverDetection;

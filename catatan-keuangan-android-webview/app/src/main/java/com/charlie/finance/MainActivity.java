@@ -19,6 +19,7 @@ import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CancellationSignal;
 import android.os.Environment;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -39,12 +40,23 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.text.TextUtils;
+import android.util.Log;
 
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialException;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.FragmentActivity;
+
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,6 +106,7 @@ public class MainActivity extends FragmentActivity {
     private Button biometricUsePinButton;
     private boolean biometricPromptVisible = false;
     private long backgroundedAt = 0L;
+    private boolean googleSignInInProgress = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -158,14 +171,9 @@ public class MainActivity extends FragmentActivity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         }
 
-        /*
-         * Safe Browsing WebView dimatikan.
-         * PENTING: sebelumnya kode Anda memanggil setSafeBrowsingEnabled(false),
-         * lalu beberapa baris kemudian setSafeBrowsingEnabled(true).
-         * Pemanggilan kedua itulah yang mengaktifkannya kembali.
-         */
+        // Safe Browsing tetap aktif untuk pemeriksaan keamanan URL di WebView.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            settings.setSafeBrowsingEnabled(false);
+            settings.setSafeBrowsingEnabled(true);
         }
 
         // Tandai request berasal dari aplikasi Android Charlie Finance
@@ -187,6 +195,8 @@ public class MainActivity extends FragmentActivity {
         webView.addJavascriptInterface(new OfflineBridge(), "AndroidOffline");
         webView.addJavascriptInterface(new ReminderBridge(), "AndroidReminders");
         webView.addJavascriptInterface(new AppInfoBridge(), "AndroidApp");
+        // Google sign-in is native; do not send the user to an external browser from WebView.
+        webView.addJavascriptInterface(new GoogleSignInBridge(), "AndroidGoogleSignIn");
 
         // Debug WebView hanya aktif pada debug build
         boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
@@ -331,14 +341,32 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void useApplicationPinFallback() {
+        biometricPromptVisible = false;
+
+        // Android 11+ dapat memakai kredensial perangkat (PIN/pola/sandi)
+        // langsung melalui BiometricPrompt. Ini tetap bekerja tanpa internet.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            int capability = BiometricManager.from(this).canAuthenticate(
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL);
+            if (capability == BiometricManager.BIOMETRIC_SUCCESS) {
+                authenticateBiometric(BIOMETRIC_MODE_UNLOCK);
+                return;
+            }
+            Toast.makeText(this, biometricUnavailableMessage(capability), Toast.LENGTH_LONG).show();
+            showBiometricOverlay("Gunakan biometrik atau kunci layar perangkat untuk membuka aplikasi.");
+            return;
+        }
+
+        // Android 7–10 tidak menyediakan DEVICE_CREDENTIAL melalui API BiometricPrompt
+        // yang dipakai aplikasi. Fallback PIN aplikasi lama hanya boleh dipanggil
+        // saat online karena validasinya dilakukan server-side.
         if (!isConnected()) {
             Toast.makeText(
                     this,
-                    "PIN aplikasi memerlukan koneksi untuk mengunci ulang sesi dengan aman.",
+                    "Pada Android 7–10, PIN aplikasi memerlukan koneksi. Gunakan biometrik saat offline.",
                     Toast.LENGTH_LONG).show();
             return;
         }
-        biometricPromptVisible = false;
         webView.loadUrl(APP_URL + "?app_lock=1");
         hideBiometricOverlay();
     }
@@ -441,6 +469,122 @@ public class MainActivity extends FragmentActivity {
     }
 
 
+
+    /**
+     * Starts Google's native Credential Manager UI. The ID token returns to the
+     * same WebView login page so its PHP session, CSRF token and one-time nonce
+     * are used by the existing server-side google_login endpoint.
+     */
+    private class GoogleSignInBridge {
+        @JavascriptInterface
+        public void signIn(String nonce, String serverClientId) {
+            runOnUiThread(() -> beginNativeGoogleSignIn(nonce, serverClientId));
+        }
+    }
+
+    private boolean isTrustedGoogleLoginPage() {
+        try {
+            if (webView == null || webView.getUrl() == null) return false;
+            Uri current = Uri.parse(webView.getUrl());
+            return "https".equalsIgnoreCase(current.getScheme())
+                    && APP_HOST.equalsIgnoreCase(current.getHost());
+        } catch (Exception ignored) { return false; }
+    }
+
+    private void beginNativeGoogleSignIn(String nonce, String serverClientId) {
+        if (googleSignInInProgress) {
+            dispatchGoogleSignInError("Permintaan login Google sedang diproses. Tunggu sebentar.");
+            return;
+        }
+        if (!isTrustedGoogleLoginPage()) {
+            dispatchGoogleSignInError("Buka halaman login Catatan Keuangan untuk masuk dengan Google.");
+            return;
+        }
+        if (!isConnected()) {
+            dispatchGoogleSignInError("Login dengan Google membutuhkan koneksi internet. Sambungkan internet lalu coba lagi.");
+            return;
+        }
+        if (nonce == null || !nonce.matches("(?i)^[0-9a-f]{64}$")) {
+            dispatchGoogleSignInError("Sesi login Google sudah kedaluwarsa. Muat ulang halaman login lalu coba lagi.");
+            return;
+        }
+        if (serverClientId == null
+                || !serverClientId.matches("^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$")) {
+            dispatchGoogleSignInError("Konfigurasi login Google belum lengkap. Hubungi administrator aplikasi.");
+            return;
+        }
+        googleSignInInProgress = true;
+        try {
+            CredentialManager credentialManager = CredentialManager.create(this);
+            GetSignInWithGoogleOption googleOption = new GetSignInWithGoogleOption.Builder(serverClientId)
+                    .setNonce(nonce)
+                    .build();
+            GetCredentialRequest request = new GetCredentialRequest.Builder()
+                    .addCredentialOption(googleOption)
+                    .build();
+            credentialManager.getCredentialAsync(this, request, new CancellationSignal(),
+                    ContextCompat.getMainExecutor(this),
+                    new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                        @Override public void onResult(GetCredentialResponse result) { handleNativeGoogleCredential(result); }
+                        @Override public void onError(GetCredentialException error) {
+                            Log.w("CatatanKeuanganGoogle", "Credential Manager sign-in failed: " + error.getClass().getSimpleName());
+                            googleSignInInProgress = false;
+                            String name = error.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+                            if (name.contains("cancel")) dispatchGoogleSignInError("Login Google dibatalkan. Anda bisa mencoba lagi.");
+                            else if (name.contains("nocredential")) dispatchGoogleSignInError("Tidak ada akun Google yang bisa dipilih. Pastikan akun Google sudah ditambahkan ke perangkat.");
+                            else dispatchGoogleSignInError("Login Google belum berhasil. Pastikan layanan Google aktif dan coba lagi.");
+                        }
+                    });
+        } catch (Exception error) {
+            Log.w("CatatanKeuanganGoogle", "Unable to start Credential Manager: " + error.getClass().getSimpleName());
+            googleSignInInProgress = false;
+            dispatchGoogleSignInError("Login Google belum dapat dimulai. Periksa layanan Google di perangkat lalu coba lagi.");
+        }
+    }
+
+    private void handleNativeGoogleCredential(GetCredentialResponse result) {
+        try {
+            Credential credential = result == null ? null : result.getCredential();
+            if (!(credential instanceof CustomCredential)) {
+                googleSignInInProgress = false;
+                dispatchGoogleSignInError("Google tidak mengembalikan kredensial yang valid. Silakan coba lagi.");
+                return;
+            }
+            CustomCredential custom = (CustomCredential) credential;
+            if (!GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(custom.getType())) {
+                googleSignInInProgress = false;
+                dispatchGoogleSignInError("Jenis kredensial Google tidak dikenali. Silakan coba lagi.");
+                return;
+            }
+            GoogleIdTokenCredential googleCredential = GoogleIdTokenCredential.createFrom(custom.getData());
+            String idToken = googleCredential.getIdToken();
+            if (idToken == null || idToken.length() < 100 || idToken.length() > 16000
+                    || !idToken.matches("^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$")) {
+                googleSignInInProgress = false;
+                dispatchGoogleSignInError("Google tidak mengembalikan token login yang valid. Silakan coba lagi.");
+                return;
+            }
+            googleSignInInProgress = false;
+            if (!isTrustedGoogleLoginPage()) {
+                dispatchGoogleSignInError("Halaman login berubah. Muat ulang halaman dan coba lagi.");
+                return;
+            }
+            final String tokenJson = JSONObject.quote(idToken);
+            if (webView != null) webView.post(() -> webView.evaluateJavascript(
+                    "(function(t){if(typeof window.ckGoogleNativeSignInSuccess==='function'){window.ckGoogleNativeSignInSuccess(t);}else if(typeof window.ckGoogleNativeSignInError==='function'){window.ckGoogleNativeSignInError('Halaman login belum diperbarui. Muat ulang halaman lalu coba lagi.');}})(" + tokenJson + ");", null));
+        } catch (Exception error) {
+            Log.w("CatatanKeuanganGoogle", "Unexpected native Google login response: " + error.getClass().getSimpleName());
+            googleSignInInProgress = false;
+            dispatchGoogleSignInError("Login Google belum berhasil. Silakan coba lagi.");
+        }
+    }
+
+    private void dispatchGoogleSignInError(String message) {
+        if (webView == null) return;
+        final String messageJson = JSONObject.quote(message == null ? "Login Google belum berhasil." : message);
+        webView.post(() -> webView.evaluateJavascript(
+                "if(typeof window.ckGoogleNativeSignInError==='function'){window.ckGoogleNativeSignInError(" + messageJson + ");}", null));
+    }
 
     private class BiometricBridge {
         @JavascriptInterface
@@ -659,30 +803,51 @@ public class MainActivity extends FragmentActivity {
         }
 
         networkCallback = new ConnectivityManager.NetworkCallback() {
-            @Override
-            public void onAvailable(Network network) {
+            private void dispatchValidatedState() {
+                boolean online = isConnected();
                 runOnUiThread(() -> {
-                    setOfflineAwareCacheMode(true);
-                    offlineBootRetryAttempted = false;
-                    if (showingLocalOfflinePage) {
-                        showingLocalOfflinePage = false;
-                        webView.loadUrl(APP_URL);
-                    } else {
-                        // Trigger event online agar queue IndexedDB langsung diproses.
+                    setOfflineAwareCacheMode(online);
+                    if (online) {
+                        offlineBootRetryAttempted = false;
+                        if (showingLocalOfflinePage) {
+                            showingLocalOfflinePage = false;
+                            webView.loadUrl(APP_URL);
+                        } else {
+                            // Trigger event online agar outbox IndexedDB langsung diproses.
+                            webView.evaluateJavascript(
+                                    "window.dispatchEvent(new Event('online'));",
+                                    null);
+                        }
+                    } else if (isOfflineReady()) {
                         webView.evaluateJavascript(
-                                "window.dispatchEvent(new Event('online'));",
+                                "window.dispatchEvent(new Event('offline'));",
                                 null);
                     }
                 });
             }
 
             @Override
+            public void onAvailable(Network network) {
+                // onAvailable bisa dipanggil sebelum Android menyatakan jaringan
+                // memiliki internet tervalidasi. Cek ulang capability supaya Wi-Fi
+                // tanpa internet tetap diperlakukan sebagai offline-first.
+                dispatchValidatedState();
+            }
+
+            @Override
+            public void onCapabilitiesChanged(Network network, NetworkCapabilities networkCapabilities) {
+                dispatchValidatedState();
+            }
+
+            @Override
             public void onLost(Network network) {
                 runOnUiThread(() -> {
                     setOfflineAwareCacheMode(false);
-                    webView.evaluateJavascript(
-                            "window.dispatchEvent(new Event('offline'));",
-                            null);
+                    if (isOfflineReady()) {
+                        webView.evaluateJavascript(
+                                "window.dispatchEvent(new Event('offline'));",
+                                null);
+                    }
                 });
             }
         };
@@ -1045,15 +1210,26 @@ public class MainActivity extends FragmentActivity {
 
         NetworkCapabilities caps = cm.getNetworkCapabilities(network);
 
-        return caps != null
-                && (caps.hasTransport(
-                        NetworkCapabilities.TRANSPORT_WIFI)
-                        || caps.hasTransport(
-                                NetworkCapabilities.TRANSPORT_CELLULAR)
-                        || caps.hasTransport(
-                                NetworkCapabilities.TRANSPORT_ETHERNET)
-                        || caps.hasTransport(
-                                NetworkCapabilities.TRANSPORT_VPN));
+        if (caps == null) {
+            return false;
+        }
+
+        boolean transport = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+        if (!transport) {
+            return false;
+        }
+
+        // NET_CAPABILITY_VALIDATED membedakan "tersambung ke Wi-Fi" dari
+        // benar-benar memiliki akses internet. Ini penting agar aplikasi segera
+        // masuk ke mesin IndexedDB ketika jaringan tersambung tetapi internet lag
+        // / captive / tidak merespons.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        }
+        return true;
     }
 
     @Override

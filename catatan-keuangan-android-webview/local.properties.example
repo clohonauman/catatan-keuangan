@@ -1,0 +1,4 @@
+# Copy this file to local.properties if Android Studio cannot detect the SDK.
+# Replace the path with the Android SDK location on your Mac.
+# Typical macOS path:
+# sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk

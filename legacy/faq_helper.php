@@ -389,10 +389,36 @@ function faqFindBestMatch(string $message): ?array {
     return $best;
 }
 
+function faqLooksLikePersonalFinanceDataQuestion(string $message): bool {
+    $t = faqNormalize($message);
+    if ($t === '') return false;
+
+    // Pertanyaan yang meminta DATA KEUANGAN MILIK AKUN harus diteruskan ke
+    // smartFinance/native assistant. Jangan biarkan FAQ generik menang hanya
+    // karena memiliki kata yang sama, misalnya "bulan" pada FAQ konteks chat.
+    $financialTopic = (bool)preg_match('/\b(?:saldo|pengeluaran|pemasukan|pendapatan|transaksi|tagihan|cicilan|angsuran|piutang|hutang|utang|budget|anggaran|gaji|uang|duit|keuangan|belanja|bensin|makan)\b/u', $t);
+    if (!$financialTopic) return false;
+
+    // Jelas merupakan pertanyaan tentang CARA/FITUR/DEFINISI -> tetap biarkan FAQ.
+    $featureQuestion = (bool)preg_match('/^(?:bagaimana|gimana|cara|apa itu|jelaskan|jelasin|fungsi|untuk apa)\b/u', $t);
+    if ($featureQuestion) return false;
+
+    $dataIntent = (bool)preg_match('/\b(?:berapa|brp|total|jumlah|terbesar|terbanyak|tertinggi|terkecil|terakhir|terbaru|rata[- ]?rata|rekap|ringkasan|selisih|sekarang|saat ini|bulan|minggu|tahun|hari ini|kemarin|tanggal)\b/u', $t)
+        || (bool)preg_match('/\b(?:saya|aku|punya|milik|ku)\b/u', $t);
+
+    return $dataIntent;
+}
+
 function faqAssistantReply(string $message): ?string {
     // V69: pertanyaan kondisi keuangan pribadi seperti "apakah aman sampai gajian?"
     // harus masuk engine analitik, bukan FAQ statis tentang cara kerja prediksi.
     if(function_exists('smartPaydayAnalysisIntent') && smartPaydayAnalysisIntent($message)) return null;
+
+    // V242: pertanyaan data keuangan pribadi selalu diprioritaskan ke engine
+    // finansial. Contoh: "Pengeluaran bulan ini?" / "Pengeluaran terbesar?".
+    // Sebelumnya query seperti ini salah dijawab FAQ-11 karena kata "bulan"
+    // dan "pengeluaran" kebetulan muncul di knowledge base FAQ tersebut.
+    if (faqLooksLikePersonalFinanceDataQuestion($message)) return null;
 
     $match = faqFindBestMatch($message);
     if (!$match) return null;

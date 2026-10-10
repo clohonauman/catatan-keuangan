@@ -20,7 +20,7 @@ class SiteController extends Controller
         // V44: halaman login/registrasi tetap selalu dapat diakses saat maintenance.
         // Maintenance baru mengunci aplikasi setelah sebuah akun benar-benar login.
         $incomingAction = Yii::$app->request->isPost ? (string)Yii::$app->request->post('action','') : '';
-        $maintenanceAuthPost = in_array($incomingAction, ['login','logout','register','request_recovery','reset_with_email_token'], true);
+        $maintenanceAuthPost = in_array($incomingAction, ['login','google_login','logout','register','request_recovery','reset_with_email_token'], true);
         if (
             !empty($maintenance['is_active'])
             && $maintenanceUser
@@ -50,6 +50,28 @@ class SiteController extends Controller
                     return $this->redirect(['site/index']);
                 }
                 if ($action === 'login') { authLogin(Yii::$app->request->post('username',''),Yii::$app->request->post('password','')); return $this->redirect(['site/index']); }
+                if ($action === 'google_login') {
+                    $googleClientId = trim((string)($_ENV['GOOGLE_CLIENT_ID'] ?? ''));
+                    if (preg_match('/^(GANTI_DENGAN|YOUR_|REPLACE_ME)/i', $googleClientId)) $googleClientId = '';
+                    $submittedGoogleNonce = (string)Yii::$app->request->post('google_nonce', '');
+                    $googleNonces = is_array($_SESSION['google_login_nonces'] ?? null) ? $_SESSION['google_login_nonces'] : [];
+                    $expectedGoogleNonce = '';
+                    if ($submittedGoogleNonce !== '' && isset($googleNonces[$submittedGoogleNonce])
+                        && (time() - (int)$googleNonces[$submittedGoogleNonce]) <= 600
+                        && (time() - (int)$googleNonces[$submittedGoogleNonce]) >= 0) {
+                        $expectedGoogleNonce = $submittedGoogleNonce;
+                        unset($googleNonces[$submittedGoogleNonce]);
+                    }
+                    // Nonce single-use; several open login tabs may each keep their own nonce.
+                    unset($_SESSION['google_login_nonce']);
+                    $_SESSION['google_login_nonces'] = $googleNonces;
+                    \app\services\GoogleSignInService::login(
+                        (string)Yii::$app->request->post('credential', ''),
+                        $googleClientId,
+                        $expectedGoogleNonce
+                    );
+                    return $this->redirect(['site/index']);
+                }
                 if ($action === 'request_recovery') { $identifier=trim((string)Yii::$app->request->post('identifier',''));$result=authRequestRecoveryToken($identifier);$_SESSION['recovery_identifier']=$identifier;$_SESSION['flash_notice']='Token pemulihan telah dikirim ke '.$result['masked'].'. Token berlaku 15 menit.';return $this->redirect(['site/index','mode'=>'forgot','sent'=>1]); }
                 if ($action === 'reset_with_email_token') {
                     if (Yii::$app->request->post('password','') !== Yii::$app->request->post('password_confirm','')) throw new \RuntimeException('Konfirmasi password baru tidak sama.');
@@ -114,8 +136,24 @@ class SiteController extends Controller
         $emailStatus=$user?authEmailStatus($user):['email'=>'','has_email'=>false,'verified'=>false,'verified_at'=>'','masked'=>''];
         $loginDevices=$user?authListDevices((int)$user['id']):[];
         $emailSecurityRequested=Yii::$app->request->get('email_security')!==null || (Yii::$app->request->isPost && in_array(Yii::$app->request->post('action',''),['save_email','resend_email_verification','verify_email','change_password','change_pin','revoke_device','revoke_other_devices'],true));
-        $assetVersion=max(@filemtime(Yii::getAlias('@webroot/assets/style.css'))?:1,@filemtime(Yii::getAlias('@webroot/assets/app.js'))?:1,@filemtime(Yii::getAlias('@webroot/assets/offline-store.js'))?:1);
-        return $this->render('index',compact('error','notice','mode','user','unlocked','emailStatus','loginDevices','emailSecurityRequested','assetVersion','nativeBiometricUnlockNonce','nativeBiometricAutoUnlockAllowed','forcePinFallback'));
+        $googleClientId=trim((string)($_ENV['GOOGLE_CLIENT_ID']??''));
+        if (preg_match('/^(GANTI_DENGAN|YOUR_|REPLACE_ME)/i', $googleClientId)) $googleClientId='';
+        $googleLoginNonce='';
+        if(!$user && $mode==='login' && $googleClientId!==''){
+            $googleLoginNonces=is_array($_SESSION['google_login_nonces']??null)?$_SESSION['google_login_nonces']:[];
+            foreach($googleLoginNonces as $nonceKey=>$createdAt){
+                if(!is_string($nonceKey)||(time()-(int)$createdAt)>600||(time()-(int)$createdAt)<0) unset($googleLoginNonces[$nonceKey]);
+            }
+            if(count($googleLoginNonces)>10) $googleLoginNonces=array_slice($googleLoginNonces,-10,10,true);
+            $googleLoginNonce=bin2hex(random_bytes(32));
+            $googleLoginNonces[$googleLoginNonce]=time();
+            $_SESSION['google_login_nonces']=$googleLoginNonces;
+            unset($_SESSION['google_login_nonce']);
+        }else{
+            unset($_SESSION['google_login_nonce'],$_SESSION['google_login_nonces']);
+        }
+        $assetVersion='261-'.max(@filemtime(Yii::getAlias('@webroot/assets/style.css'))?:1,@filemtime(Yii::getAlias('@webroot/assets/app.js'))?:1,@filemtime(Yii::getAlias('@webroot/assets/offline-store.js'))?:1,@filemtime(Yii::getAlias('@webroot/assets/offline-engine.js'))?:1);
+        return $this->render('index',compact('error','notice','mode','user','unlocked','emailStatus','loginDevices','emailSecurityRequested','assetVersion','nativeBiometricUnlockNonce','nativeBiometricAutoUnlockAllowed','forcePinFallback','googleClientId','googleLoginNonce'));
     }
 
     public function actionError()

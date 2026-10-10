@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="com.charlie.finance"
-4    android:versionCode="6"
-5    android:versionName="1.4.1" >
+4    android:versionCode="13"
+5    android:versionName="2.6.3" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="24"
@@ -121,59 +121,146 @@
 69            android:screenOrientation="unspecified" />
 69-->/Applications/XAMPP/xamppfiles/htdocs/catatan-keuangan/catatan-keuangan-android-webview/app/src/main/AndroidManifest.xml:49:13-52
 70
-71        <provider
-71-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
-72            android:name="androidx.startup.InitializationProvider"
-72-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:25:13-67
-73            android:authorities="com.charlie.finance.androidx-startup"
-73-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:26:13-68
+71        <service
+71-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:24:9-32:19
+72            android:name="androidx.credentials.playservices.CredentialProviderMetadataHolder"
+72-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:25:13-94
+73            android:enabled="true"
+73-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:26:13-35
 74            android:exported="false" >
-74-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:27:13-37
+74-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:27:13-37
 75            <meta-data
-75-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
-76                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-76-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
-77                android:value="androidx.startup" />
-77-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
-78        </provider>
+75-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:29:13-31:104
+76                android:name="androidx.credentials.CREDENTIAL_PROVIDER_KEY"
+76-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:30:17-76
+77                android:value="androidx.credentials.playservices.CredentialProviderPlayServicesImpl" />
+77-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:31:17-101
+78        </service>
 79
-80        <receiver
-80-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
-81            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
-82            android:directBootAware="false"
-82-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+80        <activity
+80-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:34:9-41:20
+81            android:name="androidx.credentials.playservices.controllers.identityauth.HiddenActivity"
+81-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:35:13-101
+82            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+82-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:36:13-87
 83            android:enabled="true"
-83-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
-84            android:exported="true"
-84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
-85            android:permission="android.permission.DUMP" >
-85-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
-86            <intent-filter>
-86-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
-87                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
-87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
-88            </intent-filter>
-89            <intent-filter>
-89-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
-90                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
-90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
-91            </intent-filter>
-92            <intent-filter>
-92-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
-93                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-93-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
-93-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
-94            </intent-filter>
-95            <intent-filter>
-95-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
-96                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-96-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
-96-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
-97            </intent-filter>
-98        </receiver>
-99    </application>
-100
-101</manifest>
+83-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:37:13-35
+84            android:exported="false"
+84-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:38:13-37
+85            android:fitsSystemWindows="true"
+85-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:39:13-45
+86            android:theme="@style/Theme.Hidden" >
+86-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:40:13-48
+87        </activity>
+88        <activity
+88-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:42:9-49:20
+89            android:name="androidx.credentials.playservices.controllers.identitycredentials.IdentityCredentialApiHiddenActivity"
+89-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:43:13-129
+90            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+90-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:44:13-87
+91            android:enabled="true"
+91-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:45:13-35
+92            android:exported="false"
+92-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:46:13-37
+93            android:fitsSystemWindows="true"
+93-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:47:13-45
+94            android:theme="@style/Theme.Hidden" >
+94-->[androidx.credentials:credentials-play-services-auth:1.6.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/b1b4c26060f68f3acfa90f7bf8b88beb/transformed/credentials-play-services-auth-1.6.0/AndroidManifest.xml:48:13-48
+95        </activity>
+96        <activity
+96-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:23:9-27:75
+97            android:name="com.google.android.gms.auth.api.signin.internal.SignInHubActivity"
+97-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:24:13-93
+98            android:excludeFromRecents="true"
+98-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:25:13-46
+99            android:exported="false"
+99-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:26:13-37
+100            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+100-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:27:13-72
+101        <!--
+102            Service handling Google Sign-In user revocation. For apps that do not integrate with
+103            Google Sign-In, this service will never be started.
+104        -->
+105        <service
+105-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:33:9-37:51
+106            android:name="com.google.android.gms.auth.api.signin.RevocationBoundService"
+106-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:34:13-89
+107            android:exported="true"
+107-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:35:13-36
+108            android:permission="com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION"
+108-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:36:13-107
+109            android:visibleToInstantApps="true" />
+109-->[com.google.android.gms:play-services-auth:21.1.1] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/c0e3cb2187970bd7ef2baf23b536d88b/transformed/play-services-auth-21.1.1/AndroidManifest.xml:37:13-48
+110
+111        <activity
+111-->[com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+112            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+112-->[com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+113            android:exported="false"
+113-->[com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+114            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+114-->[com.google.android.gms:play-services-base:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/57bacb9ef58048c0e6f8321d8067096b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+115
+116        <meta-data
+116-->[com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:21:9-23:69
+117            android:name="com.google.android.gms.version"
+117-->[com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:22:13-58
+118            android:value="@integer/google_play_services_version" />
+118-->[com.google.android.gms:play-services-basement:18.5.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/e791354c57ce6a21953958f4b130d085/transformed/play-services-basement-18.5.0/AndroidManifest.xml:23:13-66
+119
+120        <provider
+120-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+121            android:name="androidx.startup.InitializationProvider"
+121-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:25:13-67
+122            android:authorities="com.charlie.finance.androidx-startup"
+122-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:26:13-68
+123            android:exported="false" >
+123-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:27:13-37
+124            <meta-data
+124-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+125                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+125-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+126                android:value="androidx.startup" />
+126-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+127        </provider>
+128
+129        <receiver
+129-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+130            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+130-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+131            android:directBootAware="false"
+131-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+132            android:enabled="true"
+132-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+133            android:exported="true"
+133-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+134            android:permission="android.permission.DUMP" >
+134-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+135            <intent-filter>
+135-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+136                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+136-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+136-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+137            </intent-filter>
+138            <intent-filter>
+138-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+139                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+139-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+139-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+140            </intent-filter>
+141            <intent-filter>
+141-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+142                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+142-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+142-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+143            </intent-filter>
+144            <intent-filter>
+144-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+145                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/charlielohonauman/.gradle/caches/8.11.1/transforms/5fcdab4fbdeaff9fae1e69e9c585931a/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+146            </intent-filter>
+147        </receiver>
+148    </application>
+149
+150</manifest>

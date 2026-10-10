@@ -4,6 +4,139 @@ const esc = (s) =>
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
   })[c]);
 
+// V2.5.1: unified foreground loading indicator for network, offline queue,
+// chat responses, uploads, OCR and other asynchronous user actions.
+// The indicator is intentionally non-blocking: it informs the user without
+// freezing the page while the request is being processed.
+const cleanUrl = (u) => String(u || "").split("?")[0].replace(/^\//, "");
+
+let globalActionLoadingSeq = 0;
+const globalActionLoadingJobs = new Map();
+// Each control can have more than one active loading job (for example a click
+// that triggers a request which itself starts another async operation). Keep
+// the actual token set instead of a single data attribute so one completed
+// job cannot strand the spinner from another active job.
+const globalActionLoadingControls = new Map();
+
+function ensureGlobalActionLoader() {
+  if (document.getElementById("globalActionLoader")) return document.getElementById("globalActionLoader");
+  if (!document.body) return null;
+  const node = document.createElement("div");
+  node.id = "globalActionLoader";
+  node.className = "global-action-loader";
+  node.hidden = true;
+  node.setAttribute("role", "status");
+  node.setAttribute("aria-live", "polite");
+  node.setAttribute("aria-busy", "false");
+  node.innerHTML = '<span class="global-action-spinner" aria-hidden="true"></span><span class="global-action-loader-copy"><strong id="globalActionLoaderTitle">Memproses...</strong><small id="globalActionLoaderText">Harap tunggu sebentar.</small></span>';
+  document.body.appendChild(node);
+  return node;
+}
+
+function globalActionLoadingControlStart(token) {
+  const active = document.activeElement;
+  const control = active?.closest?.("button,[role=button],input[type=submit],input[type=button]");
+  if (!control || control.disabled) return;
+  let tokens = globalActionLoadingControls.get(control);
+  if (!tokens) {
+    tokens = new Set();
+    globalActionLoadingControls.set(control, tokens);
+  }
+  tokens.add(token);
+  control.classList.add("global-loading-control");
+  control.dataset.globalLoadingTokens = [...tokens].join(",");
+}
+
+function globalActionLoadingControlStop(token) {
+  for (const [control, tokens] of globalActionLoadingControls.entries()) {
+    if (!tokens.has(token)) continue;
+    tokens.delete(token);
+    if (!tokens.size) {
+      globalActionLoadingControls.delete(control);
+      control.classList.remove("global-loading-control");
+      delete control.dataset.globalLoadingTokens;
+    } else {
+      control.dataset.globalLoadingTokens = [...tokens].join(",");
+    }
+    break;
+  }
+}
+
+function renderGlobalActionLoader() {
+  const ui = ensureGlobalActionLoader();
+  if (!ui) return;
+  const visibleJobs = [...globalActionLoadingJobs.values()].filter(job => job.visible);
+  const latest = visibleJobs[visibleJobs.length - 1] || null;
+  ui.hidden = !latest;
+  ui.setAttribute("aria-busy", latest ? "true" : "false");
+  if (latest) {
+    const title = document.getElementById("globalActionLoaderTitle");
+    const detail = document.getElementById("globalActionLoaderText");
+    if (title) title.textContent = latest.label || "Memproses...";
+    if (detail) detail.textContent = latest.detail || "Harap tunggu sebentar.";
+    document.body.classList.add("global-action-loading-active");
+  } else {
+    document.body.classList.remove("global-action-loading-active");
+  }
+}
+
+function beginGlobalActionLoading(label = "Memproses...", detail = "Menunggu proses selesai.", options = {}) {
+  const token = ++globalActionLoadingSeq;
+  const job = { token, label, detail, visible: false, controlMarked: false };
+  globalActionLoadingJobs.set(token, job);
+  const delay = Number.isFinite(Number(options.delay)) ? Math.max(0, Number(options.delay)) : 140;
+  job.timer = window.setTimeout(() => {
+    const current = globalActionLoadingJobs.get(token);
+    if (!current) return;
+    current.visible = true;
+    renderGlobalActionLoader();
+  }, delay);
+  // Mark a clicked button immediately so the button itself gets a subtle spinner
+  // even when the global indicator has not yet crossed the visibility delay.
+  if (!options.silentControl) {
+    globalActionLoadingControlStart(token);
+    job.controlMarked = true;
+  }
+  return token;
+}
+
+function stopGlobalActionLoading(token) {
+  const job = globalActionLoadingJobs.get(token);
+  if (!job) return;
+  if (job.timer) window.clearTimeout(job.timer);
+  if (job.controlMarked) globalActionLoadingControlStop(token);
+  globalActionLoadingJobs.delete(token);
+  renderGlobalActionLoader();
+}
+
+async function withGlobalActionLoading(label, detail, fn, options = {}) {
+  const token = beginGlobalActionLoading(label, detail, options);
+  try {
+    return await fn();
+  } finally {
+    stopGlobalActionLoading(token);
+  }
+}
+
+function requestLoadingMessage(url, options = {}) {
+  const clean = cleanUrl(url);
+  const method = String(options.method || "GET").toUpperCase();
+  const upload = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (clean === "ajax/finance.php" && method !== "GET") {
+    return upload
+      ? { label: "Mengunggah & memproses nota...", detail: "Membaca lampiran dan menunggu respons Asisten Keuangan." }
+      : { label: "Memproses Asisten Keuangan...", detail: "Menunggu analisis dan respons transaksi." };
+  }
+  if (upload) return { label: "Mengunggah...", detail: "Mengirim file dengan aman. Mohon tunggu." };
+  if (method !== "GET" && method !== "HEAD") return { label: "Menyimpan perubahan...", detail: "Menunggu respons server/perangkat." };
+  return { label: "Memuat data...", detail: "Mengambil data terbaru." };
+}
+
+window.financeActionLoading = {
+  begin: beginGlobalActionLoading,
+  stop: stopGlobalActionLoading,
+  with: withGlobalActionLoading,
+};
 
 function iconSvg(name) {
   const icons = {
@@ -67,6 +200,53 @@ let txPageState = { page: 1, limit: TX_PAGE_SIZE, total: 0, has_more: false, loa
 let chatPageState = { page: 1, limit: CHAT_PAGE_SIZE, total: 0, has_more: false, loading: false, user_interacted: false };
 let offlineTransactionPool = [];
 let offlineChatPool = [];
+
+// Chat response hardening: tampilkan balasan finance langsung dari response API
+// sebelum refresh dashboard selesai. Ini mencegah balasan hilang ketika endpoint
+// chat berhasil tetapi refresh dashboard/chat pagination terlambat atau memakai
+// snapshot lama. Baris transient otomatis dibuang ketika balasan yang sama sudah
+// benar-benar tersimpan di server.
+let transientChatReplies = [];
+
+function chatRowKey(row = {}) {
+  return `${String(row.role || '')}\n${String(row.message || '').trim()}`;
+}
+
+function transientChatAlreadyPersisted(row, chats = []) {
+  const key = chatRowKey(row);
+  if (!key) return false;
+  return (chats || []).slice(-20).some((item) => chatRowKey(item) === key);
+}
+
+function addTransientAssistantReply(message, extra = {}) {
+  const text = String(message || '').trim();
+  if (!text) return false;
+  const row = {
+    id: `transient-chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    role: 'assistant',
+    message: text,
+    created_at: new Date().toISOString(),
+    transient: true,
+    offline_pending: !!extra.offlinePending,
+  };
+  // Hindari menambahkan balasan identik berulang dalam satu respons window.
+  transientChatReplies = transientChatReplies.filter((item) => !transientChatAlreadyPersisted(item, state.chats || []));
+  if (!transientChatReplies.some((item) => chatRowKey(item) === chatRowKey(row))) transientChatReplies.push(row);
+  if (transientChatReplies.length > 12) transientChatReplies = transientChatReplies.slice(-12);
+  return true;
+}
+
+function mergeTransientChatReplies(chats = []) {
+  const base = Array.isArray(chats) ? chats.slice() : [];
+  transientChatReplies = transientChatReplies.filter((item) => !transientChatAlreadyPersisted(item, base));
+  if (!transientChatReplies.length) return base;
+  return [...base, ...transientChatReplies].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+}
+
+function removeChatTypingBubble() {
+  document.querySelectorAll('[id="typing"]').forEach((el) => el.remove());
+}
+
 
 // V47: cold-start offline readiness. Android baru dianggap siap offline jika
 // shell aplikasi DAN snapshot dashboard sudah berhasil disimpan pada origin domain.
@@ -291,7 +471,13 @@ let realtimeAccountSignature = "";
 let realtimeNotificationSignature = "";
 let realtimeDraftSignature = "";
 let subscriptionState = null;
+// Prevent an older subscription snapshot request from overwriting an invoice
+// created/uploaded moments earlier by a successful mutation response.
+let subscriptionMutationRevision = 0;
+let subscriptionLoadSequence = 0;
+let subscriptionAppliedLoadSequence = 0;
 let subscriptionCouponPreview = null;
+let subscriptionQrisPollTimer = null;
 let realtimeTimer = null;
 let realtimeRequestRunning = false;
 const REALTIME_ACTIVE_MS = 2000;
@@ -557,6 +743,9 @@ const OFFLINE_QUEUE_ENDPOINTS = [
   "ajax/delete_transaction.php",
   "ajax/delete_message.php",
   "ajax/learning.php",
+  "ajax/email_notifications.php",
+  "ajax/notifications.php",
+  "ajax/subscription.php",
 ];
 
 function isMutationRequest(options = {}) {
@@ -651,7 +840,32 @@ function parseApiJsonPayload(raw) {
 }
 window.financeParseApiJsonPayload = parseApiJsonPayload;
 
-async function fetchJson(url, options = {}, offlineExtra = {}) {
+async function cancelOfflineQueueByLocalId(localId, entity = "transaction") {
+  const id = Number(localId || 0);
+  if (!id || id >= 0 || !window.FinanceOffline?.listQueue) return 0;
+  let removed = 0;
+  try {
+    const rows = await FinanceOffline.listQueue(window.FINANCE_APP?.userId);
+    for (const row of (rows || [])) {
+      const p = row.preview || {};
+      const ids = Array.isArray(p.local_transaction_ids) ? p.local_transaction_ids.map(Number) : [];
+      const drafts = Array.isArray(p.offline_draft_ids) ? p.offline_draft_ids.map(Number) : [];
+      const direct = Number(p.offline_local_id || 0) === id;
+      const related = entity === "transaction"
+        ? ids.includes(id) || Number(p.id || 0) === id
+        : entity === "transaction_inbox"
+          ? drafts.includes(id) || Number(p.id || 0) === id || Number(p.offline_local_id || 0) === id
+          : direct;
+      if (related) {
+        await FinanceOffline.deleteQueue(row.id);
+        removed++;
+      }
+    }
+  } catch (_) {}
+  return removed;
+}
+
+async function _fetchJsonCore(url, options = {}, offlineExtra = {}) {
   const queueable = canQueueOffline(url, options);
   const opId = queueable ? (offlineExtra.clientOpId || FinanceOffline.uuid()) : "";
   let requestOptions = queueable ? attachClientOpId(options, opId) : { ...options };
@@ -663,19 +877,84 @@ async function fetchJson(url, options = {}, offlineExtra = {}) {
     requestOptions = { ...requestOptions, headers };
   }
   const queueExtra = queueable ? { ...offlineExtra, clientOpId: opId } : offlineExtra;
-  if (queueable && !navigator.onLine) {
-    return queueOfflineMutation(url, requestOptions, queueExtra);
+
+  const runLocal = async () => {
+    if (!window.FinanceOfflineEngine) throw new Error("Mesin offline belum tersedia pada perangkat ini.");
+    const local = await FinanceOfflineEngine.handleRequest(url, requestOptions);
+    if (!local || local.ok === false) throw new Error(local?.error || "Request offline gagal.");
+    if (!queueable) return local;
+
+    const localResult = local.result;
+    const inferredId = Number(local.offline_local_id || localResult?.id || local.transaction?.id || 0);
+    let inferredEntity = String(local.offline_entity || "");
+    if (!inferredEntity && local.transaction?.id) inferredEntity = "transaction";
+    const preview = {
+      ...(queueExtra.preview || {}),
+      local_applied: true,
+      offline_local_id: inferredId,
+      offline_entity: inferredEntity,
+      local_pending_id: Number(local.pending_confirmation?.id || 0),
+      offline_draft_ids: Array.isArray(local.offline_draft_ids) ? local.offline_draft_ids.map(Number) : [],
+      local_transaction_ids: Array.isArray(local.local_transaction_ids) ? local.local_transaction_ids.map(Number) : [],
+    };
+    const payload = local && typeof local === "object" ? local : {};
+    const parsedPayload = (() => {
+      try {
+        if (requestOptions.body instanceof FormData) { const out = {}; for (const [k,v] of requestOptions.body.entries()) if (!(v instanceof Blob)) out[k] = v; return out; }
+        return typeof requestOptions.body === "string" ? JSON.parse(requestOptions.body || "{}") : {};
+      } catch (_) { return {}; }
+    })();
+
+    // Operasi lokal yang membatalkan operasi lokal sebelumnya tidak perlu dikirim ke server.
+    // Ini mencegah transaksi offline yang sudah dibuat lalu dihapus/di-undo muncul kembali
+    // ketika antrean sinkronisasi diproses.
+    if (cleanUrl(url) === "ajax/delete_transaction.php" && Number(parsedPayload.id || 0) < 0) {
+      await cancelOfflineQueueByLocalId(parsedPayload.id, "transaction");
+      return { ...local, offline_local_applied: true, offline_local_only: true, offline_queued: false, message: "Perubahan lokal dibatalkan sebelum sinkronisasi." };
+    }
+    if (cleanUrl(url) === "ajax/features.php" && parsedPayload.action === "history_undo" && Number(local.result?.entity_id || 0) < 0) {
+      await cancelOfflineQueueByLocalId(local.result.entity_id, "transaction");
+      return { ...local, offline_local_applied: true, offline_local_only: true, offline_queued: false, message: "Perubahan lokal dibatalkan sebelum sinkronisasi." };
+    }
+    if (cleanUrl(url) === "ajax/features.php" && parsedPayload.action === "inbox_dismiss" && Number(parsedPayload.id || 0) < 0) {
+      await cancelOfflineQueueByLocalId(parsedPayload.id, "transaction_inbox");
+      return { ...local, offline_local_applied: true, offline_local_only: true, offline_queued: false, message: "Draf lokal dibatalkan sebelum sinkronisasi." };
+    }
+    if (cleanUrl(url) === "ajax/delete_message.php" && Number(parsedPayload.id || 0) < 0) {
+      await cancelOfflineQueueByLocalId(parsedPayload.id, "chat");
+      return { ...local, offline_local_applied: true, offline_local_only: true, offline_queued: false, message: "Pesan lokal dihapus dari perangkat." };
+    }
+
+    const queued = await queueOfflineMutation(url, requestOptions, { ...queueExtra, preview });
+    return { ...local, ...queued, offline_local_applied: true };
+  };
+
+  if (window.FinanceOfflineEngine && !navigator.onLine) {
+    return runLocal();
   }
+
   let r;
+  let timeoutId = null;
+  let controller = null;
   try {
+    const fetchOptions = { credentials: "same-origin", cache: "no-store", ...requestOptions };
+    if (!requestOptions.signal && typeof AbortController !== "undefined") {
+      controller = new AbortController();
+      fetchOptions.signal = controller.signal;
+      const timeoutMs = method === "GET" ? 12000 : 18000;
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
     const requestUrl = legacyApiUrl(url);
-    r = await fetch(requestUrl, { credentials: "same-origin", cache: "no-store", ...requestOptions });
+    r = await fetch(requestUrl, fetchOptions);
   } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (window.FinanceOfflineEngine && (isNetworkError(err) || err?.name === "AbortError")) return runLocal();
     if (queueable && isNetworkError(err)) return queueOfflineMutation(url, requestOptions, queueExtra);
     throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
   if (r.status === 401) {
-    // Saat online, session memang perlu dibuka ulang. Queue offline tidak dihapus.
     if (navigator.onLine) location.reload();
     throw new Error("Sesi terkunci.");
   }
@@ -685,19 +964,44 @@ async function fetchJson(url, options = {}, offlineExtra = {}) {
   catch (_) {
     throw new Error("Endpoint " + String(url) + " tidak mengembalikan JSON valid. HTTP " + r.status + (raw ? " — " + raw.substring(0, 180) : ""));
   }
-  // V44: maintenance dapat dinyalakan saat user sedang memakai aplikasi.
-  // Semua endpoint terlindungi mengembalikan HTTP 503 + maintenance=true;
-  // arahkan akun yang tidak dikecualikan ke halaman maintenance seketika.
   if (r.status === 503 && j && j.maintenance === true) {
-    try {
-      sessionStorage.setItem("finance_maintenance_redirect", String(Date.now()));
-    } catch (_) {}
+    try { sessionStorage.setItem("finance_maintenance_redirect", String(Date.now())); } catch (_) {}
     window.location.replace(legacyApiUrl("index.php?r=site%2Findex&_maintenance=1"));
     throw new Error(j.error || "Mode maintenance sedang aktif.");
   }
   if (!r.ok || j.ok === false) throw new Error(j.error || "Request gagal.");
+  if (cleanUrl(url) === "ajax/finance.php" && method !== "GET" && !String(j.reply || "").trim()) {
+    // Do not leave the user with a silent chat when a legacy bridge/proxy returns
+    // HTTP 200 without the expected reply. A local assistant response is generated
+    // only as a presentation fallback; we do not apply/queue another mutation here.
+    try {
+      if (window.FinanceOfflineEngine && typeof window.FinanceOfflineEngine.previewFinanceChat === "function") {
+        const preview = await window.FinanceOfflineEngine.previewFinanceChat(requestOptions);
+        if (preview && String(preview.reply || "").trim()) {
+          return { ...j, reply: String(preview.reply), local_preview_fallback: true };
+        }
+      }
+    } catch (previewError) {
+      console.warn("Local chat preview fallback gagal:", previewError);
+    }
+    throw new Error("Server menerima pesan tetapi tidak mengembalikan balasan Asisten Keuangan.");
+  }
   if (isMutationRequest(options) && !j.offline_queued) announceRealtimeMutation();
   return j;
+}
+
+async function fetchJson(url, options = {}, offlineExtra = {}) {
+  if (offlineExtra?.silentLoading) return _fetchJsonCore(url, options, offlineExtra);
+  const loading = requestLoadingMessage(url, options);
+  const token = beginGlobalActionLoading(loading.label, loading.detail, {
+    delay: Number(offlineExtra?.loadingDelay ?? (String(options.method || "GET").toUpperCase() === "GET" ? 180 : 90)),
+    silentControl: !!offlineExtra?.silentLoadingControl,
+  });
+  try {
+    return await _fetchJsonCore(url, options, offlineExtra);
+  } finally {
+    stopGlobalActionLoading(token);
+  }
 }
 
 async function fetchTransactionView(page = 1, limit = TX_PAGE_SIZE) {
@@ -836,11 +1140,12 @@ async function applyOfflineQueueOverlay(baseState, allTransactions) {
   for (const rec of queue) {
     const cleanUrl = String(rec.url).split("?")[0].replace(/^\//, "");
     const p = rec.preview || {};
+    if (p.local_applied) continue;
 
     if (cleanUrl === "ajax/finance.php") {
       const label = p.message || (p.photo ? "📷 Foto tersimpan offline" : "Permintaan chat offline");
       s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "user", message: label, created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
-      s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "assistant", message: "⏳ Tersimpan offline. Setelah tersinkron, transaksi akan ditampilkan untuk konfirmasi sebelum disimpan.", created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
+      s.chats.push({ id: `offline-chat-${rec.id}-${chatSeq++}`, role: "assistant", message: "⏳ Tersimpan offline. Data lokal akan disinkronkan otomatis saat koneksi tersedia.", created_at: new Date(rec.created_at).toISOString(), offline_pending: true });
       continue;
     }
 
@@ -852,7 +1157,7 @@ async function applyOfflineQueueOverlay(baseState, allTransactions) {
         id: `offline-tx-${rec.id}`,
         type: String(x.type || "expense"),
         amount: Number(x.amount || 0),
-        transaction_date: String(x.transaction_date || new Date(rec.created_at).toISOString().slice(0, 10)),
+        transaction_date: String(x.transaction_date || (() => { const d = new Date(rec.created_at); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })()),
         category: String(x.type || "") === "transfer" ? "Transfer Antar Dompet" : String(x.category || "Lainnya"),
         note: String(x.note || ""),
         wallet_id: Number(x.wallet_id || 0),
@@ -937,6 +1242,41 @@ async function loadFromOfflineSnapshot() {
   return state;
 }
 
+async function refreshFullOfflineSnapshot() {
+  if (!window.FinanceOffline || !window.FinanceOfflineEngine || !navigator.onLine) return;
+  try {
+    const last = Number(await FinanceOffline.getMeta("full_snapshot_saved_at", 0) || 0);
+    if (Date.now() - last < 30000) return;
+    const snapshot = await fetchJson("ajax/offline_snapshot.php?_" + Date.now());
+    if (!snapshot?.data) return;
+    await FinanceOffline.saveSnapshot("offline_full", {
+      saved_at: Date.now(), data: snapshot.data, features: snapshot.features || {}, summary: snapshot.summary || {},
+      account: snapshot.account || {}, daily_budget: snapshot.daily_budget || {}, daily_budget_settings: snapshot.daily_budget_settings || {},
+      notification_center: snapshot.notification_center || { unread_count: 0, notifications: [] }, learning: snapshot.learning || {},
+      state: { ...cloneOfflineDashboard(snapshot), offline_mode: false },
+    });
+    await FinanceOffline.saveSnapshot("dashboard", { ...cloneOfflineDashboard(snapshot), offline_mode: false });
+    await FinanceOffline.saveSnapshot("all_transactions", Array.isArray(snapshot.data.transactions) ? snapshot.data.transactions : []);
+    await FinanceOffline.saveMeta("full_snapshot_saved_at", Date.now());
+    offlineSnapshotReadyForColdStart = true;
+    notifyAndroidOfflineReadyIfPossible();
+    // Siapkan engine OCR saat pertama kali online. Setelah worker/lang data pernah
+    // diambil, Service Worker akan menjaga resource tersebut agar OCR bisa dipakai
+    // saat offline tanpa perlu jaringan. Warmup tidak menghalangi UI.
+    if (navigator.onLine) setTimeout(() => warmupOcrOffline().catch(() => false), 1200);
+  } catch (_) {}
+}
+function cloneOfflineDashboard(snapshot) {
+  return {
+    ok: true, summary: snapshot.summary || {}, features: snapshot.features || {}, account: snapshot.account || {},
+    transactions: (snapshot.data?.transactions || []).slice().sort(transactionSortForSnapshot).slice(0, 10),
+    chats: (snapshot.data?.chats || []).slice().sort(chatSortAscending).slice(-10),
+    chat_meta: { page: 1, limit: 10, total: (snapshot.data?.chats || []).length, loaded: Math.min(10, (snapshot.data?.chats || []).length), has_more: (snapshot.data?.chats || []).length > 10, next_page: (snapshot.data?.chats || []).length > 10 ? 2 : null },
+    transaction_meta: { count: (snapshot.data?.transactions || []).length, income: Number(snapshot.summary?.income || 0), expense: Number(snapshot.summary?.expense || 0), pagination: { page: 1, limit: 10, total: (snapshot.data?.transactions || []).length, loaded: Math.min(10, (snapshot.data?.transactions || []).length), loaded_through: Math.min(10, (snapshot.data?.transactions || []).length), has_more: (snapshot.data?.transactions || []).length > 10, next_page: (snapshot.data?.transactions || []).length > 10 ? 2 : null } },
+    daily_budget: snapshot.daily_budget || {}, daily_budget_settings: snapshot.daily_budget_settings || {},
+    notification_unread_count: Number(snapshot.notification_center?.unread_count || 0), revision: Number(snapshot.data?.meta?.revision || 0),
+  };
+}
 async function cacheOnlineSnapshot(dashboard, loadedTx = [], loadedChats = null) {
   if (!window.FinanceOffline) return;
   try {
@@ -950,9 +1290,9 @@ async function cacheOnlineSnapshot(dashboard, loadedTx = [], loadedChats = null)
     ]);
     offlineSnapshotReadyForColdStart = true;
     notifyAndroidOfflineReadyIfPossible();
-    if (!offlineShellReadyForColdStart && "serviceWorker" in navigator) {
-      cacheCurrentShellForOffline().catch(() => false);
-    }
+    if (!offlineShellReadyForColdStart && "serviceWorker" in navigator) cacheCurrentShellForOffline().catch(() => false);
+    refreshFullOfflineSnapshot().catch(() => {});
+    if (navigator.onLine) setTimeout(() => warmupOcrOffline().catch(() => false), 1800);
   } catch (_) {}
 }
 
@@ -1134,13 +1474,33 @@ async function loadMoreChats() {
   updateChatInfiniteLoader();
 }
 
+const localPhotoUrlCache = new WeakMap();
+
+function localAttachmentBlob(att) {
+  if (!att || typeof att !== "object") return null;
+  const blob = att.local_blob || att.blob || null;
+  if (blob && (blob instanceof Blob || typeof blob.arrayBuffer === "function")) return blob;
+  return null;
+}
+
 function photoUrl(att) {
-  return att && att.file ? legacyApiUrl("ajax/photo.php?f=" + encodeURIComponent(att.file) + "&pv=7") : "";
+  if (!att || typeof att !== "object") return "";
+  if (att.local_data_url) return String(att.local_data_url);
+  const localBlob = localAttachmentBlob(att);
+  if (localBlob) {
+    if (localPhotoUrlCache.has(att)) return localPhotoUrlCache.get(att);
+    try {
+      const url = URL.createObjectURL(localBlob);
+      localPhotoUrlCache.set(att, url);
+      return url;
+    } catch (_) {}
+  }
+  return att.file ? legacyApiUrl("ajax/photo.php?f=" + encodeURIComponent(att.file) + "&pv=8") : "";
 }
 
 function attachmentHtml(att, compact = false) {
-  if (!att || !att.file) return "";
   const url = photoUrl(att);
+  if (!url) return "";
   return `<button type="button" class="stored-photo ${compact ? "compact" : ""}" data-photo-url="${esc(url)}" aria-label="Lihat foto"><img src="${esc(url)}" alt="Lampiran foto" loading="lazy"></button>`;
 }
 
@@ -1232,7 +1592,7 @@ function pendingConfirmationMarkup(pending) {
             <label>Nama peminjam<input data-confirm-field="receivable_borrower_name" value="${esc(d.receivable_borrower_name || '')}" ${isRepay?'readonly':''}></label>
             <input type="hidden" data-confirm-field="receivable_borrower_key" value="${esc(d.receivable_borrower_key || '')}">
             <label>Nominal<input type="number" min="1" step="1000" data-confirm-field="amount" value="${Number(d.amount || 0)}"></label>
-            <label>Tanggal<input type="date" data-confirm-field="transaction_date" value="${esc(d.transaction_date || new Date().toISOString().slice(0,10))}"></label>
+            <label>Tanggal<input type="date" data-confirm-field="transaction_date" value="${esc(d.transaction_date || localTodayValue())}"></label>
             <label>${isRepay?'Masuk ke dompet':'Dari dompet'}<select data-confirm-field="wallet_id">${receivablePendingWalletOptions(Number(d.wallet_id || 0))}</select></label>
             ${isRepay ? `<label class="receivable-confirm-allocation">Pelunasan untuk<select data-confirm-field="receivable_lend_id">${receivablePendingLoanOptions(d)}</select><small>Pilih satu hutang tertentu atau biarkan akumulasi agar dialokasikan ke hutang tertua.</small></label>` : ''}
             <label class="receivable-confirm-note">Keterangan<input data-confirm-field="note" maxlength="255" value="${esc(d.note || '')}"></label>
@@ -1246,17 +1606,23 @@ function pendingConfirmationMarkup(pending) {
       const singleWallet = Number(d.wallet_id || d.from_wallet_id || wallets[0]?.id || 1);
       const fromWallet = Number(d.from_wallet_id || d.wallet_id || wallets[0]?.id || 1);
       const firstOther = wallets.find(w => Number(w.id) !== fromWallet)?.id || wallets[0]?.id || 1;
-      const toWallet = Number(d.to_wallet_id || firstOther);
-      return `<div class="chat-confirm-row" data-confirm-index="${i}">
+      const isAdminFee = Boolean(d.admin_fee_auto_wallet);
+      const adminFeeParent = isAdminFee && Number.isInteger(Number(d.admin_fee_parent_index)) ? Number(d.admin_fee_parent_index) : null;
+      const toWallet = d.to_wallet_id !== undefined && d.to_wallet_id !== null ? Number(d.to_wallet_id || 0) : Number(firstOther);
+      const toWalletOptions = d.cash_withdrawal && !toWallet
+        ? `<option value="" selected>Pilih dompet tujuan</option>${pendingWalletOptions(0)}`
+        : pendingWalletOptions(toWallet);
+      return `<div class="chat-confirm-row" data-confirm-index="${i}"${adminFeeParent !== null ? ` data-admin-fee-parent-index="${adminFeeParent}"` : ""}>
         <div class="chat-confirm-number">#${i+1}</div>
         <div class="chat-confirm-fields">
           <label class="chat-confirm-type-field">Jenis transaksi<select data-confirm-field="type"><option value="expense"${type==='expense'?' selected':''}>Pengeluaran</option><option value="income"${type==='income'?' selected':''}>Pemasukan</option><option value="transfer"${type==='transfer'?' selected':''}>Transfer Antar Dompet</option></select></label>
           <label>Nominal<input type="number" min="1" step="1" data-confirm-field="amount" value="${Number(d.amount || 0)}"></label>
           <label data-confirm-group="category">Kategori<select data-confirm-field="category">${pendingCategoryOptions(d.category || "Lainnya", type === "transfer" ? "expense" : type)}</select></label>
-          <label>Tanggal<input type="date" data-confirm-field="transaction_date" value="${esc(d.transaction_date || new Date().toISOString().slice(0,10))}"></label>
-          <label data-confirm-group="wallet">Dompet<select data-confirm-field="wallet_id">${pendingWalletOptions(singleWallet)}</select></label>
+          <label>Tanggal<input type="date" data-confirm-field="transaction_date" value="${esc(d.transaction_date || localTodayValue())}"></label>
+          <label data-confirm-group="wallet">Dompet<select data-confirm-field="wallet_id"${isAdminFee ? " disabled" : ""}>${pendingWalletOptions(singleWallet)}</select></label>
+          ${isAdminFee ? `<small class="chat-confirm-note">Dompet biaya admin mengikuti dompet sumber transaksi utama.</small>` : ""}
           <label data-confirm-group="from-wallet">Dompet asal<select data-confirm-field="from_wallet_id">${pendingWalletOptions(fromWallet)}</select></label>
-          <label data-confirm-group="to-wallet">Dompet tujuan<select data-confirm-field="to_wallet_id">${pendingWalletOptions(toWallet)}</select></label>
+          <label data-confirm-group="to-wallet">Dompet tujuan<select data-confirm-field="to_wallet_id">${toWalletOptions}</select></label>
           <label data-confirm-group="spending-kind">Pola<select data-confirm-field="spending_kind"><option value="daily"${d.spending_kind==='daily'?' selected':''}>Harian</option><option value="once"${d.spending_kind!=='daily'&&d.spending_kind!=='recurring'?' selected':''}>Sekali bayar</option><option value="recurring"${d.spending_kind==='recurring'?' selected':''}>Berulang</option></select></label>
           <label data-confirm-group="bill">Hubungkan tagihan<select data-confirm-field="bill_id"><option value="0">Tidak dihubungkan</option>${billOptions(candidates)}</select></label>
         </div>
@@ -1311,11 +1677,38 @@ function syncPendingConfirmationRow(row, resetCategory = false) {
 
 function wirePendingConfirmationCard(card) {
   if (!card) return;
-  card.querySelectorAll('[data-confirm-index]').forEach(row => {
+  const rows = [...card.querySelectorAll('[data-confirm-index]')];
+  const syncLinkedAdminFeeWallets = (parentIndex) => {
+    const parent = rows.find(row => Number(row.dataset.confirmIndex) === Number(parentIndex));
+    if (!parent || parent.dataset.receivableConfirm) return;
+    const get = (name) => parent.querySelector(`[data-confirm-field="${name}"]`);
+    const parentType = get("type")?.value || "expense";
+    const sourceWallet = parentType === "transfer" ? get("from_wallet_id")?.value : get("wallet_id")?.value;
+    if (!sourceWallet) return;
+    rows.forEach(feeRow => {
+      if (feeRow.dataset.adminFeeParentIndex === "" || feeRow.dataset.adminFeeParentIndex == null) return;
+      if (Number(feeRow.dataset.adminFeeParentIndex) !== Number(parentIndex)) return;
+      const wallet = feeRow.querySelector('[data-confirm-field="wallet_id"]');
+      if (wallet) wallet.value = String(sourceWallet);
+    });
+  };
+  rows.forEach(row => {
     if (row.dataset.receivableConfirm) return;
     syncPendingConfirmationRow(row, false);
-    row.querySelector('[data-confirm-field="type"]')?.addEventListener('change', () => syncPendingConfirmationRow(row, true));
-    row.querySelector('[data-confirm-field="from_wallet_id"]')?.addEventListener('change', () => syncPendingConfirmationRow(row, false));
+    const index = Number(row.dataset.confirmIndex);
+    row.querySelector('[data-confirm-field="type"]')?.addEventListener('change', () => {
+      syncPendingConfirmationRow(row, true);
+      syncLinkedAdminFeeWallets(index);
+    });
+    row.querySelector('[data-confirm-field="from_wallet_id"]')?.addEventListener('change', () => {
+      syncPendingConfirmationRow(row, false);
+      syncLinkedAdminFeeWallets(index);
+    });
+    row.querySelector('[data-confirm-field="wallet_id"]')?.addEventListener('change', () => syncLinkedAdminFeeWallets(index));
+  });
+  rows.forEach(row => {
+    const index = Number(row.dataset.confirmIndex);
+    if (rows.some(feeRow => feeRow.dataset.adminFeeParentIndex !== "" && Number(feeRow.dataset.adminFeeParentIndex) === index)) syncLinkedAdminFeeWallets(index);
   });
 }
 
@@ -1397,23 +1790,24 @@ function renderChats(forceBottom = false) {
   const distanceFromBottom = cb.scrollHeight - cb.scrollTop - cb.clientHeight;
   const wasNearBottom = distanceFromBottom < 90;
 
+  const renderedChats = mergeTransientChatReplies(state.chats || []);
   cb.innerHTML = "";
-  if ((state.chats || []).length || chatPageState.has_more) {
+  if (renderedChats.length || chatPageState.has_more) {
     const historyLoader = document.createElement("div");
     historyLoader.id = "chatHistoryLoader";
     historyLoader.className = "infinite-loader chat-history-loader";
     cb.appendChild(historyLoader);
     updateChatInfiniteLoader();
   }
-  (state.chats || []).forEach((c) => {
+  renderedChats.forEach((c) => {
     const row = document.createElement("div");
     row.className = "chat-row " + c.role + (c.offline_pending ? " offline-pending" : "");
     const bubble = document.createElement("div");
     bubble.className = "bubble " + c.role + (c.attachment ? " has-photo" : "") + (c.offline_pending ? " offline-pending" : "");
-    bubble.innerHTML = `${attachmentHtml(c.attachment)}${c.message ? `<div class="bubble-text">${esc(c.message)}</div>` : ""}${c.offline_pending ? '<span class="offline-pending-label">menunggu sinkronisasi</span>' : ''}`;
+    bubble.innerHTML = `${attachmentHtml(c.attachment)}${c.message ? `<div class="bubble-text">${esc(c.message)}</div>` : ""}${c.offline_pending ? '<span class="offline-pending-label">Belum sinkron</span>' : ''}`;
 
     row.appendChild(bubble);
-    if (!c.offline_pending) {
+    if (!c.offline_pending && !c.transient) {
       const del = document.createElement("button");
       del.type = "button";
       del.className = "chat-delete-btn";
@@ -1426,7 +1820,7 @@ function renderChats(forceBottom = false) {
     cb.appendChild(row);
   });
 
-  if (!(state.chats || []).length) {
+  if (!renderedChats.length) {
     cb.innerHTML = '<div class="chat-row assistant system-greeting"><div class="bubble assistant chat-welcome"><div class="bubble-text"><b class="chat-welcome-title">Halo! 👋 Ada yang bisa saya bantu?</b><span class="chat-welcome-copy">Saya bisa membantu mencatat transaksi, memantau keuangan, mengelola piutang, atau sekadar menemani Anda bercerita. Tulis saja dengan bahasa sehari-hari.</span><div class="chat-welcome-suggestions"><button type="button" data-chat-suggestion="makan 25rb dari BCA">💸 Catat transaksi</button><button type="button" data-chat-suggestion="aman sampai gajian?">📊 Aman sampai gajian?</button><button type="button" data-chat-suggestion="Catat piutang">🤝 Catat piutang</button><button type="button" data-chat-suggestion="Saya mau cerita">💬 Mulai ngobrol</button></div></div></div></div>';
   }
 
@@ -1491,7 +1885,7 @@ function transactionDetailMarkup(t, wallets = []) {
       ? field('Peminjam',borrowerName)+field('Sumber','Piutang '+borrowerName)+field('Masuk ke dompet',wallet(t.to_wallet_id))
       : transfer ? field('Dari dompet',wallet(t.from_wallet_id))+field('Ke dompet',wallet(t.to_wallet_id)) : field('Dompet',wallet(t.wallet_id || 1));
   const photo = photoUrl(t.attachment);
-  return `<header class="tx-invoice-brand"><div><span class="tx-invoice-eyebrow">CATATAN KEUANGAN</span><h2 id="txDetailTitle">Bukti Transaksi</h2></div><span class="tx-invoice-status ${pending?'pending':''}">${pending?'Menunggu sinkronisasi':'Tercatat'}</span></header>
+  return `<header class="tx-invoice-brand"><div><span class="tx-invoice-eyebrow">CATATAN KEUANGAN</span><h2 id="txDetailTitle">Bukti Transaksi</h2></div><span class="tx-invoice-status ${pending?'pending':''}">${pending?'Belum sinkron':'Tercatat'}</span></header>
     <div class="tx-invoice-reference"><span>${esc(ref)}</span><span>${esc(date)}</span></div>
     <section class="tx-invoice-amount ${tone}"><span>${esc(type)}</span><strong>${esc(rupiah(t.amount))}</strong><small>${receivableLend?'Dana keluar sebagai piutang':receivableRepay?'Dana kembali dari piutang':transfer?'Perpindahan dana antar-dompet':t.type==='income'?'Dana masuk':'Dana keluar'}</small></section>
     <dl class="tx-invoice-meta">${field('Kategori',t.category || 'Lainnya')}${!transfer&&!receivable?field('Pola pengeluaran',spendingKindLabel(t.spending_kind || (t.source==='recurring'?'recurring':t.source==='bill'?'once':'daily'))):''}${receivableLend&&t.receivable_due_date?field('Jatuh tempo',formatBillDate(t.receivable_due_date)):''}${t.bill_id?field('Terhubung ke tagihan',billLabel):''}${route}${field('Sumber pencatatan',source)}${field('Waktu pencatatan',t.created_at || 'Tidak tersedia')}</dl>
@@ -1585,12 +1979,12 @@ function renderTransactions() {
       pattern ? `<span class="tx-pattern-badge">${esc(pattern)}</span>` : "",
       t.source === "receipt_scan" ? '<span class="scan-badge">scan nota</span>' : "",
       isReceivable ? '<span class="scan-badge">piutang</span>' : "",
-      t.offline_pending ? '<span class="sync-badge">offline</span>' : ""
+      t.offline_pending ? '<span class="sync-badge">Belum sinkron</span>' : ""
     ].filter(Boolean).join("");
 
     const detailAction = `<button type="button" class="tx-detail-btn" data-detail-id="${esc(String(t.id))}" aria-label="Lihat detail transaksi">Detail</button>`;
     const actions = detailAction + (t.offline_pending
-      ? '<span class="pending-sync-text">Menunggu sinkronisasi</span>'
+      ? '<span class="pending-sync-text">Belum sinkron</span>'
       : isReceivable
         ? '<button type="button" class="tx-edit-btn" data-open-receivables="1">Kelola Piutang</button>'
         : `<button type="button" class="tx-edit-btn" data-edit-id="${Number(t.id)}">Edit</button><button type="button" data-delete-id="${Number(t.id)}">Hapus</button>`);
@@ -1784,25 +2178,42 @@ function setTransactionFilterPanel(open) {
   toggle.classList.toggle("is-open", open);
 }
 
+function offlineDownloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.style.display = "none";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function offlineReportRows() {
+  const base = Array.isArray(offlineTransactionPool) && offlineTransactionPool.length ? offlineTransactionPool : (state.transactions || []);
+  return localFilterTransactions(base).transactions || [];
+}
+
+function transactionReportHtml(rows, title = "Laporan Transaksi") {
+  const totalIn = rows.filter(t => t.type === "income").reduce((n,t)=>n+Number(t.amount||0),0);
+  const totalOut = rows.filter(t => t.type === "expense").reduce((n,t)=>n+Number(t.amount||0),0);
+  const e = value => esc(String(value ?? ""));
+  const lines = rows.map((t,i)=>`<tr><td>${i+1}</td><td>${e(formatTransactionDate(t.transaction_date))}</td><td>${e(transactionKindLabel(t.type))}</td><td>${e(t.category||"Lainnya")}</td><td>${e(t.note||"")}</td><td style="text-align:right">${e(rupiah(t.amount||0))}</td><td>${t.offline_pending?"Belum sinkron":"Tersimpan"}</td></tr>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${e(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#1d2430}h1{margin:0 0 6px}small{color:#6b7280}.summary{display:flex;gap:24px;margin:18px 0}.summary b{font-size:18px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #d5dae2;padding:7px;text-align:left}th{background:#f3f5f8}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Cetak / Simpan PDF</button><h1>${e(title)}</h1><small>Dibuat offline · ${e(new Date().toLocaleString('id-ID'))}</small><div class="summary"><div>Pemasukan<br><b>${e(rupiah(totalIn))}</b></div><div>Pengeluaran<br><b>${e(rupiah(totalOut))}</b></div><div>Selisih<br><b>${e(rupiah(totalIn-totalOut))}</b></div></div><table><thead><tr><th>#</th><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Catatan</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${lines||'<tr><td colspan="7">Tidak ada transaksi.</td></tr>'}</tbody></table></body></html>`;
+}
+
 function downloadTransactionReport() {
   if (!isPremiumUser()) return openPremiumUpsell("Laporan PDF tersedia untuk akun Premium.");
+  if (!navigator.onLine || state.offline_mode) {
+    offlineDownloadBlob(new Blob([transactionReportHtml(offlineReportRows())], {type:"text/html;charset=utf-8"}), `laporan-transaksi-offline-${typeof localTodayValue === "function" ? localTodayValue() : "data"}.html`);
+    showFeatureToast("Laporan offline dibuat. Buka file lalu pilih Cetak / Simpan PDF.");
+    return;
+  }
   const params = new URLSearchParams();
-  params.set("type", txFilters.type);
-  params.set("sort", txFilters.sort);
+  params.set("type", txFilters.type); params.set("sort", txFilters.sort);
   if (txFilters.search) params.set("search", txFilters.search);
   if (txFilters.wallet_id) params.set("wallet_id", String(txFilters.wallet_id));
   if (txFilters.category) params.set("category", txFilters.category);
   if (txFilters.from) params.set("from", txFilters.from);
   if (txFilters.to) params.set("to", txFilters.to);
-
-  // Filter yang dikirim adalah filter AKTIF yang sedang menghasilkan daftar transaksi di layar.
-  const url = legacyApiUrl("ajax/report.php?" + params.toString());
-  const a = document.createElement("a");
-  a.href = url;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const a = document.createElement("a"); a.href = legacyApiUrl("ajax/report.php?" + params.toString()); a.style.display="none"; document.body.appendChild(a); a.click(); a.remove();
 }
 
 function renderDailyBudget() {
@@ -1918,6 +2329,31 @@ function setOcrStatus(text, kind = "") {
   if (!el) return;
   el.textContent = text;
   el.className = kind ? "ocr-status " + kind : "ocr-status";
+}
+
+let offlineOcrWarmupPromise = null;
+async function warmupOcrOffline() {
+  if (!navigator.onLine || typeof ensureOcrWorker !== 'function') return false;
+  if (offlineOcrWarmupPromise) return offlineOcrWarmupPromise;
+  try {
+    if (localStorage.getItem('finance_offline_ocr_warmed_v1_' + String(window.FINANCE_APP?.userId || 0)) === '1') return true;
+  } catch (_) {}
+  offlineOcrWarmupPromise = (async () => {
+    let worker = null;
+    try {
+      worker = await ensureOcrWorker();
+      try { await worker.terminate(); } catch (_) {}
+      ocrWorker = null;
+      ocrWorkerPromise = null;
+      try { localStorage.setItem('finance_offline_ocr_warmed_v1_' + String(window.FINANCE_APP?.userId || 0), '1'); } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      offlineOcrWarmupPromise = null;
+    }
+  })();
+  return offlineOcrWarmupPromise;
 }
 
 async function ensureOcrWorker() {
@@ -2165,7 +2601,7 @@ function clearSelectedPhoto() {
   setOcrStatus("Siap dipindai");
 }
 
-async function scanSelectedPhoto() {
+async function _scanSelectedPhotoCore() {
   if (!selectedPhoto) return null;
   const mode = document.getElementById("imageMode").value;
   if (mode === "attachment") {
@@ -2174,6 +2610,10 @@ async function scanSelectedPhoto() {
     return selectedPhoto.ocr;
   }
   if (selectedPhoto.ocrPromise) return selectedPhoto.ocrPromise;
+  // Jangan langsung mematikan OCR saat offline. Service Worker menyimpan engine
+  // Tesseract + worker + traineddata setelah warm-up online, sehingga engine dapat
+  // dimuat kembali dari cache ketika Android sedang tanpa internet. Bila resource
+  // memang belum pernah dipanaskan, ensureOcrWorker() akan gagal dan foto tetap aman.
   selectedPhoto.ocrPromise = (async () => {
     try {
       const worker = await ensureOcrWorker();
@@ -2209,7 +2649,7 @@ async function scanSelectedPhoto() {
   return selectedPhoto.ocrPromise;
 }
 
-async function handlePhotoSelection(file) {
+async function _handlePhotoSelectionCore(file) {
   if (!file) return;
   clearSelectedPhoto();
   setOcrStatus("Mengompres foto…");
@@ -2228,6 +2668,25 @@ async function handlePhotoSelection(file) {
   document.getElementById("photoPreviewWrap").hidden = false;
   document.getElementById("imageMode").value = "auto";
   scanSelectedPhoto();
+}
+
+async function scanSelectedPhoto() {
+  return withGlobalActionLoading(
+    "Memindai nota...",
+    "OCR sedang membaca foto pada perangkat.",
+    () => _scanSelectedPhotoCore(),
+    { delay: 160 }
+  );
+}
+
+async function handlePhotoSelection(file) {
+  if (!file) return;
+  return withGlobalActionLoading(
+    "Menyiapkan foto...",
+    "Mengompres foto dan menyiapkan OCR pada perangkat.",
+    () => _handlePhotoSelectionCore(file),
+    { delay: 100 }
+  );
 }
 
 const attachBtn = document.getElementById("attachPhotoBtn");
@@ -2314,13 +2773,27 @@ chatForm.addEventListener("submit", async (e) => {
       wallet_id: Number(((state.features || {}).wallets || [])[0]?.id || 1),
     };
     const result = await fetchJson("ajax/finance.php", options, { kind: "finance", preview: offlinePreview });
+    const reply = String(result?.reply || "").trim();
+    removeChatTypingBubble();
+    if (reply) {
+      addTransientAssistantReply(reply, { offlinePending: !!result?.offline_queued || !!result?.offline_local });
+      renderChats(true);
+    }
     input.value = "";
     clearSelectedPhoto();
-    await load();
+    // Refresh data, tetapi jangan menghapus balasan yang baru diterima jika
+    // endpoint dashboard/chat belum menampilkan row tersebut. Transient reply
+    // akan hilang otomatis begitu row resmi dari server sudah terlihat.
+    try {
+      await load();
+    } catch (refreshError) {
+      renderChats(true);
+      console.warn("Refresh dashboard setelah chat gagal:", refreshError);
+    }
     if (result?.offline_queued) showOfflineToast("Tersimpan offline. Setelah tersinkron, transaksi akan diminta konfirmasi sebelum disimpan.");
   } catch (err) {
-    document.getElementById("typing")?.remove();
-    cb.insertAdjacentHTML("beforeend", `<div class="bubble assistant"><div class="bubble-text">Error: ${esc(err.message)}</div></div>`);
+    removeChatTypingBubble();
+    cb.insertAdjacentHTML("beforeend", `<div class="bubble assistant"><div class="bubble-text">Error: ${esc(err.message || "Asisten tidak dapat merespons.")}</div></div>`);
     cb.scrollTop = cb.scrollHeight;
   } finally {
     document.getElementById("sendBtn").disabled = false;
@@ -3158,6 +3631,7 @@ async function enrichQueuedPhotoOcr() {
 async function syncOfflineQueue(manual = false) {
   if (!window.FinanceOffline) return;
   if (!navigator.onLine) { await updateConnectionUi(); return; }
+  const loadingToken = manual ? beginGlobalActionLoading("Menyinkronkan data...","Mengirim perubahan offline dan memeriksa konflik.",{delay:90}) : 0;
   try {
     await updateConnectionUi({ syncing: true });
     await enrichQueuedPhotoOcr();
@@ -3173,6 +3647,8 @@ async function syncOfflineQueue(manual = false) {
     console.warn("Offline sync gagal", err);
     await updateConnectionUi();
     if (manual) alert("Sinkronisasi belum berhasil: " + (err.message || err));
+  } finally {
+    if (loadingToken) stopGlobalActionLoading(loadingToken);
   }
 }
 
@@ -3181,6 +3657,15 @@ document.getElementById("syncQueueRetry")?.addEventListener("click", () => syncO
 window.addEventListener("online", () => setTimeout(() => syncOfflineQueue(false), 500));
 window.addEventListener("offline", () => updateConnectionUi());
 if (window.FinanceOffline) FinanceOffline.onStatus((s) => updateConnectionUi(s));
+// Retry berkala membuat antrean tetap tersinkron walau perangkat melaporkan Wi-Fi
+// tersambung tetapi internet sempat lag/tidak memiliki akses keluar.
+setInterval(() => {
+  if (navigator.onLine && window.FinanceOffline) {
+    FinanceOffline.status().then(status => {
+      if (Number(status.pending || 0) > 0 && !status.syncing) syncOfflineQueue(false);
+    }).catch(() => {});
+  }
+}, 30000);
 
 document.querySelectorAll('form input[name="action"][value="logout"]').forEach((input) => {
   input.form?.addEventListener("submit", () => {
@@ -3225,7 +3710,7 @@ async function runRealtimePoll() {
       _: String(Date.now()),
     });
 
-    const j = await fetchJson("ajax/realtime.php?" + params.toString());
+    const j = await fetchJson("ajax/realtime.php?" + params.toString(), {}, { silentLoadingControl: true, silentLoading: true });
     const previousRevision = realtimeRevision;
     const previousTxSignature = realtimeTransactionSignature;
     const previousChatSignature = realtimeChatSignature;
@@ -3377,8 +3862,53 @@ function el(id) { return document.getElementById(id); }
 
 // ===== BERLANGGANAN / PREMIUM =====
 function subscriptionData() { return subscriptionState || {}; }
+
+/**
+ * Apply the order returned directly by a Premium mutation before trusting a
+ * potentially stale subscription snapshot. This makes newly created invoices
+ * render immediately without requiring a page refresh.
+ */
+function applyPremiumSubscriptionMutationResponse(response = {}) {
+  // Every successful server mutation invalidates GET snapshots that started
+  // earlier. Otherwise an in-flight periodic/open-modal GET can repaint the
+  // old invoice over this newer POST response until the modal is reopened.
+  subscriptionMutationRevision += 1;
+  const snapshot = response?.subscription && typeof response.subscription === "object"
+    ? response.subscription
+    : null;
+  const incomingOrder = response?.order && typeof response.order === "object"
+    ? response.order
+    : (snapshot?.open_order || snapshot?.latest_order || null);
+  const current = subscriptionState && typeof subscriptionState === "object"
+    ? subscriptionState
+    : {};
+
+  subscriptionState = { ...current, ...(snapshot || {}) };
+
+  if (incomingOrder) {
+    const incomingId = Number(incomingOrder.id || 0);
+    const latestId = Number(subscriptionState.latest_order?.id || 0);
+    if (!subscriptionState.latest_order || incomingId >= latestId) {
+      subscriptionState.latest_order = incomingOrder;
+    }
+
+    const status = String(incomingOrder.status || "");
+    const isOpen = status === "waiting_payment" || status === "pending_verification";
+    if (isOpen) {
+      const currentOpenId = Number(subscriptionState.open_order?.id || 0);
+      if (!subscriptionState.open_order || incomingId >= currentOpenId) {
+        subscriptionState.open_order = incomingOrder;
+      }
+    } else if (String(subscriptionState.open_order?.id ?? "") === String(incomingOrder.id ?? "")) {
+      subscriptionState.open_order = null;
+    }
+  }
+
+  if (subscriptionState.account) state.account = subscriptionState.account;
+  return incomingOrder;
+}
 function premiumStatusClass(status = "") {
-  return ({waiting_payment:"waiting",pending_verification:"pending",approved:"approved",rejected:"rejected"})[status] || "waiting";
+  return ({waiting_payment:"waiting",pending_verification:"pending",approved:"approved",rejected:"rejected",expired:"expired",failed:"failed"})[status] || "waiting";
 }
 function premiumPlanDescription(plan) {
   if (!plan) return "";
@@ -3486,6 +4016,36 @@ function renderPremiumBanks() {
   if ([...select.options].some(o => o.value === prev && !o.disabled)) select.value = prev;
   renderPremiumBankPreview();
 }
+function selectedPremiumPaymentMethod() {
+  const selected = document.querySelector('input[name="premiumPaymentMethod"]:checked')?.value || "";
+  if (selected === "midtrans_qris" && !subscriptionData().payment_config?.qris_enabled) return "bank_transfer";
+  return selected || (subscriptionData().payment_config?.qris_enabled ? "midtrans_qris" : "bank_transfer");
+}
+function renderPremiumPaymentMethods() {
+  const qrisEnabled = !!subscriptionData().payment_config?.qris_enabled;
+  const qrisLabel = el("premiumQrisMethod");
+  const bankLabel = el("premiumBankMethod");
+  const bankFields = el("premiumBankFields");
+  if (qrisLabel) qrisLabel.hidden = !qrisEnabled;
+
+  let selected = document.querySelector('input[name="premiumPaymentMethod"]:checked');
+  if (!qrisEnabled && selected?.value === "midtrans_qris") selected = null;
+  if (!selected) {
+    const preferred = document.querySelector(`input[name="premiumPaymentMethod"][value="${qrisEnabled ? "midtrans_qris" : "bank_transfer"}"]`);
+    if (preferred) preferred.checked = true;
+    selected = preferred;
+  }
+  const method = selected?.value || (qrisEnabled ? "midtrans_qris" : "bank_transfer");
+  if (bankFields) bankFields.hidden = method === "midtrans_qris";
+  [qrisLabel, bankLabel].filter(Boolean).forEach(label => {
+    const input = label.querySelector('input[name="premiumPaymentMethod"]');
+    label.classList.toggle("is-selected", !!input && input.value === method);
+  });
+  const createBtn = el("createPremiumInvoice");
+  if (createBtn && !subscriptionData().open_order) {
+    createBtn.textContent = method === "midtrans_qris" ? "Buat QRIS & Invoice" : "Buat Invoice Transfer";
+  }
+}
 function renderPremiumInvoice(order) {
   const area = el("premiumInvoiceArea");
   const upload = el("premiumUploadArea");
@@ -3493,30 +4053,51 @@ function renderPremiumInvoice(order) {
   upload.hidden = true;
   if (!order) {
     area.className = "premium-invoice-empty";
-    area.innerHTML = "Belum ada invoice. Pilih paket dan bank untuk membuat tagihan.";
+    area.innerHTML = "Belum ada invoice. Pilih paket dan metode pembayaran untuk membuat tagihan.";
     return;
   }
   const status = String(order.status || "");
+  const isQris = String(order.payment_method || "") === "midtrans_qris";
+  const isQrisWaiting = isQris && status === "waiting_payment";
   const proof = order.proof_url ? `<button type="button" class="premium-proof-preview stored-photo" data-photo-url="${esc(order.proof_url)}"><img src="${esc(order.proof_url)}" alt="Bukti pembayaran" loading="lazy"></button>` : "";
   let action = "";
   let notice = "";
   if (status === "waiting_payment") {
-    action = `<button type="button" class="btn primary wide" data-premium-pay="${Number(order.id)}">Bayar</button>`;
-    notice = "Transfer sesuai total invoice ke rekening tujuan, lalu tekan Bayar untuk mengunggah bukti.";
+    if (isQris) {
+      action = `<div class="premium-qris-actions"><button type="button" class="btn secondary" data-premium-refresh-status>Perbarui Status</button><button type="button" class="btn secondary" data-premium-reload-qr>Muat Ulang QR</button></div>`;
+      notice = "Scan QRIS menggunakan aplikasi mobile banking atau e-wallet yang mendukung QRIS. Setelah pembayaran berhasil, status dan akses Premium akan diperbarui otomatis.";
+    } else {
+      action = `<button type="button" class="btn primary wide" data-premium-pay="${Number(order.id)}">Bayar</button>`;
+      notice = "Transfer sesuai total invoice ke rekening tujuan, lalu tekan Bayar untuk mengunggah bukti.";
+    }
   } else if (status === "pending_verification") {
     notice = Number(order.amount || 0) <= 0
       ? "Kupon menutupi seluruh tagihan. Invoice sedang menunggu verifikasi admin untuk mengaktifkan Premium."
-      : "Pembayaran sedang diverifikasi silahkan mengecek secara berkala.";
+      : "Pembayaran sedang diverifikasi. Silakan mengecek secara berkala.";
   } else if (status === "rejected") {
-    notice = "Pembelian ditolak karena bukti bayar tidak valid. Jika ingin mengajukan pertanyaan seputar pembelian tersebut silahkan hubungi admin melalui Chat WA Only +6282259866048 (Senin - Sabtu 09.00 WITA - 17.00 WITA).";
+    notice = "Pembelian ditolak karena bukti bayar tidak valid. Jika perlu bantuan, hubungi admin Catatan Keuangan.";
   } else if (status === "approved") {
     notice = "Invoice telah LUNAS dan akses Premium sudah diberikan.";
+  } else if (status === "expired") {
+    notice = "QRIS/invoice ini sudah kedaluwarsa. Anda dapat membuat invoice baru untuk mencoba kembali.";
+  } else if (status === "failed") {
+    notice = "Pembayaran belum berhasil dibuat atau ditolak penyedia pembayaran. Buat invoice baru atau coba transfer manual.";
   }
+
   const hasCoupon = !!order.coupon?.code;
   const couponRows = hasCoupon ? `
       <div><span>Harga awal</span><b>${rupiah(order.base_amount ?? order.amount ?? 0)}</b></div>
       <div><span>Kupon</span><b>${esc(order.coupon.code)} · ${esc(order.coupon.discount_label || "")}</b></div>
       <div><span>Potongan</span><b class="coupon-discount">-${rupiah(order.discount_amount || 0)}</b></div>` : "";
+  const qrisMarkup = isQrisWaiting && order.qr_image_url ? `
+    <div class="premium-qris-card">
+      <div class="premium-qris-image-wrap"><img data-premium-qris-image src="${esc(order.qr_image_url)}" alt="QRIS pembayaran ${esc(order.invoice_no || "Premium")}" loading="eager"></div>
+      <b>Scan untuk membayar ${rupiah(order.amount || 0)}</b>
+      <small>Jangan ubah nominal pembayaran. QR ini khusus untuk invoice ${esc(order.invoice_no || "-")}.</small>
+    </div>` : "";
+  const paymentRows = isQris
+    ? `<div><span>Metode</span><b>QRIS Otomatis (Midtrans)</b></div>${order.midtrans_acquirer ? `<div><span>Acquirer</span><b>${esc(order.midtrans_acquirer === "airpay_shopee" ? "ShopeePay" : "GoPay / QRIS")}</b></div>` : ""}`
+    : `<div><span>Metode</span><b>Transfer Bank Manual</b></div><div><span>Bank tujuan</span><b>${esc(order.bank_name || "-")}</b></div><div><span>Nomor Rekening</span><b>${esc(order.bank_account_number || "-")}</b></div><div><span>Atas Nama</span><b>${esc(order.bank_account_name || "-")}</b></div><div><span>Nama Pengirim</span><b>${esc(order.sender_name || "-")}</b></div><div><span>Rekening Pengirim</span><b>${esc(order.sender_account_number || "-")}</b></div>`;
   area.className = `premium-invoice-box ${premiumStatusClass(status)}`;
   area.innerHTML = `
     <div class="premium-invoice-top"><div><small>INVOICE</small><b>${esc(order.invoice_no || "-")}</b></div><span class="premium-order-status ${premiumStatusClass(status)}">${esc(order.status_label || status)}</span></div>
@@ -3524,12 +4105,9 @@ function renderPremiumInvoice(order) {
     <div class="premium-invoice-lines">
       <div><span>Paket</span><b>${esc(order.plan_label || "-")}</b></div>
       ${couponRows}
-      <div><span>Bank tujuan</span><b>${esc(order.bank_name || "-")}</b></div>
-      <div><span>Nomor Rekening</span><b>${esc(order.bank_account_number || "-")}</b></div>
-      <div><span>Atas Nama</span><b>${esc(order.bank_account_name || "-")}</b></div>
-      <div><span>Nama Pengirim</span><b>${esc(order.sender_name || "-")}</b></div>
-      <div><span>Rekening Pengirim</span><b>${esc(order.sender_account_number || "-")}</b></div>
+      ${paymentRows}
     </div>
+    ${qrisMarkup}
     ${proof}
     <div class="premium-invoice-notice ${premiumStatusClass(status)}">${esc(notice)}</div>
     ${action}`;
@@ -3538,6 +4116,38 @@ function renderPremiumInvoice(order) {
     el("premiumProofFile")?.click();
     setTimeout(() => upload.scrollIntoView({behavior:"smooth", block:"nearest"}), 120);
   });
+  area.querySelector("[data-premium-refresh-status]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const old = button.textContent;
+    button.disabled = true;
+    button.textContent = "Memeriksa...";
+    try {
+      await loadSubscriptionPanel(true);
+      showFeatureToast("Status pembayaran diperbarui.");
+    } catch (e) {
+      showFeatureToast(e.message || "Status belum dapat diperbarui.");
+    } finally {
+      if (button.isConnected) { button.disabled = false; button.textContent = old; }
+    }
+  });
+  area.querySelector("[data-premium-reload-qr]")?.addEventListener("click", () => {
+    const image = area.querySelector("[data-premium-qris-image]");
+    if (image) {
+      const base = String(image.getAttribute("src") || "").split("&retry=")[0];
+      image.src = `${base}&retry=${Date.now()}`;
+    }
+  });
+  const qrisImage = area.querySelector("[data-premium-qris-image]");
+  qrisImage?.addEventListener("error", () => {
+    const wrap = qrisImage.closest(".premium-qris-image-wrap");
+    if (wrap && !wrap.querySelector(".premium-qris-image-error")) {
+      const error = document.createElement("span");
+      error.className = "premium-qris-image-error";
+      error.textContent = "QR belum dapat dimuat. Tekan Muat Ulang QR.";
+      wrap.appendChild(error);
+    }
+  });
+  qrisImage?.addEventListener("load", () => area.querySelector(".premium-qris-image-error")?.remove());
   bindStoredPhotos(area);
 }
 function renderPremiumTrialCard() {
@@ -3607,6 +4217,7 @@ function renderPremiumPanel() {
   renderAccountPlan();
   renderPremiumPlans();
   renderPremiumBanks();
+  renderPremiumPaymentMethods();
   renderPremiumTrialCard();
   const premium = isPremiumUser();
   const trialActive = isTrialPremium();
@@ -3622,8 +4233,8 @@ function renderPremiumPanel() {
   if (text) {
     if (trialActive) text.textContent = `${premiumExpiryText()}. Setelah masa trial berakhir, pilih paket Premium untuk melanjutkan akses.`;
     else if (premium) text.textContent = `${premiumExpiryText()}. Anda tetap dapat membeli paket lagi untuk perpanjangan akses.`;
-    else if (trial.used) text.textContent = "Masa coba 7 hari sudah digunakan. Pilih paket, lakukan pembayaran, lalu unggah bukti untuk melanjutkan fitur Premium.";
-    else text.textContent = "Aktifkan Free Trial 7 hari terlebih dahulu jika ingin mencoba, atau langsung pilih paket Premium berbayar.";
+    else if (trial.used) text.textContent = "Masa coba 7 hari sudah digunakan. Pilih paket lalu bayar melalui QRIS otomatis atau transfer bank manual.";
+    else text.textContent = "Pilih paket Premium. QRIS dapat mengaktifkan Premium otomatis setelah pembayaran terverifikasi; transfer bank manual tetap tersedia.";
   }
   const order = sub.open_order || sub.latest_order || null;
   renderPremiumInvoice(order);
@@ -3631,18 +4242,57 @@ function renderPremiumPanel() {
   if (createBtn) {
     const open = sub.open_order;
     createBtn.disabled = !!open;
-    createBtn.textContent = open ? (open.status === "pending_verification" ? "Menunggu Verifikasi" : "Selesaikan Invoice Aktif") : (trialActive ? "Beli Premium Sekarang" : (premium ? "Buat Invoice Perpanjangan" : "Buat Invoice"));
+    createBtn.textContent = open ? (open.status === "pending_verification" ? "Menunggu Verifikasi" : "Selesaikan Invoice Aktif") : (selectedPremiumPaymentMethod() === "midtrans_qris" ? (premium ? "Buat QRIS Perpanjangan" : "Buat QRIS & Invoice") : (trialActive ? "Beli Premium Sekarang" : (premium ? "Buat Invoice Perpanjangan" : "Buat Invoice Transfer")));
   }
 }
-async function loadSubscriptionPanel() {
+function schedulePremiumQrisPolling() {
+  if (subscriptionQrisPollTimer) clearTimeout(subscriptionQrisPollTimer);
+  subscriptionQrisPollTimer = null;
+  const order = subscriptionData().open_order;
+  if (!order || order.payment_method !== "midtrans_qris" || order.status !== "waiting_payment") return;
+  subscriptionQrisPollTimer = setTimeout(() => loadSubscriptionPanel(true), 6000);
+}
+async function loadSubscriptionPanel(silent = false) {
+  const loadSequence = ++subscriptionLoadSequence;
+  const mutationRevisionAtStart = subscriptionMutationRevision;
   try {
-    const j = await fetchJson("ajax/subscription.php?_=" + Date.now());
+    let j;
+    if (silent) {
+      const response = await fetch("ajax/subscription.php?_=" + Date.now(), {
+        method: "GET", credentials: "same-origin", cache: "no-store", headers: {"Accept":"application/json"}
+      });
+      j = await response.json();
+      if (!response.ok || j?.ok === false) throw new Error(j?.error || "Status pembayaran belum dapat diperbarui.");
+    } else {
+      j = await fetchJson("ajax/subscription.php?_=" + Date.now());
+    }
+
+    // Ignore a snapshot if a create/upload response committed after this read
+    // began, or if a newer read already rendered. Both races can otherwise
+    // restore an empty/old invoice over the latest invoice in the open modal.
+    if (mutationRevisionAtStart !== subscriptionMutationRevision || loadSequence < subscriptionAppliedLoadSequence) {
+      return;
+    }
+    subscriptionAppliedLoadSequence = loadSequence;
     subscriptionState = j.subscription || {};
     if (subscriptionState.account) state.account = subscriptionState.account;
     renderPremiumPanel();
+    schedulePremiumQrisPolling();
   } catch (e) {
-    const area = el("premiumInvoiceArea");
-    if (area) area.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    // A stale failed request should not overwrite a successful invoice mutation
+    // with an error panel after the mutation already rendered correctly.
+    if (mutationRevisionAtStart !== subscriptionMutationRevision || loadSequence < subscriptionAppliedLoadSequence) return;
+    if (!silent) {
+      const area = el("premiumInvoiceArea");
+      if (area) area.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    } else {
+      // Retry in the background while a QR invoice remains open; do not show foreground loading.
+      const order = subscriptionData().open_order;
+      if (order?.payment_method === "midtrans_qris" && order?.status === "waiting_payment") {
+        if (subscriptionQrisPollTimer) clearTimeout(subscriptionQrisPollTimer);
+        subscriptionQrisPollTimer = setTimeout(() => loadSubscriptionPanel(true), 10000);
+      }
+    }
   }
 }
 el("startPremiumTrial")?.addEventListener("click", async () => {
@@ -3691,24 +4341,74 @@ el("premiumCouponCode")?.addEventListener("keydown", (event) => {
 });
 el("applyPremiumCoupon")?.addEventListener("click", () => validatePremiumCoupon(true));
 el("premiumBankSelect")?.addEventListener("change", renderPremiumBankPreview);
+function keepPremiumManualFieldsReachable() {
+  const dialog = financeCenter;
+  const content = dialog?.querySelector(".finance-content");
+  const fields = el("premiumBankFields");
+  const bankSelect = el("premiumBankSelect");
+  if (!dialog || !content || !fields || fields.hidden || !bankSelect) return;
+
+  // Browsers may scroll the <dialog> itself when the hidden radio is focused.
+  // Keep the dialog fixed and move only its designated content scroller if needed.
+  dialog.scrollTop = 0;
+  requestAnimationFrame(() => {
+    if (!dialog.open || fields.hidden) return;
+    dialog.scrollTop = 0;
+    const viewport = content.getBoundingClientRect();
+    const target = (bankSelect.closest("label") || bankSelect).getBoundingClientRect();
+    const safeBottom = viewport.bottom - 16;
+    if (target.bottom > safeBottom) {
+      content.scrollBy({
+        top: target.bottom - safeBottom,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+      });
+    }
+  });
+}
+document.querySelectorAll('input[name="premiumPaymentMethod"]').forEach(radio => radio.addEventListener("change", () => {
+  renderPremiumPaymentMethods();
+  if (radio.value === "bank_transfer") keepPremiumManualFieldsReachable();
+  else if (financeCenter) financeCenter.scrollTop = 0;
+}));
 el("createPremiumInvoice")?.addEventListener("click", async () => {
   const plan = document.querySelector('input[name="premiumPlan"]:checked')?.value || "";
+  const paymentMethod = selectedPremiumPaymentMethod();
   const bank = el("premiumBankSelect")?.value || "";
   const senderName = el("premiumSenderName")?.value.trim() || "";
   const senderAccount = el("premiumSenderAccount")?.value.trim() || "";
   const couponCode = el("premiumCouponCode")?.value.trim().toUpperCase() || "";
   if (!plan) return alert("Pilih paket berlangganan.");
-  if (!bank) return alert("Pilih bank tujuan pembayaran.");
-  if (!senderName || !senderAccount) return alert("Masukkan nama pengirim dan nomor rekening pengirim.");
+  if (paymentMethod !== "midtrans_qris") {
+    if (!bank) return alert("Pilih bank tujuan pembayaran.");
+    if (!senderName || !senderAccount) return alert("Masukkan nama pengirim dan nomor rekening pengirim.");
+  }
   try {
+    const body = paymentMethod === "midtrans_qris"
+      ? {action:"create_qris_invoice",plan_key:plan,coupon_code:couponCode}
+      : {action:"create_invoice",plan_key:plan,bank_id:bank,sender_name:senderName,sender_account_number:senderAccount,coupon_code:couponCode};
     const j = await fetchJson("ajax/subscription.php", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"create_invoice",plan_key:plan,bank_id:bank,sender_name:senderName,sender_account_number:senderAccount,coupon_code:couponCode})
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
     });
-    subscriptionState = j.subscription || subscriptionState;
+    applyPremiumSubscriptionMutationResponse(j);
     renderPremiumPanel();
-    showFeatureToast("Invoice berhasil dibuat");
-  } catch (e) { alert(e.message); }
+    // Older deployment endpoints may omit `order` or return a stale snapshot.
+    // Fetch a fresh no-cache snapshot only as a fallback; normal responses render
+    // immediately from the order returned by the create endpoint.
+    if (!j.order) await loadSubscriptionPanel(true);
+    showFeatureToast(paymentMethod === "midtrans_qris" ? "QRIS berhasil dibuat. Status akan diperbarui otomatis." : "Invoice berhasil dibuat");
+    schedulePremiumQrisPolling();
+  } catch (e) {
+    // QRIS creation can persist a new invoice with status "failed" server-side
+    // before returning an error response. Refresh the active modal immediately
+    // so it replaces the previously displayed invoice without close/reopen.
+    if (paymentMethod === "midtrans_qris") {
+      // Invalidate GET snapshots started before this failed QRIS mutation; they
+      // must not overwrite the fresh latest_order snapshot after this refresh.
+      subscriptionMutationRevision += 1;
+      await loadSubscriptionPanel(true);
+    }
+    alert(e.message);
+  }
 });
 el("premiumProofFile")?.addEventListener("change", () => {
   const input = el("premiumProofFile");
@@ -3732,13 +4432,13 @@ el("premiumProofFile")?.addEventListener("change", () => {
   }
 
   if (label) label.textContent = `${file.name} · mengompres…`;
-  premiumProofPreparePromise = compressImageForStorage(file, {
+  premiumProofPreparePromise = withGlobalActionLoading("Menyiapkan bukti pembayaran...","Mengompres gambar sebelum diunggah.",()=>compressImageForStorage(file, {
     maxSide: 1600,
     targetBytes: 600 * 1024,
     initialQuality: 0.82,
     minQuality: 0.64,
     maxInputBytes: 20 * 1024 * 1024,
-  }).then((prepared) => {
+  }),{delay:100}).then((prepared) => {
     premiumProofPrepared = prepared;
     if (label) {
       label.textContent = prepared.compressed
@@ -3765,7 +4465,7 @@ el("uploadPremiumProof")?.addEventListener("click", async () => {
   if (!prepared && premiumProofPreparePromise) prepared = await premiumProofPreparePromise;
   if (!prepared) {
     try {
-      prepared = await compressImageForStorage(original, { maxSide:1600, targetBytes:600*1024, initialQuality:0.82, minQuality:0.64 });
+      prepared = await withGlobalActionLoading("Menyiapkan bukti pembayaran...","Mengompres gambar sebelum diunggah.",()=>compressImageForStorage(original, { maxSide:1600, targetBytes:600*1024, initialQuality:0.82, minQuality:0.64 }),{delay:100});
       premiumProofPrepared = prepared;
     } catch (e) {
       return alert(e.message || "Gambar gagal dikompres.");
@@ -3778,7 +4478,7 @@ el("uploadPremiumProof")?.addEventListener("click", async () => {
   fd.append("action","upload_proof"); fd.append("order_id",String(order.id)); fd.append("proof",file,file.name);
   try {
     const j = await fetchJson("ajax/subscription.php", {method:"POST",body:fd});
-    subscriptionState = j.subscription || subscriptionState;
+    applyPremiumSubscriptionMutationResponse(j);
     premiumProofPrepared = null;
     premiumProofPreparePromise = null;
     if (input) input.value = "";
@@ -3812,9 +4512,9 @@ function renderFeatureSelectOptions() {
   ["billCategory","recurringCategory","editTxCategory"].forEach(id => fillSelect(id, categories, x => x.name, x => `${x.icon || ""} ${x.name}`.trim()));
   fillSelect("editTxBill", bills, x => x.id, x => `${x.name} · ${rupiah(x.amount)}${x.paid ? " · lunas" : ""}`, {value:"0",label:"Tidak dihubungkan"});
   fillSelect("createTxBill", bills, x => x.id, x => `${x.name} · ${rupiah(x.amount)}${x.paid ? " · lunas" : ""}`, {value:"0",label:"Tidak dihubungkan"});
-  const currentMonth = new Date().toISOString().slice(0,7);
+  const currentMonth = localTodayValue().slice(0,7);
   if (el("monthlyBudgetMonth") && !el("monthlyBudgetMonth").value) el("monthlyBudgetMonth").value = currentMonth;
-  if (el("recurringNextRun") && !el("recurringNextRun").value) el("recurringNextRun").value = new Date().toISOString().slice(0,10);
+  if (el("recurringNextRun") && !el("recurringNextRun").value) el("recurringNextRun").value = localTodayValue();
   if (el("paydayDay")) el("paydayDay").value = String(f.payday_day || 1);
 }
 
@@ -3958,6 +4658,16 @@ async function openFinanceCenter(tab = "analytics") {
   try { await refreshFeatures(); } catch (_) {}
   if (!isPremiumUser() && ["analytics","simulation","wallets","budgets","bills","recurring","goals"].includes(tab)) tab = "premium";
   selectFinanceTab(tab); financeCenter?.showModal();
+  if (financeCenter) {
+    // Prevent a previous focus/scroll position from reopening the dialog halfway down.
+    financeCenter.scrollTop = 0;
+    requestAnimationFrame(() => {
+      if (!financeCenter.open) return;
+      financeCenter.scrollTop = 0;
+      const content = financeCenter.querySelector(".finance-content");
+      if (content) content.scrollTop = 0;
+    });
+  }
   if (tab === "simulation") loadSimulationForMonth(el("simulationMonth")?.value || simulationDefaultMonth());
 }
 document.querySelectorAll("[data-finance-open]").forEach(btn => btn.addEventListener("click", () => openFinanceCenter(btn.dataset.financeOpen)));
@@ -4004,9 +4714,10 @@ function receivableInitial(name="") {
 }
 
 function receivableProofHtml(entry={}) {
-  if (!entry.attachment?.file) return "";
+  if (!entry.attachment) return "";
   const src = photoUrl(entry.attachment);
-  return `<a class="receivable-proof-link" href="${esc(src)}" target="_blank" rel="noopener">Lihat bukti foto</a>`;
+  if (!src) return "";
+  return `<a class="receivable-proof-link" href="${esc(src)}" target="_blank" rel="noopener">${entry.attachment.local ? "Lihat bukti foto · offline" : "Lihat bukti foto"}</a>`;
 }
 
 function receivableEntryMarkup(entry={}) {
@@ -4368,7 +5079,9 @@ function setReceivableMobileMode(mode="lend", options={}) {
 }
 
 function receivableEnsureOnline() {
-  if (!navigator.onLine || state.offline_mode) throw new Error("Pencatatan piutang membutuhkan koneksi internet agar saldo dan sisa hutang tidak bentrok antarperangkat.");
+  // Piutang sudah mempunyai state lokal + outbox. Server tetap menjadi sumber kebenaran
+  // saat sinkronisasi, tetapi pencatatan tidak perlu memaksa pengguna online.
+  return true;
 }
 function receivableValidatePhoto(file) {
   if (!file) return;
@@ -4446,6 +5159,14 @@ function downloadReceivablePdf(){
   if(!r.people.length)return showFeatureToast("Belum ada data piutang untuk direkap.","info");
   const f=receivableFilterValues();
   if(f.from&&f.to&&f.from>f.to)return showFeatureToast("Tanggal awal filter tidak boleh melewati tanggal akhir.","error");
+  if(!navigator.onLine || state.offline_mode){
+    const people=r.people.filter(p => (!f.borrower || p.key===f.borrower) && (f.status==="all" || (f.status==="lunas" ? Number(p.outstanding||0)<=0 : Number(p.outstanding||0)>0)));
+    const rows=people.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${esc(rupiah(p.lent))}</td><td>${esc(rupiah(p.interest))}</td><td>${esc(rupiah(p.repaid))}</td><td>${esc(rupiah(p.outstanding))}</td></tr>`).join("");
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Rekap Piutang Offline</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#1d2430}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}th,td{border:1px solid #d5dae2;padding:7px;text-align:left}th{background:#f3f5f8}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Cetak / Simpan PDF</button><h1>Rekap Piutang</h1><p>Dibuat offline · ${esc(new Date().toLocaleString('id-ID'))}</p><table><thead><tr><th>#</th><th>Peminjam</th><th>Diberikan</th><th>Bunga</th><th>Dibayar</th><th>Sisa</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Belum ada data.</td></tr>'}</tbody></table></body></html>`;
+    offlineDownloadBlob(new Blob([html],{type:"text/html;charset=utf-8"}),`rekap-piutang-offline-${typeof localTodayValue==="function"?localTodayValue():"data"}.html`);
+    showFeatureToast("Rekap offline dibuat. Buka file lalu pilih Cetak / Simpan PDF.");
+    return;
+  }
 
   const q=new URLSearchParams();
   if(f.borrower)q.set("borrower_key",f.borrower);
@@ -4557,11 +5278,20 @@ el("saveCategory")?.addEventListener("click",async()=>{try{await featureAction({
 el("saveMonthlyBudget")?.addEventListener("click",async()=>{try{await featureAction({action:"monthly_budget_set",month:el("monthlyBudgetMonth").value,category_id:Number(el("monthlyBudgetCategory").value||0),limit:Number(el("monthlyBudgetLimit").value||0)},"Budget disimpan");}catch(e){alert(e.message)}});
 
 function formatBillDate(value){if(!value)return "-";const p=String(value).split("-");if(p.length!==3)return value;return `${p[2]}/${p[1]}/${p[0]}`;}
+function billSortRank(b){
+  if (b && b.paid) return 3;
+  const status=String(b?.status||"");
+  if (status === "overdue") return 0;
+  if (status === "due_soon") return 1;
+  return 2;
+}
+
 function renderBills(bills){
   const box=el("billList");if(!box)return;
   const wallets=(state.features?.wallets||[]).filter(w=>!w.archived&&String(w.type||"")!=="credit_card");
   const paymentOptions=(selected)=>wallets.map(w=>`<option value="${Number(w.id)}" ${Number(selected)===Number(w.id)?"selected":""}>${esc(w.name)} · ${rupiah(w.available_balance??w.balance??0)}</option>`).join("");
-  box.innerHTML=bills.length?bills.map(b=>{
+
+  const renderBillRow=(b)=>{
     const card=!!b.auto_generated&&b.bill_type==="credit_card";
     const remain=Number(b.remaining_amount??b.amount??0);
     const cycle=card&&b.cycle_start?` · Siklus ${esc(formatBillDate(b.cycle_start))}–${esc(formatBillDate(b.cycle_end||b.due_date))}`:"";
@@ -4570,19 +5300,40 @@ function renderBills(bills){
     const amountLabel=card&&Number(b.payment_total||0)>0&&!b.paid?`${rupiah(remain)}<small class="money-caption"> sisa dari ${rupiah(b.amount)}</small>`:rupiah(b.amount);
     const payWallet=card&&!b.paid&&wallets.length?`<select class="bill-pay-wallet" data-bill-pay-wallet="${b.id}" aria-label="Rekening pembayaran">${paymentOptions(b.wallet_id)}</select>`:"";
     return `<div class="feature-list-row bill-row ${card?"credit-card-bill-row":"standard-bill-row"} bill-${esc(b.status)}"><div class="feature-row-icon bill-row-icon">${b.paid?iconSvg("check"):card?iconSvg("creditCard"):iconSvg("receipt")}</div><div class="feature-row-main bill-row-main"><b>${esc(b.name)}</b><small>Jatuh tempo ${esc(formatBillDate(b.due_date))} · ${meta}</small></div><div class="bill-row-summary"><strong class="bill-row-amount">${amountLabel}</strong><span class="status-pill bill-row-status ${esc(b.status)}">${b.paid?"Lunas":b.status==="overdue"?"Terlambat":b.status==="due_soon"?"Segera":"Belum"}</span></div><div class="row-actions bill-row-actions">${payWallet}${!b.paid?`<button class="success-link bill-pay-button" data-bill-pay="${b.id}">${card?"Bayar Kartu":"Bayar"}</button>`:""}${card?"":`<button data-bill-edit="${b.id}">Edit</button><button class="danger-link" data-bill-delete="${b.id}">Hapus</button>`}</div></div>`;
-  }).join(""):'<div class="empty">Belum ada tagihan/cicilan.</div>';
+  };
+
+  const sorted=(Array.isArray(bills)?bills.slice():[]).sort((a,b)=>{
+    const rankDiff=billSortRank(a)-billSortRank(b);
+    if(rankDiff!==0)return rankDiff;
+    const da=String(a?.due_date||"");
+    const db=String(b?.due_date||"");
+    const diff=Date.parse(db)-Date.parse(da);
+    // Unpaid: nearest/most urgent first. Paid: latest settled item first.
+    return billSortRank(a)===3?diff:(-diff);
+  });
+  const unpaid=sorted.filter(b=>!b.paid);
+  const paid=sorted.filter(b=>!!b.paid);
+
+  let html="";
+  if(unpaid.length){
+    html+=`<section class="bill-section bill-section-unpaid"><div class="bill-section-head"><div><b>Belum Lunas</b><small>Utamakan tagihan yang masih perlu dibayar.</small></div><span class="bill-section-count">${unpaid.length}</span></div><div class="bill-section-list">${unpaid.map(renderBillRow).join("")}</div></section>`;
+  }
+  if(paid.length){
+    html+=`<details class="bill-section bill-section-paid" ${unpaid.length?"":"open"}><summary><span><b>Sudah Lunas</b><small>Tagihan yang pembayarannya sudah selesai.</small></span><span class="bill-section-count">${paid.length}</span></summary><div class="bill-section-list">${paid.map(renderBillRow).join("")}</div></details>`;
+  }
+  box.innerHTML=html||'<div class="empty">Belum ada tagihan/cicilan.</div>';
+
   box.querySelectorAll("[data-bill-pay]").forEach(x=>x.onclick=async()=>{
-    const b=bills.find(v=>Number(v.id)===Number(x.dataset.billPay));if(!b)return;
+    const b=(Array.isArray(bills)?bills:[]).find(v=>Number(v.id)===Number(x.dataset.billPay));if(!b)return;
     const card=!!b.auto_generated&&b.bill_type==="credit_card";
     const walletId=card?Number(box.querySelector(`[data-bill-pay-wallet="${b.id}"]`)?.value||0):0;
     if(card&&walletId<=0){alert("Pilih rekening/dompet untuk membayar kartu kredit.");return;}
     const msg=card?`Bayar tagihan ${b.name} sebesar ${rupiah(b.remaining_amount??b.amount)}? Pembayaran akan dicatat sebagai transfer ke kartu kredit.`:"Tandai lunas dan catat sebagai pengeluaran?";
     if(confirm(msg)){try{await featureAction({action:"bill_pay",id:Number(x.dataset.billPay),wallet_id:walletId},card?"Tagihan kartu kredit dibayar":"Tagihan dibayar");await load();}catch(e){alert(e.message)}}
   });
-  box.querySelectorAll("[data-bill-edit]").forEach(x=>x.onclick=()=>{const b=bills.find(v=>Number(v.id)===Number(x.dataset.billEdit));if(!b)return;el("billId").value=b.id;el("billName").value=b.name;el("billAmount").value=b.amount;el("billDueDate").value=b.due_date||"";el("billCategory").value=b.category;el("billWallet").value=String(b.wallet_id||1);});
+  box.querySelectorAll("[data-bill-edit]").forEach(x=>x.onclick=()=>{const b=(Array.isArray(bills)?bills:[]).find(v=>Number(v.id)===Number(x.dataset.billEdit));if(!b)return;el("billId").value=b.id;el("billName").value=b.name;el("billAmount").value=b.amount;el("billDueDate").value=b.due_date||"";el("billCategory").value=b.category;el("billWallet").value=String(b.wallet_id||1);});
   box.querySelectorAll("[data-bill-delete]").forEach(x=>x.onclick=async()=>{if(confirm("Hapus tagihan ini?")){try{await featureAction({action:"bill_delete",id:Number(x.dataset.billDelete)},"Tagihan dihapus");}catch(e){alert(e.message)}}});
 }
-
 el("saveBill")?.addEventListener("click",async()=>{try{const dueDate=el("billDueDate").value;if(!dueDate)throw new Error("Pilih tanggal jatuh tempo terlebih dahulu.");await featureAction({action:"bill_save",id:Number(el("billId").value||0),name:el("billName").value,amount:Number(el("billAmount").value||0),due_date:dueDate,category:el("billCategory").value,wallet_id:Number(el("billWallet").value||1),reminder_days:3,active:true},"Tagihan disimpan");el("billId").value="";el("billName").value="";el("billAmount").value="";el("billDueDate").value="";}catch(e){alert(e.message)}});
 
 function renderRecurring(items){const box=el("recurringList");if(!box)return;box.innerHTML=items.length?items.map(r=>`<div class="feature-list-row"><div class="feature-row-icon">${iconSvg("repeat")}</div><div class="feature-row-main"><b>${esc(r.name)}</b><small>${r.type==="income"?"Pemasukan":"Pengeluaran"} · ${esc(r.frequency)} setiap ${r.interval} · berikutnya ${esc(r.next_run)}${r.last_error?` · <span class="danger-text">tertahan: ${esc(r.last_error)}</span>`:""}</small></div><strong class="${r.type}">${rupiah(r.amount)}</strong><div class="row-actions"><button data-recurring-edit="${r.id}">Edit</button><button class="danger-link" data-recurring-delete="${r.id}">Hapus</button></div></div>`).join(""):'<div class="empty">Belum ada transaksi berulang.</div>';
@@ -4923,14 +5674,14 @@ notificationSettingsModal?.addEventListener("click",e=>{if(e.target===notificati
 function notificationEmailKind(key){if(String(key).startsWith("credit_card_due_"))return "bill";if(String(key).startsWith("bill_"))return "bill";if(String(key).startsWith("budget_"))return "budget";if(String(key)==="low_balance")return "low_balance";return "info";}
 async function emailNotificationOnce(key,title,body){const n=featureState()?.notifications||{};if(!n.enabled||!n.email_enabled)return;try{await fetchJson("ajax/email_notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,kind:notificationEmailKind(key),title,message:body})});}catch(_){/* email tidak boleh mengganggu notifikasi utama */}}
 function persistWarningNotificationOnce(key,title,body){
-  const today=new Date().toISOString().slice(0,10);
+  const today=localTodayValue();
   const localKey="finance_center_notify_"+key+"_"+today;
   if(localStorage.getItem(localKey))return;
   fetchJson("ajax/notifications.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"create_warning",key,title,message:body,kind:"warning"})})
     .then(j=>{localStorage.setItem(localKey,"1");applyUserNotificationSnapshot(j);announceRealtimeMutation();})
     .catch(()=>{/* pusat pemberitahuan tidak boleh mengganggu fitur utama */});
 }
-function notifyOnce(key,title,body,externalEnabled=true){if(!externalEnabled)return;persistWarningNotificationOnce(key,title,body);const today=new Date().toISOString().slice(0,10);const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
+function notifyOnce(key,title,body,externalEnabled=true){if(!externalEnabled)return;persistWarningNotificationOnce(key,title,body);const today=localTodayValue();const k="finance_notify_"+key+"_"+today;if(localStorage.getItem(k))return;localStorage.setItem(k,"1");if(("Notification" in window)&&Notification.permission==="granted"){try{new Notification(title,{body,icon:"assets/icon.webp"});}catch(_){}}emailNotificationOnce(key,title,body);}
 function formatCreditCardReminderDate(value){return formatBillDate(value);}
 function creditCardReminderMessage(r){
   const h=Number(r.days_until||0);
@@ -5059,7 +5810,7 @@ async function refreshUserNotifications(silent=true) {
   if(userNotificationRequestRunning)return userNotificationState;
   userNotificationRequestRunning=true;
   try{
-    const j=await fetchJson("ajax/notifications.php?_="+Date.now());
+    const j=await fetchJson("ajax/notifications.php?_="+Date.now(), {}, { silentLoadingControl: true, silentLoading: true });
     const before=Number(userNotificationState.unread_count||0);
     applyUserNotificationSnapshot(j);
     if(!silent&&Number(j.unread_count||0)>before)showFeatureToast("Ada pemberitahuan baru","info");
@@ -5140,7 +5891,7 @@ function clearQuickCapturePhoto() {
   if (el("quickPhotoOcrResult")) el("quickPhotoOcrResult").textContent = "";
 }
 
-async function scanQuickCapturePhoto() {
+async function _scanQuickCapturePhotoCore() {
   if (!quickCapturePhoto) return null;
   if (quickCapturePhoto.ocrPromise) return quickCapturePhoto.ocrPromise;
   quickCapturePhoto.ocrPromise = (async () => {
@@ -5169,7 +5920,16 @@ async function scanQuickCapturePhoto() {
   return quickCapturePhoto.ocrPromise;
 }
 
-async function handleQuickCapturePhoto(file) {
+async function scanQuickCapturePhoto() {
+  return withGlobalActionLoading(
+    "Memindai nota...",
+    "OCR sedang membaca foto Catat Cepat pada perangkat.",
+    () => _scanQuickCapturePhotoCore(),
+    { delay: 160 }
+  );
+}
+
+async function _handleQuickCapturePhotoCore(file) {
   if (!file) return;
   clearQuickCapturePhoto();
   if (el("quickPhotoStatus")) el("quickPhotoStatus").textContent = "Mengompres foto…";
@@ -5184,6 +5944,16 @@ async function handleQuickCapturePhoto(file) {
   if (el("quickPhotoPreviewWrap")) el("quickPhotoPreviewWrap").hidden = false;
   if (el("quickPhotoStatus")) el("quickPhotoStatus").textContent = "Memindai nota…";
   scanQuickCapturePhoto();
+}
+
+async function handleQuickCapturePhoto(file) {
+  if (!file) return;
+  return withGlobalActionLoading(
+    "Menyiapkan foto...",
+    "Mengompres foto dan menjalankan OCR Catat Cepat.",
+    () => _handleQuickCapturePhotoCore(file),
+    { delay: 100 }
+  );
 }
 
 function openQuickCapture(prefill = {}) {
@@ -5808,7 +6578,7 @@ async function openTransactionEdit(id) {
     el("editTxId").value = String(t.id || "");
     el("editTxType").value = t.type || "expense";
     el("editTxAmount").value = Number(t.amount || 0);
-    el("editTxDate").value = t.transaction_date || new Date().toISOString().slice(0, 10);
+    el("editTxDate").value = t.transaction_date || localTodayValue();
     el("editTxCategory").value = t.category || "Lainnya";
     el("editTxNote").value = t.note || "";
     el("editTxWallet").value = String(t.wallet_id || 1);
@@ -5887,13 +6657,34 @@ el("saveTransactionEdit")?.addEventListener("click", async () => {
 });
 
 // Export sesuai filter aktif.
-function downloadFiltered(format){if(!isPremiumUser())return openPremiumUpsell("Export CSV/Excel tersedia untuk akun Premium.");const params=new URLSearchParams();params.set("type",txFilters.type);params.set("sort",txFilters.sort);if(txFilters.search)params.set("search",txFilters.search);if(txFilters.wallet_id)params.set("wallet_id",String(txFilters.wallet_id));if(txFilters.category)params.set("category",txFilters.category);if(txFilters.from)params.set("from",txFilters.from);if(txFilters.to)params.set("to",txFilters.to);params.set("format",format);const a=document.createElement("a");a.href=legacyApiUrl("ajax/export.php?"+params.toString());a.style.display="none";document.body.appendChild(a);a.click();a.remove();}
+function offlineExportRows(){return offlineReportRows();}
+function downloadFiltered(format){
+  if(!isPremiumUser())return openPremiumUpsell("Export CSV/Excel tersedia untuk akun Premium.");
+  if(!navigator.onLine||state.offline_mode){
+    const rows=offlineExportRows();
+    if(String(format).toLowerCase()==='xls'){
+      const table=rows.map(t=>`<tr><td>${esc(formatTransactionDate(t.transaction_date))}</td><td>${esc(transactionKindLabel(t.type))}</td><td>${esc(t.category||"Lainnya")}</td><td>${esc(t.note||"")}</td><td>${Number(t.amount||0)}</td><td>${esc(t.offline_pending?"Belum sinkron":"Tersimpan")}</td></tr>`).join("");
+      const html=`<html><head><meta charset="utf-8"></head><body><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Catatan</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${table}</tbody></table></body></html>`;
+      offlineDownloadBlob(new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"}),`transaksi-offline-${typeof localTodayValue==="function"?localTodayValue():"data"}.xls`);
+    }else{
+      const header=["Tanggal","Jenis","Kategori","Catatan","Nominal","Status"];
+      const lines=[header,...rows.map(t=>[formatTransactionDate(t.transaction_date),transactionKindLabel(t.type),t.category||"Lainnya",t.note||"",Number(t.amount||0),t.offline_pending?"Belum sinkron":"Tersimpan"])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","));
+      offlineDownloadBlob(new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"}),`transaksi-offline-${typeof localTodayValue==="function"?localTodayValue():"data"}.csv`);
+    }
+    showFeatureToast("Data berhasil diekspor dari penyimpanan offline.");return;
+  }
+  const params=new URLSearchParams();params.set("type",txFilters.type);params.set("sort",txFilters.sort);if(txFilters.search)params.set("search",txFilters.search);if(txFilters.wallet_id)params.set("wallet_id",String(txFilters.wallet_id));if(txFilters.category)params.set("category",txFilters.category);if(txFilters.from)params.set("from",txFilters.from);if(txFilters.to)params.set("to",txFilters.to);params.set("format",format);const a=document.createElement("a");a.href=legacyApiUrl("ajax/export.php?"+params.toString());a.style.display="none";document.body.appendChild(a);a.click();a.remove();}
 el("txDownloadCsv")?.addEventListener("click",()=>downloadFiltered("csv"));el("txDownloadXls")?.addEventListener("click",()=>downloadFiltered("xls"));
 let searchTimer;el("txFilterSearch")?.addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(applyTransactionFilters,450);});el("txFilterWallet")?.addEventListener("change",applyTransactionFilters);el("txFilterCategory")?.addEventListener("change",applyTransactionFilters);
 
+async function blobToDataUrl(blob){if(!blob)return null;return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||""));r.onerror=()=>reject(r.error||new Error("Gagal membaca lampiran offline."));r.readAsDataURL(blob);});}
+async function serializeOfflineBackupValue(value){if(value instanceof Blob)return {__offline_blob__:true,name:value.name||"receipt.jpg",mime:value.type||"application/octet-stream",size:Number(value.size||0),data_url:await blobToDataUrl(value)};if(Array.isArray(value)){const out=[];for(const item of value)out.push(await serializeOfflineBackupValue(item));return out;}if(value&&typeof value==="object"){const out={};for(const [k,v] of Object.entries(value))out[k]=await serializeOfflineBackupValue(v);return out;}return value;}
+async function reviveOfflineBackupValue(value){if(Array.isArray(value)){const out=[];for(const item of value)out.push(await reviveOfflineBackupValue(item));return out;}if(value&&typeof value==="object"){if(value.__offline_blob__&&value.data_url){const res=await fetch(value.data_url);const blob=await res.blob();try{return new File([blob],value.name||"receipt.jpg",{type:value.mime||blob.type||"application/octet-stream"});}catch(_){return blob;}}const out={};for(const [k,v] of Object.entries(value))out[k]=await reviveOfflineBackupValue(v);return out;}return value;}
+async function createLocalBackup(){const full=await FinanceOffline.getSnapshot("offline_full"),dashboard=await FinanceOffline.getSnapshot("dashboard"),allTransactions=await FinanceOffline.getSnapshot("all_transactions"),queue=await FinanceOffline.listQueue();if(!full&&!dashboard)throw new Error("Belum ada data offline yang dapat dibackup.");const payload={format:"catatan-keuangan-offline-backup",version:2,saved_at:Date.now(),user_id:Number(window.FINANCE_APP?.userId||0),offline_full:await serializeOfflineBackupValue(full),dashboard:await serializeOfflineBackupValue(dashboard),all_transactions:await serializeOfflineBackupValue(allTransactions||[]),queue:await serializeOfflineBackupValue(queue)};offlineDownloadBlob(new Blob([JSON.stringify(payload)],{type:"application/json;charset=utf-8"}),`backup-catatan-keuangan-offline-${typeof localTodayValue==="function"?localTodayValue():"data"}.json`);}
+
 // Backup / restore
-el("downloadBackupBtn")?.addEventListener("click",(e)=>{if(!isPremiumUser()){e.preventDefault();openPremiumUpsell("Download backup tersedia untuk akun Premium.");}});
-el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())return openPremiumUpsell("Restore backup tersedia untuk akun Premium.");const file=el("restoreBackupFile")?.files?.[0];if(!file)return alert("Pilih file backup JSON terlebih dahulu.");if(!confirm("Restore akan mengganti data keuangan akun saat ini. Lanjutkan?"))return;const fd=new FormData();fd.append("backup",file);try{const j=await fetchJson("ajax/backup.php",{method:"POST",body:fd});showFeatureToast(j.message||"Backup dipulihkan");financeCenter.close();await load();}catch(e){alert(e.message)}});
+el("downloadBackupBtn")?.addEventListener("click",async(e)=>{if(!isPremiumUser()){e.preventDefault();openPremiumUpsell("Download backup tersedia untuk akun Premium.");return;}if(navigator.onLine&&!state.offline_mode)return;e.preventDefault();try{showFeatureToast("Menyiapkan backup offline…");await withGlobalActionLoading("Menyiapkan backup...","Menyusun salinan data lokal.",()=>createLocalBackup(),{delay:100});showFeatureToast("Backup offline selesai dibuat.");}catch(err){alert(err.message||"Backup offline gagal dibuat.");}});
+el("restoreBackupBtn")?.addEventListener("click",async()=>{if(!isPremiumUser())return openPremiumUpsell("Restore backup tersedia untuk akun Premium.");const file=el("restoreBackupFile")?.files?.[0];if(!file)return alert("Pilih file backup JSON terlebih dahulu.");if(!confirm("Restore akan mengganti data keuangan akun saat ini. Lanjutkan?"))return;try{if(!navigator.onLine||state.offline_mode){await withGlobalActionLoading("Memulihkan backup...","Mengembalikan data lokal dan antrean sinkronisasi.",async()=>{const raw=await file.text(),parsed=JSON.parse(raw);if(parsed?.format!=="catatan-keuangan-offline-backup")throw new Error("File bukan backup offline Catatan Keuangan.");if(Number(parsed.user_id||0)&&Number(parsed.user_id)!==Number(window.FINANCE_APP?.userId||0))throw new Error("Backup berasal dari akun berbeda.");const full=await reviveOfflineBackupValue(parsed.offline_full),dashboard=await reviveOfflineBackupValue(parsed.dashboard),allTx=await reviveOfflineBackupValue(parsed.all_transactions||[]),queue=await reviveOfflineBackupValue(parsed.queue||[]);await FinanceOffline.clearUserOfflineData();if(full)await FinanceOffline.saveSnapshot("offline_full",full);if(dashboard)await FinanceOffline.saveSnapshot("dashboard",dashboard);await FinanceOffline.saveSnapshot("all_transactions",allTx||[]);for(const row of(queue||[]))await FinanceOffline.restoreQueueRecord(row);showFeatureToast("Backup offline berhasil dipulihkan.");financeCenter.close();await loadFromOfflineSnapshot();await updateConnectionUi();},{delay:100});}else{const fd=new FormData();fd.append("backup",file);const j=await fetchJson("ajax/backup.php",{method:"POST",body:fd});showFeatureToast(j.message||"Backup dipulihkan");financeCenter.close();await load();}}catch(e){alert(e.message||"Restore gagal");}});
 
 // PWA install
 let deferredInstallPrompt=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;el("installPwaBtn")?.classList.add("ready");});
@@ -5901,7 +6692,7 @@ el("installPwaBtn")?.addEventListener("click",async()=>{if(deferredInstallPrompt
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("sw.js?v=66", { updateViaCache: "none" });
+      await navigator.serviceWorker.register("sw.js?v=255", { updateViaCache: "none" });
       await navigator.serviceWorker.ready;
       await cacheCurrentShellForOffline();
     } catch (_) {}
@@ -5995,7 +6786,7 @@ async function refreshAdminNotifications(silent=false) {
   if (!window.FINANCE_APP?.isSuperAdmin || adminNotificationRequestRunning) return;
   adminNotificationRequestRunning = true;
   try {
-    const j = await fetchJson("ajax/admin_notifications.php?_=" + Date.now());
+    const j = await fetchJson("ajax/admin_notifications.php?_=" + Date.now(), {}, { silentLoadingControl: true, silentLoading: true });
     const rows = Array.isArray(j.notifications) ? j.notifications : [];
     updateAdminNotificationBadges(j.unread_count || 0);
     renderAdminNotificationList(rows);

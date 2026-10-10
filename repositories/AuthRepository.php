@@ -13,6 +13,31 @@ final class AuthRepository
     public static function findById(int $id): ?array { $r=(new Query())->from('{{%user}}')->where(['id'=>$id])->one(); return $r?self::hydrate($r):null; }
     public static function findByUsername(string $username): ?array { $r=(new Query())->from('{{%user}}')->where(['username'=>trim($username)])->one(); return $r?self::hydrate($r):null; }
     public static function findByEmail(string $email): ?array { $r=(new Query())->from('{{%user}}')->where(['email'=>strtolower(trim($email))])->one(); return $r?self::hydrate($r):null; }
+    public static function findByGoogleSub(string $sub): ?array {
+        $sub = trim($sub);
+        if ($sub === '') return null;
+        try {
+            $rows = self::db()->createCommand(
+                "SELECT * FROM {{%user}} WHERE JSON_UNQUOTE(JSON_EXTRACT(extra_json, '$.google_sub')) = :googleSub LIMIT 2",
+                [':googleSub' => $sub]
+            )->queryAll();
+            if (count($rows) > 1) throw new \RuntimeException('Tautan akun Google terduplikasi. Hubungi admin aplikasi.');
+            if (count($rows) === 1) return self::hydrate($rows[0]);
+            return null;
+        } catch (\Throwable $e) {
+            if ($e instanceof \RuntimeException && str_contains($e->getMessage(), 'terduplikasi')) throw $e;
+            // Compatibility fallback for older MySQL/MariaDB installations or legacy extra_json rows.
+            $matches = [];
+            foreach ((new Query())->from('{{%user}}')->select(['id','extra_json'])->all(self::db()) as $row) {
+                $extra = json_decode((string)($row['extra_json'] ?? ''), true);
+                if (is_array($extra) && isset($extra['google_sub']) && is_string($extra['google_sub']) && hash_equals($sub, $extra['google_sub'])) {
+                    $matches[] = (int)$row['id'];
+                    if (count($matches) > 1) throw new \RuntimeException('Tautan akun Google terduplikasi. Hubungi admin aplikasi.');
+                }
+            }
+            return count($matches) === 1 ? self::findById($matches[0]) : null;
+        }
+    }
     public static function findByDeviceHash(string $hash): ?array { $r=(new Query())->from('{{%user_device}}')->where(['token_hash'=>$hash])->one(); return $r?self::findById((int)$r['user_id']):null; }
 
     private static function hydrate(array $r): array {

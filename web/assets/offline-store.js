@@ -199,6 +199,23 @@
     emit();
   }
 
+  async function saveMeta(key, value) {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tr = db.transaction(STORE_META, 'readwrite');
+      tr.objectStore(STORE_META).put({ key: String(key), value });
+      tr.oncomplete = resolve;
+      tr.onerror = () => reject(tr.error);
+    });
+  }
+
+  async function getMeta(key, fallback = null) {
+    const db = await openDb();
+    const tr = db.transaction(STORE_META, 'readonly');
+    const row = await reqPromise(tr.objectStore(STORE_META).get(String(key)));
+    return row ? row.value : fallback;
+  }
+
   async function updateQueue(record) {
     const db = await openDb();
     await new Promise((resolve, reject) => {
@@ -208,6 +225,21 @@
       tr.onerror = () => reject(tr.error);
     });
     emit();
+  }
+
+  async function restoreQueueRecord(record) {
+    const userId = currentUserId();
+    if (!userId) throw new Error('Akun offline belum dikenali.');
+    const safe = { ...record, id: String(record?.id || uuid()), user_id: userId, restored_at: Date.now() };
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tr = db.transaction(STORE_QUEUE, 'readwrite');
+      tr.objectStore(STORE_QUEUE).put(safe);
+      tr.oncomplete = resolve;
+      tr.onerror = () => reject(tr.error);
+    });
+    emit();
+    return safe;
   }
 
   function buildBody(record) {
@@ -274,13 +306,16 @@
     try {
       const rows = await listQueue();
       for (const row of rows) {
-        const routedUrl = routeLegacyUrl(row.url);
+        const sendRow = window.FinanceOfflineEngine?.prepareSyncRecord
+          ? await window.FinanceOfflineEngine.prepareSyncRecord(row)
+          : row;
+        const routedUrl = routeLegacyUrl(sendRow.url);
         const target = /^https?:\/\//i.test(routedUrl) ? routedUrl : currentSyncBase() + '/' + String(routedUrl).replace(/^\//, '');
         try {
           const response = await fetch(target, {
-            method: row.method || 'POST',
-            headers: buildHeaders(row),
-            body: buildBody(row),
+            method: sendRow.method || 'POST',
+            headers: buildHeaders(sendRow),
+            body: buildBody(sendRow),
             credentials: 'include',
             cache: 'no-store',
           });
@@ -304,6 +339,9 @@
             // 4xx selain auth biasanya data invalid; jangan hentikan item berikutnya.
             if (response.status >= 500) break;
             continue;
+          }
+          if (window.FinanceOfflineEngine?.reconcileServerResult) {
+            try { await window.FinanceOfflineEngine.reconcileServerResult(row, json || {}); } catch (_) {}
           }
           await deleteQueue(row.id);
           synced++;
@@ -346,6 +384,9 @@
       tr.oncomplete = resolve;
       tr.onerror = () => reject(tr.error);
     });
+    // ID mapping berasal dari sesi sinkronisasi sebelumnya; setelah data akun dihapus/restored,
+    // mapping tersebut tidak boleh dipakai lagi.
+    await saveMeta('id_maps', {});
     emit();
   }
 
@@ -378,7 +419,10 @@
     queueRequest,
     listQueue,
     deleteQueue,
+    restoreQueueRecord,
     updateQueue,
+    saveMeta,
+    getMeta,
     syncQueue,
     status,
     onStatus,

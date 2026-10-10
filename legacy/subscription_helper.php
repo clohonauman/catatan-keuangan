@@ -7,6 +7,25 @@ require_once __DIR__.'/image_storage_helper.php';
 require_once __DIR__.'/user_email_notification_helper.php';
 
 if (!defined('SUBSCRIPTION_FILE')) define('SUBSCRIPTION_FILE','mysql://subscription');
+
+/** Return a customer-safe support reference for QRIS checkout failures. */
+function subscriptionQrisSupportReference(?array $order = null): string {
+    $invoice = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($order['invoice_no'] ?? ''));
+    if ($invoice !== '') return 'QRIS-' . strtoupper(substr($invoice, 0, 40));
+
+    try {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+    } catch (Throwable $ignore) {
+        $suffix = strtoupper(dechex(mt_rand(0, 0x7fffffff)));
+    }
+    return 'QRIS-REQ-' . date('ymdHis') . '-' . $suffix;
+}
+
+/** Keep provider/configuration details in server logs, never in customer-facing messages. */
+function subscriptionQrisPublicFailureMessage(string $reference): string {
+    return 'Pembayaran QRIS belum dapat disiapkan saat ini. Silakan coba lagi beberapa saat atau pilih metode Transfer Bank. Jika masalah berlanjut, hubungi bantuan dan sertakan kode referensi ' . $reference . '.';
+}
+
 if (!defined('PAYMENT_PROOF_DIR')) define('PAYMENT_PROOF_DIR', Yii::$app->params['privateStorage'].'/payment_proofs');
 
 function subscriptionDefaultPlans(): array {
@@ -402,6 +421,146 @@ function subscriptionCreateInvoice(array $user, array $input): array {
     return $created;
 }
 
+/** Create a Premium subscription invoice with automatically confirmed Midtrans QRIS. */
+function subscriptionCreateQrisInvoice(array $user, array $input): array {
+    if (!\app\services\MidtransQrisService::isEnabled()) {
+        // Keep deployment/merchant configuration details out of the customer-facing response.
+        throw new RuntimeException('QRIS_DISABLED_OR_NOT_CONFIGURED');
+    }
+    $userId = (int)($user['id'] ?? 0);
+    if ($userId <= 0) throw new InvalidArgumentException('Akun tidak ditemukan.');
+    $existing = subscriptionOpenOrderForUser($userId);
+    if ($existing) {
+        throw new InvalidArgumentException('Masih ada invoice yang belum selesai: '.($existing['invoice_no'] ?? '').'. Selesaikan atau tunggu status pembayaran tersebut.');
+    }
+
+    $planKey = strtolower(trim((string)($input['plan_key'] ?? '')));
+    $plans = subscriptionPlans();
+    if (!isset($plans[$planKey])) throw new InvalidArgumentException('Paket berlangganan tidak valid.');
+    $plan = $plans[$planKey];
+    $baseAmount = (int)($plan['amount'] ?? 0);
+    $couponCode = subscriptionNormalizeCouponCode((string)($input['coupon_code'] ?? ''));
+    $couponSnapshot = null;
+    $discountAmount = 0;
+    $finalAmount = $baseAmount;
+    if ($couponCode !== '') {
+        $validatedCoupon = subscriptionValidateCoupon($couponCode, $planKey);
+        $couponSnapshot = [
+            'id'=>(int)$validatedCoupon['id'],
+            'code'=>(string)$validatedCoupon['code'],
+            'discount_type'=>(string)$validatedCoupon['discount_type'],
+            'discount_value'=>(int)$validatedCoupon['discount_value'],
+            'discount_label'=>(string)$validatedCoupon['discount_label'],
+            'expires_at'=>(string)$validatedCoupon['expires_at'],
+        ];
+        $discountAmount = (int)$validatedCoupon['discount_amount'];
+        $finalAmount = (int)$validatedCoupon['final_amount'];
+    }
+    if ($finalAmount < 1) {
+        throw new InvalidArgumentException('Total invoice Rp0 tidak dapat dibayar dengan QRIS. Pilih transfer manual atau gunakan kupon berbeda.');
+    }
+
+    $externalOrderId = 'CKP-' . $userId . '-' . date('ymdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
+    $created = subscriptionMutateData(function (&$data) use ($user, $userId, $planKey, $plan, $baseAmount, $couponSnapshot, $discountAmount, $finalAmount, $externalOrderId) {
+        $id = (int)$data['meta']['next_order_id']++;
+        $now = date('Y-m-d H:i:s');
+        $order = [
+            'id'=>$id,
+            'invoice_no'=>subscriptionInvoiceNo($id),
+            'user_id'=>$userId,
+            'username'=>(string)($user['username'] ?? ''),
+            'plan_key'=>$planKey,
+            'plan_label'=>(string)$plan['label'],
+            'plan_months'=>(int)$plan['months'],
+            'plan_permanent'=>!empty($plan['permanent']),
+            'base_amount'=>$baseAmount,
+            'coupon'=>$couponSnapshot,
+            'discount_amount'=>$discountAmount,
+            'amount'=>$finalAmount,
+            'bank_id'=>'',
+            'bank_name'=>'QRIS Midtrans',
+            'bank_account_number'=>'',
+            'bank_account_name'=>'',
+            'sender_name'=>'',
+            'sender_account_number'=>'',
+            'payment_method'=>'midtrans_qris',
+            'payment_method_label'=>'QRIS Otomatis (Midtrans)',
+            'midtrans_order_id'=>$externalOrderId,
+            'midtrans_transaction_id'=>'',
+            'midtrans_qr_url'=>'',
+            'midtrans_transaction_status'=>'pending',
+            'midtrans_acquirer'=>\app\services\MidtransQrisService::acquirer(),
+            'activation_status'=>'pending',
+            'payment_notifications_sent'=>false,
+            'status'=>'waiting_payment',
+            'proof'=>null,
+            'created_at'=>$now,
+            'updated_at'=>$now,
+            'verified_at'=>'',
+            'verified_by'=>'',
+            'rejection_reason'=>'',
+        ];
+        $data['orders'][] = $order;
+        return $order;
+    });
+
+    try {
+        $charge = \app\services\MidtransQrisService::createQrisCharge(
+            $externalOrderId,
+            $finalAmount,
+            $user,
+            $plan
+        );
+        $created = subscriptionMutateData(function (&$data) use ($created, $charge) {
+            foreach ($data['orders'] as &$row) {
+                if ((int)($row['id'] ?? 0) !== (int)$created['id']) continue;
+                // Jangan menurunkan status jika webhook settlement sudah tiba sangat cepat.
+                $row['midtrans_transaction_id'] = (string)$charge['transaction_id'];
+                $row['midtrans_qr_url'] = (string)$charge['qr_url'];
+                $row['midtrans_transaction_status'] = (string)($charge['transaction_status'] ?? 'pending');
+                $row['midtrans_status_code'] = (string)($charge['status_code'] ?? '');
+                $row['midtrans_acquirer'] = (string)($charge['acquirer'] ?? \app\services\MidtransQrisService::acquirer());
+                $row['midtrans_transaction_time'] = (string)($charge['transaction_time'] ?? '');
+                $row['updated_at'] = date('Y-m-d H:i:s');
+                return $row;
+            }
+            unset($row);
+            throw new RuntimeException('Invoice QRIS tidak ditemukan setelah transaksi dibuat.');
+        });
+    } catch (Throwable $e) {
+        $supportReference = subscriptionQrisSupportReference($created);
+        try {
+            subscriptionMutateData(function (&$data) use ($created, $e, $supportReference) {
+                foreach ($data['orders'] as &$row) {
+                    if ((int)($row['id'] ?? 0) !== (int)$created['id']) continue;
+                    if (($row['status'] ?? '') !== 'approved') $row['status'] = 'failed';
+                    // Detailed cause is retained for server-side diagnostics only.
+                    $row['midtrans_error'] = substr((string)$e->getMessage(), 0, 240);
+                    $row['midtrans_error_reference'] = $supportReference;
+                    $row['updated_at'] = date('Y-m-d H:i:s');
+                    return $row;
+                }
+                unset($row);
+                return null;
+            });
+        } catch (Throwable $ignore) { /* detailed failure remains in server logs */ }
+        Yii::error('Midtrans QRIS creation failed [reference='.$supportReference.'] for internal order '.(int)$created['id'].': '.$e->getMessage(), __METHOD__);
+        throw new RuntimeException(subscriptionQrisPublicFailureMessage($supportReference));
+    }
+
+    adminNotifySubscriptionEvent($created, 'invoice_created');
+    return $created;
+}
+
+function subscriptionFindOrderByMidtransOrderId(string $midtransOrderId): ?array {
+    $midtransOrderId = trim($midtransOrderId);
+    if ($midtransOrderId === '') return null;
+    foreach (subscriptionReadData()['orders'] as $order) {
+        if (hash_equals((string)($order['midtrans_order_id'] ?? ''), $midtransOrderId)) return $order;
+    }
+    return null;
+}
+
 function subscriptionAllowedProofMime(string $path): string {
     $mime = '';
     if (function_exists('finfo_open')) {
@@ -614,6 +773,8 @@ function subscriptionStatusLabel(string $status): string {
         'pending_verification'=>'Menunggu Verifikasi',
         'approved'=>'Lunas / Disetujui',
         'rejected'=>'Ditolak',
+        'expired'=>'Kedaluwarsa',
+        'failed'=>'Gagal',
     ][$status] ?? ucfirst(str_replace('_',' ', $status));
 }
 
@@ -622,6 +783,15 @@ function subscriptionOrderForClient(?array $order): ?array {
     $out = $order;
     $out['status_label'] = subscriptionStatusLabel((string)($order['status'] ?? ''));
     $out['proof_url'] = !empty($order['proof']['file']) ? 'index.php?r=legacy-api%2Fbridge&name=payment_proof&order_id='.(int)$order['id'] : '';
+    if (($order['payment_method'] ?? '') === 'midtrans_qris' && !empty($order['midtrans_qr_url'])) {
+        $out['qr_image_url'] = 'index.php?r=payment%2Fqris-image&order_id='.(int)$order['id'];
+        $out['payment_method_label'] = 'QRIS Otomatis (Midtrans)';
+    } else {
+        $out['qr_image_url'] = '';
+        $out['payment_method_label'] = (string)($order['payment_method_label'] ?? 'Transfer Bank Manual');
+    }
+    // URL internal API Midtrans tidak perlu dikirim ke client; hanya endpoint proxy milik aplikasi yang aman.
+    unset($out['midtrans_qr_url'], $out['midtrans_error']);
     return $out;
 }
 
@@ -635,6 +805,10 @@ function subscriptionUserSnapshot(array $user): array {
     return [
         'plans'=>$plans,
         'banks'=>$banks,
+        'payment_config'=>[
+            'qris_enabled'=>\app\services\MidtransQrisService::isEnabled(),
+            'qris_acquirer'=>\app\services\MidtransQrisService::acquirer(),
+        ],
         'latest_order'=>subscriptionOrderForClient(subscriptionLatestOrderForUser((int)$user['id'])),
         'open_order'=>subscriptionOrderForClient(subscriptionOpenOrderForUser((int)$user['id'])),
         'account'=>[

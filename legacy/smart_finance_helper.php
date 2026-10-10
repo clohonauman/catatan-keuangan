@@ -136,7 +136,7 @@ function smartQueryRows(?string $type, ?string $category, ?string $from, ?string
 function smartPaydayIntent(string $message): bool {
     $t=norm($message);
     if (preg_match('/^(?:ajarkan|pelajari|belajar|balas|jawab)\b/u',$t)) return false;
-    return (bool)(preg_match('/\b(?:aman|cukup|bertahan|kurang|habis|solusi|hemat|prediksi|perkiraan)\b/u',$t)
+    return (bool)(preg_match('/\b(?:aman|cukup|bertahan|kurang|habis|solusi|hemat|prediksi|perkiraan|mampu|kuat|nyampe|selamat|survive)\b/u',$t)
         && preg_match('/\b(?:gajian|gaji berikutnya|terima gaji|tanggal gaji)\b/u',$t));
 }
 
@@ -186,16 +186,23 @@ function smartScenarioMoneyValue(string $raw,string $inheritUnit=''): int {
     return function_exists('parseAmount')?parseAmount($raw):0;
 }
 
+function smartScenarioNormalizeText(string $message): string {
+    $t=norm($message);
+    $t=preg_replace('/\bmkn\b/u','makan',$t);
+    return trim(preg_replace('/\s+/u',' ',$t));
+}
+
 function smartScenarioItemLabel(string $prefix,int $number): string {
     $label=norm($prefix);
     $label=preg_replace('/[^\pL\pN\s-]+/u',' ',$label);
     $phrases=[
         'kira kira dengan sisa uang saya','kira kira dengan sisa uang aku','dengan sisa uang saya','dengan sisa uang aku',
         'dengan uang saya','dengan uang aku','uang saya cukup gak kalau','uang saya cukup ga kalau','uang saya cukup nggak kalau','uang aku cukup gak kalau','uang aku cukup ga kalau','uang aku cukup nggak kalau','kalau saya','kalau aku','jika saya','jika aku','misalnya saya','misalnya aku',
-        'setiap hari','tiap hari','per hari','sehari','harian','perhari','dalam sehari','saya beli','aku beli','saya bayar','aku bayar'
+        'setiap hari','tiap hari','per hari','sehari','harian','perhari','dalam sehari','saya beli','kedepannya','ke depan','mulai sekarang','mulai besok','mulai hari ini','aku beli','saya bayar','aku bayar'
     ];
     foreach($phrases as $phrase)$label=str_replace($phrase,' ',$label);
-    $label=preg_replace('/\b(?:kira|kalau|jika|misal|misalnya|terus|lalu|kemudian|dan|serta|plus|ditambah|saya|aku|gue|gua|uang|duit|cukup|aman|gak|ga|nggak|ngga|enggak|ya|beli|bayar|pakai|gunakan|untuk|buat|biaya|budget|anggaran|pengeluaran|keluar|habis|sekitar|kurang lebih|rp)\b/u',' ',$label);
+    $label=preg_replace('/\b(?:kira|kalau|jika|misal|misalnya|terus|lalu|kemudian|dan|serta|plus|ditambah|saya|aku|gue|gua|uang|duit|cukup|aman|gak|ga|nggak|ngga|enggak|ya|beli|bayar|pakai|gunakan|untuk|buat|biaya|budget|anggaran|pengeluaran|keluar|habis|sekitar|kurang lebih|rp|kedepannya|ke depan|mulai sekarang|mulai besok|mulai hari ini)\b/u',' ',$label);
+    $label=preg_replace('/\bmkn\b/u','makan',$label);
     $label=trim(preg_replace('/\s+/u',' ',$label));
     if($label==='')return 'Kebutuhan harian '.$number;
     $parts=preg_split('/\s+/u',$label,-1,PREG_SPLIT_NO_EMPTY);
@@ -207,7 +214,7 @@ function smartScenarioItemLabel(string $prefix,int $number): string {
 }
 
 function smartPaydayScenarioItems(string $message): array {
-    $text=norm($message);
+    $text=smartScenarioNormalizeText($message);
     // Clauses keep nearby words (BBM, makan, kopi, parkir, etc.) attached to
     // their money value, but avoid swallowing the entire sentence as a label.
     $clauses=preg_split('/\s*(?:,|;|\+|\b(?:dan|serta|plus|ditambah)\b)\s*/u',$text,-1,PREG_SPLIT_NO_EMPTY);
@@ -227,18 +234,26 @@ function smartPaydayScenarioItems(string $message): array {
         if($low<=0||$high<=0)continue;
         if($high<$low){$tmp=$low;$low=$high;$high=$tmp;}
         $prefix=substr($clause,0,(int)$m[1][1]);
-        $label=smartScenarioItemLabel($prefix,$number++);
+        $label=smartScenarioItemLabel($prefix,$number);
+        if($label==='Kebutuhan harian '.$number){
+            $suffix=substr($clause,(int)$m[0][1]+strlen((string)$m[0][0]));
+            $suffix=preg_replace('/\b(?:per\s*hari|tiap\s*hari|setiap\s*hari|sehari|harian|perhari|hari|sampai|hingga|gajian|cukup|aman|bisa|tidak|ga|gak|nggak)\b/iu',' ',$suffix);
+            $suffix=preg_replace('/[^\pL\pN\s-]+/u',' ',$suffix);
+            $suffix=trim(preg_replace('/\s+/u',' ',$suffix));
+            if($suffix!=='')$label=smartScenarioItemLabel($suffix,$number);
+        }
+        $number++;
         $items[]=['label'=>$label,'low'=>$low,'high'=>$high];
     }
     return $items;
 }
 
 function smartPaydayScenarioIntent(string $message): bool {
-    $t=norm($message);
+    $t=smartScenarioNormalizeText($message);
     if(!preg_match('/\b(?:gajian|gaji berikutnya|terima gaji|tanggal gaji)\b/u',$t))return false;
-    if(!preg_match('/\b(?:per hari|tiap hari|setiap hari|sehari|harian|perhari|\/hari)\b/u',$t))return false;
-    if(!preg_match('/\b(?:cukup|aman|bertahan|nyampe|sampai|kuat|bisa|gak|ga|nggak|tidak)\b|\?/u',$t))return false;
-    return count(smartPaydayScenarioItems($message))>0;
+    if(!preg_match('/(?:\bper\s*hari\b|\btiap\s*hari\b|\bsetiap\s*hari\b|\bsehari\b|\bharian\b|\bperhari\b|\/\s*hari\b)/u',$t))return false;
+    if(!preg_match('/\b(?:cukup|aman|bertahan|nyampe|sampai|kuat|bisa|gak|ga|nggak|tidak|mampu|selamat|survive)\b|\?/u',$t))return false;
+    return count(smartPaydayScenarioItems($t))>0;
 }
 
 function smartMoneyRangeText(int $low,int $high): string {

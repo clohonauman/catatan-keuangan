@@ -85,7 +85,7 @@
                 android:layout_height="50dp"
                 android:layout_marginTop="8dp"
                 android:backgroundTint="@color/white"
-                android:text="Gunakan PIN aplikasi"
+                android:text="Gunakan kunci/PIN perangkat"
                 android:textAllCaps="false"
                 android:textColor="@color/primary" />
         </LinearLayout>

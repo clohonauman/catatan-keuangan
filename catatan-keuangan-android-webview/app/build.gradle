@@ -10,8 +10,8 @@ android {
         applicationId "com.charlie.finance"
         minSdk 24
         targetSdk 35
-        versionCode 6
-        versionName "1.4.1"
+        versionCode 13
+        versionName "2.6.3"
     }
 
     buildTypes {
@@ -31,6 +31,11 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.biometric:biometric:1.1.0'
-    implementation 'androidx.fragment:fragment:1.8.5'
     implementation 'androidx.fragment:fragment:1.9.0'
+
+    // Native Google Sign-In through Android Credential Manager.
+    // A Web OAuth Client ID is supplied by the login page and verified by the server.
+    implementation 'androidx.credentials:credentials:1.6.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
 }

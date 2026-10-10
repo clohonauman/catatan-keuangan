@@ -67,6 +67,27 @@ function adaptiveTokens(string $text): array {
     }
     return array_slice(array_keys($tokens),0,24);
 }
+
+/**
+ * Stable semantic context keys used for habit learning. These are deliberately
+ * narrow: category + genuinely repetitive spending pattern, not the current
+ * wallet value and not the generic expense/income type. That lets a correction
+ * such as "makan -> SeaBank" carry over to "nasi goreng" while avoiding a
+ * dangerous global "all expenses -> SeaBank" bias.
+ */
+function adaptiveContextTokens(array $tx): array {
+    $out=[];
+    $category=trim((string)($tx['category']??''));
+    $categoryNorm=adaptiveNormalizeText($category);
+    if($categoryNorm!=='' && !in_array(strtolower($categoryNorm),['lainnya','transfer antar dompet'],true)){
+        $slug=preg_replace('/[^a-z0-9]+/u','_',strtolower($categoryNorm));
+        $slug=trim((string)$slug,'_');
+        if($slug!=='')$out[]='ctx_category_'.$slug;
+    }
+    $kind=strtolower(trim((string)($tx['spending_kind']??'')));
+    if(in_array($kind,['daily','recurring'],true))$out[]='ctx_kind_'.$kind;
+    return array_values(array_unique($out));
+}
 function adaptiveTokenSimilarity(array $a,array $b): float {
     $a=array_values(array_unique($a));$b=array_values(array_unique($b));
     if(!$a||!$b)return 0.0;
@@ -102,25 +123,27 @@ function adaptiveCorrections(array $parsed,array $confirmed): array {
     }
     return $diff;
 }
-function adaptiveSignalRows(array $tokens,array $confirmed,array $corrections): array {
+function adaptiveSignalRows(array $tokens,array $confirmed,array $corrections,array $contextTokens=[]): array {
     $fields=adaptiveFieldSnapshot($confirmed);$rows=[];
+    $allTokens=array_values(array_unique(array_merge($tokens,$contextTokens)));
     foreach($fields as $field=>$value){
         if(!in_array($field,['type','category','wallet_id','spending_kind','from_wallet_id','to_wallet_id'],true))continue;
         $weight=array_key_exists($field,$corrections)?3:1;
-        foreach($tokens as $token)$rows[]=['token'=>$token,'field_name'=>$field,'field_value'=>adaptiveStoredFieldValue($field,$value),'weight'=>$weight];
+        foreach($allTokens as $token)$rows[]=['token'=>$token,'field_name'=>$field,'field_value'=>adaptiveStoredFieldValue($field,$value),'weight'=>$weight];
     }
     return $rows;
 }
 
-function adaptiveCorrectionPenaltyRows(array $tokens,array $corrections): array {
+function adaptiveCorrectionPenaltyRows(array $tokens,array $corrections,array $contextTokens=[]): array {
     $rows=[];
+    $allTokens=array_values(array_unique(array_merge($tokens,$contextTokens)));
     foreach($corrections as $field=>$change){
         if(!in_array($field,['type','category','wallet_id','spending_kind','from_wallet_id','to_wallet_id'],true))continue;
         $from=$change['from']??null;
         if($from===null||$from==='')continue;
         $value=adaptiveStoredFieldValue($field,$from);
         if($value==='')continue;
-        foreach($tokens as $token)$rows[]=[
+        foreach($allTokens as $token)$rows[]=[
             'token'=>$token,'field_name'=>$field,'field_value'=>$value,'weight'=>2
         ];
     }
@@ -133,14 +156,29 @@ function adaptiveLearnFromConfirmation(array $pending,array $finalDrafts): array
         $GLOBALS['adaptive_learning_last_result']=$result;
         return $result;
     }
-    $drafts=(array)($pending['drafts']??[]);$learned=0;$correctedCount=0;$correctedFields=[];
+    // Gunakan baseline parser yang disimpan sebelum koreksi user.
+    // Sebelumnya kita membaca pending['drafts']; padahal dialog koreksi memang
+    // mengubah array tersebut langsung sehingga perubahan awal -> hasil koreksi
+    // hilang sebelum fungsi learning dipanggil saat Simpan.
+    $drafts=(array)(
+        $pending['original_drafts']
+        ?? $pending['adaptive_original_drafts']
+        ?? $pending['drafts']
+        ?? []
+    );
+    $learned=0;$correctedCount=0;$correctedFields=[];
     foreach($finalDrafts as $i=>$confirmed){
         $parsed=(array)($drafts[$i]??[]);
+        // Draft biaya admin otomatis adalah transaksi turunan, bukan contoh
+        // perilaku semantik user untuk belajar jenis/kategori/dompet.
+        if(!empty($parsed['admin_fee_auto_wallet'])||!empty($confirmed['admin_fee_auto_wallet']))continue;
         $source=trim((string)($parsed['note']??''));
         if($source==='')$source=trim((string)($pending['message']??''));
         if($source==='')continue;
         $normalized=adaptiveNormalizeText($source);$tokens=adaptiveTokens($source);if(!$tokens)continue;
         $corrections=adaptiveCorrections($parsed,$confirmed);$wasCorrected=!empty($corrections);
+        $parsedContextTokens=adaptiveContextTokens($parsed);
+        $confirmedContextTokens=adaptiveContextTokens($confirmed);
         AdaptiveLearningRepository::recordExample($uid,[
             'message_hash'=>hash('sha256',$normalized),
             'source_message'=>substr($source,0,1000),
@@ -150,14 +188,14 @@ function adaptiveLearnFromConfirmation(array $pending,array $finalDrafts): array
             'confirmed'=>adaptiveFieldSnapshot($confirmed),
             'correction'=>$corrections,
             'was_corrected'=>$wasCorrected,
-        ],adaptiveSignalRows($tokens,$confirmed,$corrections));
+        ],adaptiveSignalRows($tokens,$confirmed,$corrections,$confirmedContextTokens));
 
         // Koreksi manual berarti prediksi lama terbukti salah. Kurangi asosiasi
         // token terhadap nilai lama agar model benar-benar bisa "unlearn".
         if($wasCorrected){
             AdaptiveLearningRepository::penalizeTokenSignals(
                 $uid,
-                adaptiveCorrectionPenaltyRows($tokens,$corrections)
+                adaptiveCorrectionPenaltyRows($tokens,$corrections,$parsedContextTokens)
             );
             foreach(array_keys($corrections) as $field)$correctedFields[$field]=true;
         }
@@ -180,42 +218,111 @@ function adaptiveLearningLastResult(): array {
         : ['learned'=>0,'corrected'=>0,'fields'=>[]];
 }
 
-function adaptivePredictionVotes(string $message): array {
-    $uid=adaptiveAiUserId();$tokens=adaptiveTokens($message);
-    if($uid<=0||!adaptiveAiEnabled()||!$tokens)return ['fields'=>[],'matched_examples'=>0,'example_ids'=>[],'example_count'=>0];
-    $examples=AdaptiveLearningRepository::recentExamples($uid,140);$votes=[];$matched=[];
-    foreach($examples as $ex){
-        $sim=adaptiveTokenSimilarity($tokens,(array)($ex['tokens']??[]));
-        if($sim<0.34)continue;
+function adaptivePredictionVotes(string $message,array $context=[]): array {
+    $uid=adaptiveAiUserId();
+    $tokens=array_values(array_unique(adaptiveTokens($message)));
+    $currentContext=adaptiveContextTokens($context);
+    $predictionTokens=array_values(array_unique(array_merge($tokens,$currentContext)));
+    if($uid<=0||!adaptiveAiEnabled()||!$predictionTokens)return ['fields'=>[],'matched_examples'=>0,'example_ids'=>[],'example_count'=>0,'manual_overrides'=>[]];
+
+    $examples=AdaptiveLearningRepository::recentExamples($uid,140);
+    $votes=[];$matched=[];$manualAnchors=[];
+
+    foreach($examples as $position=>$ex){
+        $exampleTokens=(array)($ex['tokens']??[]);
         $confirmed=(array)($ex['confirmed']??[]);
-        // Feedback manual harus jauh lebih kuat dibanding tebakan yang sekadar
-        // dikonfirmasi tanpa perubahan. Ini membuat satu koreksi yang sangat
-        // mirip dapat langsung memengaruhi kalimat berikutnya.
+        $exampleContext=adaptiveContextTokens($confirmed);
+        $rawSim=adaptiveTokenSimilarity($tokens,$exampleTokens);
+        $contextSim=adaptiveTokenSimilarity($currentContext,$exampleContext);
+        $sim=max($rawSim,$contextSim>=0.999?0.86:0.0);
+
+        // Explicit user corrections are hard personal memories. A correction
+        // must not be outvoted by dozens of older, uncorrected confirmations
+        // that happen to use the same category. Exact/near phrase matches win;
+        // same-category matches also win so "makan siang" can teach "nasi goreng".
+        if(!empty($ex['was_corrected']) && $sim>=0.80){
+            $correction=(array)($ex['correction']??[]);
+            foreach(array_keys($correction) as $field){
+                $value=adaptiveStoredFieldValue($field,$confirmed[$field]??'');
+                if($value==='')continue;
+                $score=$sim + ($rawSim>=0.99?0.10:0.0) - ($position*0.0001);
+                $currentAnchorScore = isset($manualAnchors[$field])
+                    ? (float)($manualAnchors[$field]['score'] ?? -INF)
+                    : -INF;
+                if($score>$currentAnchorScore){
+                    $manualAnchors[$field]=[
+                        'value'=>$value,
+                        'score'=>$score,
+                        'confidence'=>min(0.995,max(0.92,$sim + ($rawSim>=0.99?0.05:0.0))),
+                        'evidence'=>$rawSim>=0.99?8.0:6.0,
+                        'example_id'=>(int)($ex['id']??0),
+                        'similarity'=>$sim,
+                        'match_type'=>$rawSim>=0.99?'exact_correction':'category_correction',
+                    ];
+                }
+            }
+        }
+
+        if($rawSim<0.34 && $contextSim<0.999)continue;
+        if(max($rawSim,$contextSim)<0.34)continue;
         $bonus=!empty($ex['was_corrected'])?2.35:0.90;
-        $weight=$sim*$bonus;
+        $weight=max($rawSim,$contextSim)*$bonus;
         foreach(adaptiveFieldSnapshot($confirmed) as $field=>$value){
             $value=adaptiveStoredFieldValue($field,$value);if($value==='')continue;
             $votes[$field][$value]=($votes[$field][$value]??0)+$weight;
         }
-        $matched[]=['id'=>(int)($ex['id']??0),'similarity'=>$sim];
+        if(($rawSim>=0.34)||($contextSim>=0.999)){
+            $matched[]=['id'=>(int)($ex['id']??0),'similarity'=>max($rawSim,$contextSim)];
+        }
     }
-    // Personal vocabulary / online token classifier. Repeated token associations
-    // contribute even when no whole sentence is sufficiently similar.
-    foreach(AdaptiveLearningRepository::tokenStats($uid,$tokens) as $stat){
-        $field=(string)($stat['field_name']??'');$value=(string)($stat['field_value']??'');$count=max(0,(int)($stat['positive_count']??0));
-        if($field===''||$value===''||$count<=0)continue;
-        $weight=0.28*log(1+$count);
+
+    // Personal vocabulary / context classifier. Context keys are deliberate
+    // habits such as category Makan -> wallet, but explicit correction anchors
+    // below always override these aggregate counts.
+    foreach(AdaptiveLearningRepository::tokenStats($uid,$predictionTokens) as $stat){
+        $token=(string)($stat['token']??'');$field=(string)($stat['field_name']??'');$value=(string)($stat['field_value']??'');$count=max(0,(int)($stat['positive_count']??0));
+        if($token===''||$field===''||$value===''||$count<=0)continue;
+        $base=str_starts_with($token,'ctx_')?0.90:0.28;
+        $weight=$base*log(1+$count);
         $votes[$field][$value]=($votes[$field][$value]??0)+$weight;
     }
+
     $fields=[];
     foreach($votes as $field=>$values){
         arsort($values,SORT_NUMERIC);$bestValue=(string)array_key_first($values);$best=(float)$values[$bestValue];$total=max(0.0001,array_sum($values));
         $ratio=$best/$total;$evidence=min(1.0,$best/1.35);$confidence=max(0.0,min(0.99,$ratio*(0.55+0.45*$evidence)));
         $fields[$field]=['value'=>$bestValue,'confidence'=>$confidence,'evidence'=>$best];
     }
+
+    // Manual correction anchors are intentionally applied last. This is the
+    // critical fix: a correction such as Makan -> Uang Tunai must not be
+    // overridden by older Makan -> Honest examples.
+    foreach($manualAnchors as $field=>$anchor){
+        $fields[$field]=[
+            'value'=>$anchor['value'],
+            'confidence'=>$anchor['confidence'],
+            'evidence'=>$anchor['evidence']
+        ];
+        $matched[]=['id'=>$anchor['example_id'],'similarity'=>$anchor['similarity']];
+    }
+
     usort($matched,fn($a,$b)=>$b['similarity']<=>$a['similarity']);
-    $usedIds=array_values(array_filter(array_map(fn($x)=>(int)$x['id'],array_slice($matched,0,5))));
-    return ['fields'=>$fields,'matched_examples'=>count($matched),'example_ids'=>$usedIds,'example_count'=>AdaptiveLearningRepository::countExamples($uid)];
+    $usedIds=array_values(array_filter(array_map(fn($x)=>(int)$x['id'],array_slice($matched,0,8))));
+    $manualMeta=[];
+    foreach($manualAnchors as $field=>$anchor){
+        $manualMeta[$field]=[
+            'example_id'=>(int)$anchor['example_id'],
+            'similarity'=>(float)$anchor['similarity'],
+            'match_type'=>(string)$anchor['match_type']
+        ];
+    }
+    return [
+        'fields'=>$fields,
+        'matched_examples'=>count($matched),
+        'example_ids'=>$usedIds,
+        'example_count'=>AdaptiveLearningRepository::countExamples($uid),
+        'manual_overrides'=>$manualMeta,
+    ];
 }
 function adaptiveMentionedWalletIds(string $message): array {
     if(!function_exists('financeWallets'))return [];
@@ -301,7 +408,10 @@ function adaptiveApplyToDrafts(string $message,array $drafts): array {
         }
 
         if($enabled){
-            $prediction=adaptivePredictionVotes($source);
+            // First pass uses the parser's current semantic context. After type/
+            // category refinement we run a second pass so learned category ->
+            // wallet habits can affect the same draft immediately.
+            $prediction=adaptivePredictionVotes($source,$draft);
             $typePred=adaptivePredictionValue($prediction,'type',$min);
 
             // Koreksi personal boleh mengalahkan inferensi grammar yang lemah,
@@ -325,6 +435,10 @@ function adaptiveApplyToDrafts(string $message,array $drafts): array {
                     }
                 }
             }
+
+            // Recompute after the category/type pass. This is what makes a
+            // corrected wallet follow a learned semantic category on later text.
+            $prediction=adaptivePredictionVotes($source,$draft);
 
             $walletExplicit=function_exists('walletMentionForText') ? walletMentionForText($source) : null;
             if($currentType!=='transfer' && !$walletExplicit){
@@ -366,6 +480,7 @@ function adaptiveApplyToDrafts(string $message,array $drafts): array {
             'matched_examples'=>(int)($prediction['matched_examples']??0),
             'example_count'=>(int)($prediction['example_count']??0),
             'type_prediction'=>$prediction['fields']['type']??null,
+            'manual_overrides'=>(array)($prediction['manual_overrides']??[]),
         ];
     }
     unset($draft);
@@ -380,6 +495,7 @@ function adaptiveLearningStatus(): array {
         'examples'=>$count,
         'ready'=>$count>=1,
         'mode'=>'personal',
+        'storage'=>method_exists('\app\repositories\AdaptiveLearningRepository','storageMode') ? AdaptiveLearningRepository::storageMode() : 'unknown',
         'min_confidence'=>adaptiveAiMinConfidence()
     ];
 }

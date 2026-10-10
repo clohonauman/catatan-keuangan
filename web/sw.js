@@ -1,4 +1,4 @@
-const CACHE = 'finance-shell-v110';
+const CACHE = 'finance-shell-v255';
 const OFFLINE_SHELL_KEY = './__offline_shell__';
 const OFFLINE_ROOT_KEY = './';
 const OFFLINE_INDEX_KEY = './index.php';
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   './assets/style.css',
   './assets/app.js',
   './assets/offline-store.js',
+  './assets/offline-engine.js',
   './assets/currency-input.js',
   './manifest.json'
 ];
@@ -128,6 +129,24 @@ self.addEventListener('fetch', event => {
           '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title></head><body style="font-family:system-ui;padding:30px"><h2>Aplikasi belum siap offline</h2><p>Hubungkan internet dan login ke aplikasi minimal satu kali pada perangkat ini. Setelah data tersimpan, aplikasi dapat dibuka kembali tanpa jaringan.</p></body></html>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
         );
+      }
+    })());
+    return;
+  }
+
+  // Bukti/nota lama yang sudah pernah dibuka online ikut dicache agar dapat
+  // ditampilkan saat offline. Data transaksi tetap berasal dari IndexedDB.
+  if (request.method === 'GET' && url.pathname.includes('/ajax/photo.php')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) await cache.put(request, response.clone());
+        return response;
+      } catch (_) {
+        return cached || new Response('', { status: 504, statusText: 'Offline' });
       }
     })());
     return;

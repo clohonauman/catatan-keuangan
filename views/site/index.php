@@ -662,6 +662,21 @@ if (!function_exists('ck_icon')) {
             padding-right: 16px !important;
         }
     }
+
+    .google-auth-divider{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:#98a2b3;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+    .google-auth-divider:before,.google-auth-divider:after{content:"";height:1px;flex:1;background:#e4e7ec}
+    .google-auth-box{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;margin-top:4px}
+    #googleLoginButton{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px}
+    .google-auth-help{margin:0;max-width:360px;text-align:center;color:#667085;font-size:12px;line-height:1.55}
+    .google-auth-status{margin:0;color:#475467;font-size:13px;text-align:center;line-height:1.5}
+    .google-auth-not-configured{border:1px solid #e4e7ec;background:#f8fafc;color:#667085;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5;text-align:center;margin-top:16px}
+    .google-auth-form[hidden]{display:none!important}
+    .google-native-signin-button{display:flex;align-items:center;justify-content:center;gap:12px;width:min(100%,320px);min-height:44px;padding:0 16px;border:1px solid #747775;border-radius:4px;background:#fff;color:#1f1f1f;font-family:Arial,Roboto,sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(60,64,67,.18);transition:background .15s,border-color .15s}
+    .google-native-signin-button:hover{background:#f8faff;border-color:#5f6368}
+    .google-native-signin-button:focus-visible{outline:3px solid rgba(66,133,244,.3);outline-offset:2px}
+    .google-native-signin-button:disabled{opacity:.6;cursor:wait}
+    .google-native-signin-button svg{width:18px;height:18px;flex:0 0 18px}
+    @media(max-width:420px){#googleLoginButton{transform:scale(.96);transform-origin:center}}
     </style>
     <?php endif; ?>
 </head>
@@ -793,6 +808,102 @@ if (!function_exists('ck_icon')) {
                     <span class="login-submit-loading" aria-hidden="true"><span class="login-submit-spinner"></span><span>Memproses...</span></span>
                 </button>
             </form>
+            <?php if (!empty($googleClientId)): ?>
+            <div class="google-auth-divider"><span>atau</span></div>
+            <div class="google-auth-box">
+                <div id="googleLoginButton" aria-label="Masuk dengan Google"></div>
+                <p class="google-auth-help">Gunakan akun Google dengan email terverifikasi yang sudah terhubung ke akun Catatan Keuangan Anda.</p>
+                <p class="google-auth-status" id="googleLoginStatus" role="status" aria-live="polite" hidden></p>
+            </div>
+            <form method="post" id="googleLoginForm" class="google-auth-form" hidden>
+                <?= \yii\helpers\Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
+                <input type="hidden" name="action" value="google_login">
+                <input type="hidden" name="google_nonce" value="<?= h((string)$googleLoginNonce) ?>">
+                <input type="hidden" name="credential" id="googleLoginCredential" value="">
+            </form>
+            <script>
+            (function(){
+                var clientId = <?= json_encode((string)$googleClientId, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+                var nonce = <?= json_encode((string)$googleLoginNonce, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+                var initialized = false;
+                var nativeInProgress = false;
+                function setStatus(message){var node=document.getElementById('googleLoginStatus');if(node){node.hidden=!message;node.textContent=message||'';}}
+                function nativeBridgeAvailable(){return !!(window.AndroidGoogleSignIn && typeof window.AndroidGoogleSignIn.signIn === 'function');}
+                function setButtonBusy(busy){
+                    var box=document.getElementById('googleLoginButton');
+                    if(!box)return;
+                    if(busy){box.setAttribute('aria-busy','true');box.style.opacity='.68';box.style.pointerEvents='none';}
+                    else{box.removeAttribute('aria-busy');box.style.opacity='';box.style.pointerEvents='';}
+                    var button=box.querySelector('button');if(button)button.disabled=!!busy;
+                }
+                function submitGoogleCredential(credential){
+                    credential = typeof credential === 'string' ? credential : '';
+                    if(!credential){setStatus('Google tidak mengembalikan kredensial. Silakan coba lagi.');setButtonBusy(false);nativeInProgress=false;return;}
+                    var form=document.getElementById('googleLoginForm');
+                    var input=document.getElementById('googleLoginCredential');
+                    if(!form || !input){setStatus('Form login Google tidak tersedia. Muat ulang halaman dan coba lagi.');setButtonBusy(false);nativeInProgress=false;return;}
+                    input.value=credential;
+                    setStatus('Memverifikasi akun Google…');
+                    setButtonBusy(true);
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                function renderNativeGoogleButton(button){
+                    if(!button || button.dataset.nativeGoogleReady==='1')return;
+                    button.dataset.nativeGoogleReady='1';
+                    button.innerHTML='<button type="button" id="googleNativeSignInButton" class="google-native-signin-button"><svg aria-hidden="true" viewBox="0 0 48 48" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.57 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.74 7.18l7.65 5.93c4.47-4.13 7.13-10.21 7.13-17.58z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.75-4.59l-7.98-6.19A23.91 23.91 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.65-5.93c-2.12 1.42-4.84 2.27-8.25 2.27-6.26 0-11.57-4.07-13.47-9.72l-7.98 6.19C6.51 43.62 14.62 48 24 48z"/></svg><span>Masuk dengan Google</span></button>';
+                    var nativeButton=document.getElementById('googleNativeSignInButton');
+                    if(nativeButton)nativeButton.addEventListener('click',function(){
+                        if(!nativeBridgeAvailable()){setStatus('Login Google native tidak tersedia. Perbarui aplikasi Android Anda.');return;}
+                        if(nativeInProgress)return;
+                        nativeInProgress=true;setButtonBusy(true);setStatus('Memilih akun Google…');
+                        try{window.AndroidGoogleSignIn.signIn(nonce,clientId);}
+                        catch(error){nativeInProgress=false;setButtonBusy(false);setStatus('Login Google belum dapat dimulai. Silakan coba lagi.');}
+                    });
+                }
+                window.ckGoogleNativeSignInSuccess=function(credential){submitGoogleCredential(credential);};
+                window.ckGoogleNativeSignInError=function(message){nativeInProgress=false;setButtonBusy(false);setStatus(message||'Login Google belum berhasil. Silakan coba lagi.');};
+                window.ckGoogleNativeSignInProgress=function(message){setStatus(message||'Memilih akun Google…');};
+                window.ckGoogleLoginInit = function(){
+                    var button=document.getElementById('googleLoginButton');
+                    if(!button)return false;
+                    // APK baru menggunakan Credential Manager native, bukan browser OAuth eksternal.
+                    if(nativeBridgeAvailable()){
+                        if(!initialized){initialized=true;renderNativeGoogleButton(button);}
+                        return true;
+                    }
+                    if(initialized || !window.google || !google.accounts || !google.accounts.id)return false;
+                    initialized=true;
+                    google.accounts.id.initialize({
+                        client_id: clientId,
+                        nonce: nonce,
+                        auto_select: false,
+                        cancel_on_tap_outside: true,
+                        callback: function(response){
+                            var credential=response&&response.credential?String(response.credential):'';
+                            submitGoogleCredential(credential);
+                        }
+                    });
+                    google.accounts.id.renderButton(button,{type:'standard',theme:'outline',size:'large',text:'signin_with',shape:'rectangular',logo_alignment:'left',width:320});
+                    setStatus('');
+                    return true;
+                };
+                window.ckGoogleLoginLoadError=function(){if(nativeBridgeAvailable())return;setStatus('Tidak dapat memuat layanan Google. Periksa koneksi internet dan coba lagi.');};
+                if(nativeBridgeAvailable()){
+                    window.ckGoogleLoginInit();
+                }else{
+                    if(window.google&&window.google.accounts&&window.google.accounts.id)window.ckGoogleLoginInit();
+                    var script=document.createElement('script');
+                    script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;
+                    script.onload=function(){if(!window.ckGoogleLoginInit())setTimeout(function(){window.ckGoogleLoginInit();},350);};
+                    script.onerror=function(){window.ckGoogleLoginLoadError();};
+                    document.head.appendChild(script);
+                    window.addEventListener('load',function(){if(!window.ckGoogleLoginInit())window.setTimeout(function(){if(!window.ckGoogleLoginInit())window.ckGoogleLoginLoadError();},3500);},{once:true});
+                }
+            })();
+            </script>
+            <?php else: ?>
+            <div class="google-auth-not-configured">Login dengan Google belum diaktifkan. Admin perlu mengatur GOOGLE_CLIENT_ID untuk menampilkan tombol ini.</div>
+            <?php endif; ?>
             <p class="auth-switch">Belum punya akun? <a href="?mode=register">Buat akun</a></p>
             <?php endif; ?>
             <div class="auth-legal-links"><a href="privacy-policy.php">Kebijakan Privasi</a><span>·</span><a
@@ -1575,8 +1686,7 @@ if (!function_exists('ck_icon')) {
                         <div>
                             <span class="premium-kicker">CATATAN KEUANGAN PREMIUM</span>
                             <h3 id="premiumHeroTitle">Buka fitur keuangan unggulan</h3>
-                            <p id="premiumHeroText">Pilih paket, transfer ke rekening yang tersedia, lalu unggah bukti
-                                pembayaran untuk diverifikasi admin.</p>
+                            <p id="premiumHeroText">Pilih paket dan bayar melalui QRIS otomatis atau transfer bank manual.</p>
                         </div>
                         <span class="premium-account-status <?= $initialPremiumAccess ? 'active' : '' ?> <?= $initialTrialActive ? 'trial' : '' ?>" id="premiumAccountStatus"><?= $initialTrialActive ? 'TRIAL' : ($initialPremiumAccess ? 'PREMIUM' : 'FREE') ?></span>
                     </div>
@@ -1613,24 +1723,35 @@ if (!function_exists('ck_icon')) {
                             </div>
 
                             <div class="premium-step-head"><span>3</span>
-                                <div><b>Pilih Bank</b><small>Rekening tujuan dikelola oleh admin.</small></div>
+                                <div><b>Metode Pembayaran</b><small>Pilih cara pembayaran Premium.</small></div>
                             </div>
-                            <label>Bank tujuan<select id="premiumBankSelect">
-                                    <option value="">Pilih bank</option>
-                                </select></label>
-                            <div class="premium-bank-preview" id="premiumBankPreview">Pilih bank untuk melihat rekening
-                                tujuan.</div>
+                            <div class="premium-payment-methods" id="premiumPaymentMethodOptions">
+                                <label class="premium-payment-method" id="premiumQrisMethod" hidden>
+                                    <input type="radio" name="premiumPaymentMethod" value="midtrans_qris" checked>
+                                    <span class="premium-payment-icon" aria-hidden="true">▦</span>
+                                    <span class="premium-payment-copy"><b>QRIS Otomatis</b><small>Scan melalui mobile banking atau e-wallet. Premium aktif setelah pembayaran terverifikasi.</small></span>
+                                    <span class="premium-payment-check">✓</span>
+                                </label>
+                                <label class="premium-payment-method" id="premiumBankMethod">
+                                    <input type="radio" name="premiumPaymentMethod" value="bank_transfer">
+                                    <span class="premium-payment-icon" aria-hidden="true">↗</span>
+                                    <span class="premium-payment-copy"><b>Transfer Bank Manual</b><small>Transfer ke rekening tujuan, lalu unggah bukti untuk diperiksa admin.</small></span>
+                                    <span class="premium-payment-check">✓</span>
+                                </label>
+                            </div>
+                            <div id="premiumBankFields">
+                                <label>Bank tujuan<select id="premiumBankSelect">
+                                        <option value="">Pilih bank</option>
+                                    </select></label>
+                                <div class="premium-bank-preview" id="premiumBankPreview">Pilih bank untuk melihat rekening tujuan.</div>
 
-                            <div class="premium-step-head"><span>4</span>
-                                <div><b>Data Pengirim</b><small>Masukkan nama dan nomor rekening asal transfer.</small>
+                                <div class="premium-step-head premium-sender-step"><span>4</span>
+                                    <div><b>Data Pengirim</b><small>Masukkan nama dan nomor rekening asal transfer.</small></div>
                                 </div>
+                                <label>Nama Pengirim<input id="premiumSenderName" maxlength="100" placeholder="Nama sesuai rekening"></label>
+                                <label>Nomor Rekening Pengirim<input id="premiumSenderAccount" maxlength="40" inputmode="numeric" placeholder="Contoh: 1234567890"></label>
                             </div>
-                            <label>Nama Pengirim<input id="premiumSenderName" maxlength="100"
-                                    placeholder="Nama sesuai rekening"></label>
-                            <label>Nomor Rekening Pengirim<input id="premiumSenderAccount" maxlength="40"
-                                    inputmode="numeric" placeholder="Contoh: 1234567890"></label>
-                            <button type="button" class="btn primary wide" id="createPremiumInvoice">Buat
-                                Invoice</button>
+                            <button type="button" class="btn primary wide" id="createPremiumInvoice">Buat Invoice</button>
                         </div>
 
                         <div class="feature-card premium-invoice-card">
@@ -2955,7 +3076,7 @@ if (!function_exists('ck_icon')) {
     <script>
     // Migrasi cache satu kali: membersihkan Service Worker lama yang mengabaikan ?v=.
     (function() {
-        var CACHE_FIX_VERSION = 'finance-cache-fix-v8';
+        var CACHE_FIX_VERSION = 'finance-cache-fix-v11';
         try {
             if (!('serviceWorker' in navigator) || localStorage.getItem('financeCacheFix') === CACHE_FIX_VERSION)
                 return;
@@ -3341,6 +3462,7 @@ if (!function_exists('ck_icon')) {
     })();
     </script>
     <script src="assets/offline-store.js?v=<?= h($assetVersion) ?>"></script>
+    <script src="assets/offline-engine.js?v=<?= h($assetVersion) ?>"></script>
     <script>
     (function() {
         var card = document.getElementById('biometricSecurityCard');
